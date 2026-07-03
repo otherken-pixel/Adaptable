@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { supabase, isDemo } from "@/lib/supabase";
-import { DEMO_USER } from "@/lib/demo";
-import type { Profile } from "@/lib/types";
+import { DEMO_USER, demoStore } from "@/lib/demo";
+import type { Preferences, Profile } from "@/lib/types";
 
 interface AuthState {
   /** Signed-in user's profile (or the demo user in Demo Mode). */
@@ -26,6 +26,10 @@ interface AuthState {
   updatePassword: (newPassword: string) => Promise<void>;
   /** Renames the profile; throws "That username is taken" on conflict. */
   updateUsername: (username: string) => Promise<void>;
+  /** Saves the taste profile (injected into every AI generation). */
+  updatePreferences: (prefs: Preferences) => Promise<void>;
+  /** Sets a new avatar URL on the profile (upload handled by caller). */
+  setAvatarUrl: (url: string) => void;
   /** Permanently deletes the account via the delete-account edge function. */
   deleteAccount: () => Promise<void>;
 }
@@ -33,7 +37,9 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfile] = useState<Profile | null>(isDemo ? DEMO_USER : null);
+  const [profile, setProfile] = useState<Profile | null>(
+    isDemo ? { ...DEMO_USER, preferences: demoStore.getPreferences() } : null,
+  );
   const [loading, setLoading] = useState(!isDemo);
 
   useEffect(() => {
@@ -144,6 +150,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [profile],
   );
 
+  const updatePreferences = useCallback(
+    async (prefs: Preferences) => {
+      if (isDemo) {
+        demoStore.setPreferences(prefs);
+        setProfile((p) => (p ? { ...p, preferences: prefs } : p));
+        return;
+      }
+      if (!profile) return;
+      const { error } = await supabase!
+        .from("profiles")
+        .update({ preferences: prefs })
+        .eq("id", profile.id);
+      if (error) throw error;
+      setProfile((p) => (p ? { ...p, preferences: prefs } : p));
+    },
+    [profile],
+  );
+
+  const setAvatarUrl = useCallback((url: string) => {
+    setProfile((p) => (p ? { ...p, avatar_url: url } : p));
+  }, []);
+
   const deleteAccount = useCallback(async () => {
     if (isDemo) return;
     const { data, error } = await supabase!.functions.invoke("delete-account");
@@ -164,6 +192,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestPasswordReset,
       updatePassword,
       updateUsername,
+      updatePreferences,
+      setAvatarUrl,
       deleteAccount,
     }),
     [
@@ -176,6 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       requestPasswordReset,
       updatePassword,
       updateUsername,
+      updatePreferences,
+      setAvatarUrl,
       deleteAccount,
     ],
   );

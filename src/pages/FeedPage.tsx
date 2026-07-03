@@ -8,11 +8,15 @@ import { FeedSkeleton } from "@/components/Skeletons";
 import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
+import { useEngagement } from "@/context/EngagementContext";
 
 type Chip =
   | { kind: "all"; label: string }
+  | { kind: "foryou"; label: string }
+  | { kind: "following"; label: string }
   | { kind: "time"; label: string; maxMinutes: number }
   | { kind: "cal"; label: string; maxCalories: number }
+  | { kind: "protein"; label: string; minProtein: number }
   | { kind: "tag"; label: string };
 
 export default function FeedPage() {
@@ -21,8 +25,9 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [chipIdx, setChipIdx] = useState(0);
-  const { isDemo } = useAuth();
+  const { isDemo, profile } = useAuth();
   const { unreadCount } = useNotifications();
+  const { followedIds } = useEngagement();
 
   useEffect(() => {
     let cancelled = false;
@@ -46,14 +51,22 @@ export default function FeedPage() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([t]) => t);
-    return [
-      { kind: "all", label: "All" },
+    const list: Chip[] = [{ kind: "all", label: "All" }];
+    if (profile?.preferences?.diets?.length) {
+      list.push({ kind: "foryou", label: "✨ For you" });
+    }
+    if (followedIds.size > 0) {
+      list.push({ kind: "following", label: "Following" });
+    }
+    list.push(
       { kind: "time", label: "Under 20 min", maxMinutes: 20 },
       { kind: "cal", label: "Low-cal", maxCalories: 500 },
+      { kind: "protein", label: "High-protein", minProtein: 30 },
       { kind: "time", label: "Under 45 min", maxMinutes: 45 },
       ...topTags.map((t): Chip => ({ kind: "tag", label: t })),
-    ];
-  }, [recipes]);
+    );
+    return list;
+  }, [recipes, profile, followedIds]);
 
   const filtered = useMemo(() => {
     if (!recipes) return null;
@@ -73,12 +86,25 @@ export default function FeedPage() {
         // Recipes without calorie data can't claim to be low-cal.
         return r.calories !== null && r.calories <= chip.maxCalories;
       }
+      if (chip.kind === "protein") {
+        return (
+          (r.protein_g !== null && r.protein_g >= chip.minProtein) ||
+          r.tags.some((t) => t.toLowerCase() === "high-protein")
+        );
+      }
+      if (chip.kind === "foryou") {
+        const diets = (profile?.preferences?.diets ?? []).map((d) => d.toLowerCase());
+        return r.tags.some((t) => diets.includes(t.toLowerCase()));
+      }
+      if (chip.kind === "following") {
+        return followedIds.has(r.author_id);
+      }
       if (chip.kind === "tag") {
         return r.tags.some((t) => t.toLowerCase() === chip.label.toLowerCase());
       }
       return true;
     });
-  }, [recipes, search, chipIdx, chips]);
+  }, [recipes, search, chipIdx, chips, profile, followedIds]);
 
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">

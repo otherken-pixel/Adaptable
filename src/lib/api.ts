@@ -1,12 +1,14 @@
 import { supabase, isDemo } from "./supabase";
-import { demoStore, demoGenerate } from "./demo";
+import { demoStore, demoGenerate, demoImport } from "./demo";
 import { shoppingLocal } from "./shoppingLocal";
 import { sortByTrending } from "./trending";
 import type {
   AppNotification,
   Comment,
   FeedSort,
+  MealPlanEntry,
   Recipe,
+  RecipePhoto,
   ShoppingItem,
   VoteValue,
 } from "./types";
@@ -299,6 +301,187 @@ export async function clearCheckedShoppingItems(userId: string): Promise<void> {
     .eq("user_id", userId)
     .eq("checked", true);
   if (error) throw error;
+}
+
+/* ---- Meal planner ---- */
+
+export async function fetchMealPlans(userId: string): Promise<MealPlanEntry[]> {
+  if (isDemo) return demoStore.listPlans();
+  const { data, error } = await supabase!
+    .from("meal_plans")
+    .select(`*, recipe:recipes(${RECIPE_SELECT})`)
+    .eq("user_id", userId)
+    .order("plan_date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as unknown as MealPlanEntry[];
+}
+
+export async function addMealPlan(
+  userId: string,
+  recipeId: string,
+  planDate: string,
+  servings: number,
+): Promise<void> {
+  if (isDemo) {
+    demoStore.addPlan(recipeId, planDate, servings);
+    return;
+  }
+  const { error } = await supabase!
+    .from("meal_plans")
+    .insert({ user_id: userId, recipe_id: recipeId, plan_date: planDate, servings });
+  if (error) throw error;
+}
+
+export async function updateMealPlanServings(
+  userId: string,
+  id: string,
+  servings: number,
+): Promise<void> {
+  if (isDemo) {
+    demoStore.updatePlanServings(id, servings);
+    return;
+  }
+  const { error } = await supabase!
+    .from("meal_plans")
+    .update({ servings })
+    .eq("user_id", userId)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function removeMealPlan(userId: string, id: string): Promise<void> {
+  if (isDemo) {
+    demoStore.removePlan(id);
+    return;
+  }
+  const { error } = await supabase!
+    .from("meal_plans")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/* ---- Follows ---- */
+
+export async function fetchFollowees(userId: string): Promise<string[]> {
+  if (isDemo) return demoStore.getFollows();
+  const { data, error } = await supabase!
+    .from("follows")
+    .select("followee_id")
+    .eq("follower_id", userId);
+  if (error) throw error;
+  return (data ?? []).map((f) => f.followee_id as string);
+}
+
+export async function setFollow(
+  userId: string,
+  chefId: string,
+  follow: boolean,
+): Promise<void> {
+  if (isDemo) {
+    demoStore.toggleFollow(chefId);
+    return;
+  }
+  if (follow) {
+    const { error } = await supabase!
+      .from("follows")
+      .upsert({ follower_id: userId, followee_id: chefId });
+    if (error) throw error;
+  } else {
+    const { error } = await supabase!
+      .from("follows")
+      .delete()
+      .eq("follower_id", userId)
+      .eq("followee_id", chefId);
+    if (error) throw error;
+  }
+}
+
+/* ---- Cooked-it photos + avatars (live mode only; storage-backed) ---- */
+
+export async function fetchRecipePhotos(recipeId: string): Promise<RecipePhoto[]> {
+  if (isDemo) return [];
+  const { data, error } = await supabase!
+    .from("recipe_photos")
+    .select("*")
+    .eq("recipe_id", recipeId)
+    .order("created_at", { ascending: false })
+    .limit(24);
+  if (error) throw error;
+  return (data ?? []).map((p) => ({
+    ...p,
+    url: supabase!.storage.from("cook-photos").getPublicUrl(p.path).data.publicUrl,
+  })) as RecipePhoto[];
+}
+
+export async function uploadCookPhoto(
+  userId: string,
+  recipeId: string,
+  file: File,
+): Promise<RecipePhoto> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${userId}/${recipeId}-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase!.storage
+    .from("cook-photos")
+    .upload(path, file, { contentType: file.type || "image/jpeg" });
+  if (upErr) throw upErr;
+  const { data, error } = await supabase!
+    .from("recipe_photos")
+    .insert({ user_id: userId, recipe_id: recipeId, path })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return {
+    ...(data as RecipePhoto),
+    url: supabase!.storage.from("cook-photos").getPublicUrl(path).data.publicUrl,
+  };
+}
+
+export async function uploadAvatar(userId: string, file: File): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${userId}/avatar-${Date.now()}.${ext}`;
+  const { error: upErr } = await supabase!.storage
+    .from("avatars")
+    .upload(path, file, { contentType: file.type || "image/jpeg", upsert: true });
+  if (upErr) throw upErr;
+  const url = supabase!.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+  const { error } = await supabase!
+    .from("profiles")
+    .update({ avatar_url: url })
+    .eq("id", userId);
+  if (error) throw error;
+  return url;
+}
+
+/* ---- Import + generation ---- */
+
+export interface ImportSource {
+  url?: string;
+  text?: string;
+  imageBase64?: string;
+  mimeType?: string;
+}
+
+export async function importRecipe(source: ImportSource): Promise<Recipe> {
+  if (isDemo) {
+    return demoImport({
+      url: source.url,
+      text: source.text,
+      hasImage: Boolean(source.imageBase64),
+    });
+  }
+  const { data, error } = await supabase!.functions.invoke("import-recipe", {
+    body: {
+      url: source.url,
+      text: source.text,
+      image_base64: source.imageBase64,
+      mime_type: source.mimeType,
+    },
+  });
+  if (error) throw new Error(error.message ?? "Import failed");
+  if (data?.error) throw new Error(data.error);
+  return data.recipe as Recipe;
 }
 
 export async function generateRecipe(

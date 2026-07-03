@@ -1,41 +1,84 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  Camera,
   Check,
   ChevronLeft,
   ChevronRight,
   Lightbulb,
   ListChecks,
+  Loader2,
+  Mic,
+  MicOff,
   PartyPopper,
+  Play,
+  RotateCcw,
+  TimerIcon,
   X,
 } from "lucide-react";
-import { fetchRecipe, recordCook } from "@/lib/api";
-import { extractTimerSeconds } from "@/lib/duration";
+import { fetchRecipe, recordCook, uploadCookPhoto } from "@/lib/api";
+import { extractTimerSeconds, formatClock } from "@/lib/duration";
 import { scaleQuantity } from "@/lib/quantity";
 import { coverGradient } from "@/lib/gradients";
 import { compactCount } from "@/lib/format";
+import { ringAlarm } from "@/lib/alarm";
 import type { Recipe } from "@/lib/types";
 import { useAuth } from "@/context/AuthContext";
-import StepTimer from "@/components/StepTimer";
 import VotePill from "@/components/VotePill";
 import SaveButton from "@/components/SaveButton";
 
+interface RunningTimer {
+  step: number;
+  endsAt: number;
+  totalSeconds: number;
+  rang: boolean;
+}
+
+// Minimal SpeechRecognition surface (typed loosely; vendor-prefixed on iOS).
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>>; resultIndex: number }) => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function getSpeechRecognition(): (new () => SpeechRecognitionLike) | null {
+  const w = window as unknown as {
+    SpeechRecognition?: new () => SpeechRecognitionLike;
+    webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 /**
- * Full-screen guided cooking: one step at a time in huge type, one-tap
- * timers parsed from the instructions, an ingredients sheet always a tap
- * away, and a screen wake-lock so the phone never sleeps mid-sauté.
+ * Full-screen guided cooking: one step at a time in huge type, timers
+ * that keep running while you move between steps, hands-free voice
+ * commands ("next", "back", "ingredients", "start timer"), a wake-lock,
+ * and a celebration that records the cook and invites a photo.
  */
 export default function CookModePage() {
   const { id } = useParams<{ id: string }>();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, isDemo } = useAuth();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   // 0 = mise en place, 1..N = steps, N+1 = done
   const [idx, setIdx] = useState(0);
   const [gathered, setGathered] = useState<Set<number>>(new Set());
   const [sheetOpen, setSheetOpen] = useState(false);
   const cookRecordedRef = useRef(false);
+
+  // Multi-timer state — timers survive step navigation.
+  const [timers, setTimers] = useState<RunningTimer[]>([]);
+  const [now, setNow] = useState(Date.now());
+
+  // Cooked-it photo (live mode only)
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoState, setPhotoState] = useState<"idle" | "uploading" | "done">("idle");
 
   const servings = Number(params.get("servings")) || undefined;
   const factor = recipe && servings ? servings / recipe.servings : 1;
@@ -50,6 +93,27 @@ export default function CookModePage() {
       cancelled = true;
     };
   }, [id]);
+
+  // Tick while any timer is live; ring exactly once per finished timer.
+  useEffect(() => {
+    if (timers.length === 0) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      setTimers((prev) => {
+        let changed = false;
+        const next = prev.map((tm) => {
+          if (!tm.rang && tm.endsAt <= Date.now()) {
+            changed = true;
+            ringAlarm();
+            return { ...tm, rang: true };
+          }
+          return tm;
+        });
+        return changed ? next : prev;
+      });
+    }, 400);
+    return () => clearInterval(t);
+  }, [timers.length]);
 
   // Keep the screen awake while cooking.
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
@@ -95,10 +159,102 @@ export default function CookModePage() {
     }
   }, [reachedDone, profile, recipe]);
 
-  const timerSeconds = useMemo(() => {
+  const currentTimerSeconds = useMemo(() => {
     if (idx < 1 || idx > total) return null;
     return extractTimerSeconds(steps[idx - 1].instruction);
   }, [idx, steps, total]);
+
+  const currentTimer = timers.find((t) => t.step === idx) ?? null;
+
+  const startTimer = useCallback(() => {
+    if (!currentTimerSeconds || idx < 1 || idx > total) return;
+    setTimers((prev) =>
+      prev.some((t) => t.step === idx)
+        ? prev
+        : [
+            ...prev,
+            {
+              step: idx,
+              endsAt: Date.now() + currentTimerSeconds * 1000,
+              totalSeconds: currentTimerSeconds,
+              rang: false,
+            },
+          ],
+    );
+    setNow(Date.now());
+  }, [currentTimerSeconds, idx, total]);
+
+  const clearTimer = (step: number) =>
+    setTimers((prev) => prev.filter((t) => t.step !== step));
+
+  const goNext = useCallback(
+    () => setIdx((i) => Math.min(i + 1, total + 1)),
+    [total],
+  );
+  const goBack = useCallback(() => setIdx((i) => Math.max(i - 1, 0)), []);
+
+  /* ---- Voice control ---- */
+  const SR = useMemo(getSpeechRecognition, []);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const actionsRef = useRef({ goNext, goBack, startTimer, setSheetOpen });
+  actionsRef.current = { goNext, goBack, startTimer, setSheetOpen };
+
+  useEffect(() => {
+    if (!voiceOn || !SR) return;
+    let stopped = false;
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+    rec.onresult = (event) => {
+      const last = event.results[event.results.length - 1];
+      const heard = (last?.[0]?.transcript ?? "").toLowerCase();
+      const a = actionsRef.current;
+      if (/\b(next|continue|done|forward)\b/.test(heard)) a.goNext();
+      else if (/\b(back|previous)\b/.test(heard)) a.goBack();
+      else if (/\bingredient/.test(heard)) a.setSheetOpen(true);
+      else if (/\b(close|hide)\b/.test(heard)) a.setSheetOpen(false);
+      else if (/\btimer\b/.test(heard)) a.startTimer();
+    };
+    rec.onend = () => {
+      // Browsers stop recognition periodically; keep listening.
+      if (!stopped) {
+        try {
+          rec.start();
+        } catch {
+          /* already restarting */
+        }
+      }
+    };
+    rec.onerror = () => {
+      if (!stopped) setVoiceOn(false);
+    };
+    try {
+      rec.start();
+    } catch {
+      setVoiceOn(false);
+    }
+    return () => {
+      stopped = true;
+      rec.onend = null;
+      try {
+        rec.stop();
+      } catch {
+        /* already stopped */
+      }
+    };
+  }, [voiceOn, SR]);
+
+  const onPhotoPicked = async (file: File | null) => {
+    if (!file || !profile || !recipe || photoState === "uploading") return;
+    setPhotoState("uploading");
+    try {
+      await uploadCookPhoto(profile.id, recipe.id, file);
+      setPhotoState("done");
+    } catch {
+      setPhotoState("idle");
+    }
+  };
 
   if (!recipe) {
     return (
@@ -112,12 +268,13 @@ export default function CookModePage() {
   const isPrep = idx === 0;
   const isDone = idx === total + 1;
   const step = !isPrep && !isDone ? steps[idx - 1] : null;
+  const otherTimers = timers.filter((t) => t.step !== idx);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-surface">
       {/* Top bar */}
       <div className="pt-safe">
-        <div className="mx-auto flex max-w-lg items-center gap-3 px-4 pt-3 pb-2">
+        <div className="mx-auto flex max-w-lg items-center gap-2 px-4 pt-3 pb-2">
           <button
             aria-label="Exit cook mode"
             onClick={exit}
@@ -135,14 +292,30 @@ export default function CookModePage() {
                   key={i}
                   className="h-1 flex-1 rounded-full transition-colors"
                   style={{
-                    background: i <= idx - (isDone ? 1 : 0) && idx > 0
-                      ? "var(--accent)"
-                      : "var(--line)",
+                    background:
+                      i <= idx - (isDone ? 1 : 0) && idx > 0
+                        ? "var(--accent)"
+                        : "var(--line)",
                   }}
                 />
               ))}
             </div>
           </div>
+          {SR && (
+            <button
+              aria-label={voiceOn ? "Disable voice control" : "Enable voice control"}
+              onClick={() => setVoiceOn((v) => !v)}
+              className={`pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                voiceOn ? "bg-accent text-white" : "bg-sunken text-muted"
+              }`}
+            >
+              {voiceOn ? (
+                <Mic size={18} strokeWidth={2.2} className="animate-pulse" />
+              ) : (
+                <MicOff size={18} strokeWidth={2.2} />
+              )}
+            </button>
+          )}
           <button
             aria-label="Show ingredients"
             onClick={() => setSheetOpen(true)}
@@ -151,10 +324,42 @@ export default function CookModePage() {
             <ListChecks size={19} strokeWidth={2.2} />
           </button>
         </div>
+
+        {/* Heads-up strip: timers running on other steps */}
+        {otherTimers.length > 0 && (
+          <div className="mx-auto max-w-lg px-4 pb-1">
+            <div className="scrollbar-none flex gap-2 overflow-x-auto">
+              {otherTimers.map((t) => {
+                const left = Math.max(0, Math.round((t.endsAt - now) / 1000));
+                const finished = left === 0;
+                return (
+                  <button
+                    key={t.step}
+                    onClick={() => (finished ? clearTimer(t.step) : setIdx(t.step))}
+                    className={`pressable flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold tabular-nums ${
+                      finished
+                        ? "animate-pulse bg-accent text-white"
+                        : "bg-accent-soft text-accent"
+                    }`}
+                  >
+                    <TimerIcon size={12} strokeWidth={2.6} />
+                    Step {t.step} · {finished ? "Done ✓" : formatClock(left)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="mx-auto w-full max-w-lg flex-1 overflow-y-auto px-5">
+        {voiceOn && (
+          <p className="animate-fade-up mt-2 rounded-xl bg-accent-soft px-3 py-2 text-center text-[12px] font-bold text-accent">
+            🎙️ Listening — say “next”, “back”, “ingredients” or “start timer”
+          </p>
+        )}
+
         {isPrep && (
           <div className="animate-fade-up py-4" key="prep">
             <p className="text-xs font-bold tracking-[0.18em] text-accent uppercase">
@@ -223,9 +428,48 @@ export default function CookModePage() {
                 </p>
               </div>
             )}
-            {timerSeconds && (
-              <div className="mt-5">
-                <StepTimer key={idx} seconds={timerSeconds} />
+
+            {/* Timer for this step — keeps running if you navigate away */}
+            {currentTimerSeconds && (
+              <div className="mt-5 flex items-center gap-3 rounded-2xl border border-line bg-raised px-4 py-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
+                  <TimerIcon size={17} strokeWidth={2.4} className="text-accent" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xl leading-none font-extrabold tracking-tight tabular-nums">
+                    {currentTimer
+                      ? formatClock(Math.max(0, Math.round((currentTimer.endsAt - now) / 1000)))
+                      : formatClock(currentTimerSeconds)}
+                  </p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-faint">
+                    {currentTimer
+                      ? currentTimer.endsAt <= now
+                        ? "Time's up!"
+                        : "Running — keeps going between steps"
+                      : "Step timer"}
+                  </p>
+                </div>
+                {!currentTimer ? (
+                  <button
+                    aria-label="Start timer"
+                    onClick={startTimer}
+                    className="pressable flex h-11 w-11 items-center justify-center rounded-full text-white shadow-md"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+                    }}
+                  >
+                    <Play size={18} strokeWidth={2.4} fill="currentColor" className="ml-0.5" />
+                  </button>
+                ) : (
+                  <button
+                    aria-label="Reset timer"
+                    onClick={() => clearTimer(idx)}
+                    className="pressable flex h-11 w-11 items-center justify-center rounded-full border border-line bg-raised text-muted"
+                  >
+                    <RotateCcw size={17} strokeWidth={2.2} />
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -255,6 +499,43 @@ export default function CookModePage() {
               <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} size="lg" />
               <SaveButton recipeId={recipe.id} variant="bar" />
             </div>
+
+            {!isDemo && (
+              <>
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => void onPhotoPicked(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  onClick={() => photoState !== "done" && photoInputRef.current?.click()}
+                  disabled={photoState === "uploading"}
+                  className={`pressable mt-4 flex h-12 w-full max-w-xs items-center justify-center gap-2 rounded-2xl border text-[14px] font-bold ${
+                    photoState === "done"
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-line bg-raised"
+                  }`}
+                >
+                  {photoState === "uploading" ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : photoState === "done" ? (
+                    <>
+                      <Check size={16} strokeWidth={2.6} className="animate-pop" />
+                      Photo shared with the community
+                    </>
+                  ) : (
+                    <>
+                      <Camera size={16} strokeWidth={2.2} className="text-accent" />
+                      Show off your plate 📸
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+
             <Link
               to="/"
               className="pressable mt-4 text-sm font-bold text-muted underline-offset-4 hover:underline"
@@ -272,14 +553,14 @@ export default function CookModePage() {
             {idx > 0 && (
               <button
                 aria-label="Previous step"
-                onClick={() => setIdx((i) => i - 1)}
+                onClick={goBack}
                 className="pressable flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-line bg-raised text-muted"
               >
                 <ChevronLeft size={24} strokeWidth={2.4} />
               </button>
             )}
             <button
-              onClick={() => setIdx((i) => i + 1)}
+              onClick={goNext}
               className="pressable flex h-14 flex-1 items-center justify-center gap-2 rounded-2xl text-[16px] font-extrabold text-white shadow-lg shadow-accent/25"
               style={{
                 background:

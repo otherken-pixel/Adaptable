@@ -1,5 +1,13 @@
 import { scaleQuantity } from "./quantity";
-import type { AppNotification, Comment, Profile, Recipe, VoteValue } from "./types";
+import type {
+  AppNotification,
+  Comment,
+  MealPlanEntry,
+  Preferences,
+  Profile,
+  Recipe,
+  VoteValue,
+} from "./types";
 
 /**
  * Demo Mode backend — a seeded, localStorage-persisted store used when
@@ -40,6 +48,9 @@ const SEED_RECIPES: Recipe[] = [
     cook_time_minutes: 15,
     servings: 2,
     calories: 560,
+    protein_g: 38,
+    carbs_g: 52,
+    fat_g: 21,
     tags: ["High-protein", "Pescatarian", "Weeknight"],
     ingredients: [
       { item: "Salmon fillets", quantity: "2 × 150 g (5 oz)", note: "skin on" },
@@ -78,6 +89,9 @@ const SEED_RECIPES: Recipe[] = [
     cook_time_minutes: 15,
     servings: 4,
     calories: 430,
+    protein_g: 16,
+    carbs_g: 48,
+    fat_g: 22,
     tags: ["Vegan", "Pantry", "One-pan", "Gluten-free"],
     ingredients: [
       { item: "Chickpeas", quantity: "2 cans (800 g)", note: "drained, ½ cup reserved" },
@@ -114,6 +128,9 @@ const SEED_RECIPES: Recipe[] = [
     cook_time_minutes: 10,
     servings: 4,
     calories: 610,
+    protein_g: 33,
+    carbs_g: 38,
+    fat_g: 34,
     tags: ["Crowd-pleaser", "30-minute", "Beef"],
     ingredients: [
       { item: "Ground beef (80/20)", quantity: "500 g (1 lb)" },
@@ -150,6 +167,9 @@ const SEED_RECIPES: Recipe[] = [
     cook_time_minutes: 15,
     servings: 3,
     calories: 520,
+    protein_g: 21,
+    carbs_g: 68,
+    fat_g: 18,
     tags: ["Vegetarian", "One-pot", "15-minute"],
     ingredients: [
       { item: "Rigatoni", quantity: "300 g (10 oz)" },
@@ -185,6 +205,9 @@ const SEED_RECIPES: Recipe[] = [
     cook_time_minutes: 3,
     servings: 1,
     calories: 480,
+    protein_g: 38,
+    carbs_g: 28,
+    fat_g: 24,
     tags: ["High-protein", "Breakfast", "5-minute"],
     ingredients: [
       { item: "Eggs", quantity: "3" },
@@ -218,6 +241,9 @@ const SEED_RECIPES: Recipe[] = [
     cook_time_minutes: 15,
     servings: 2,
     calories: 540,
+    protein_g: 19,
+    carbs_g: 58,
+    fat_g: 26,
     tags: ["Vegetarian", "Comfort", "Late-night"],
     ingredients: [
       { item: "Instant ramen", quantity: "2 packs", note: "noodles only" },
@@ -332,6 +358,9 @@ interface DemoState {
   saves: string[];
   comments: Comment[];
   notifications: AppNotification[];
+  plans: MealPlanEntry[];
+  preferences: Preferences;
+  follows: string[];
 }
 
 /** Change events so live UI (inbox badge, feed) can react to the store. */
@@ -344,7 +373,7 @@ export function subscribeDemoStore(fn: () => void): () => void {
   };
 }
 
-const KEY = "adaptable.demo.v3";
+const KEY = "adaptable.demo.v4";
 
 function load(): DemoState {
   try {
@@ -359,6 +388,9 @@ function load(): DemoState {
     saves: [],
     comments: SEED_COMMENTS,
     notifications: [],
+    plans: [],
+    preferences: {},
+    follows: [],
   };
 }
 
@@ -445,6 +477,51 @@ export const demoStore = {
       r.id === recipeId ? { ...r, cook_count: r.cook_count + 1 } : r,
     );
     persist();
+  },
+  listPlans(): MealPlanEntry[] {
+    return state.plans.map((p) => ({
+      ...p,
+      recipe: state.recipes.find((r) => r.id === p.recipe_id) ?? null,
+    }));
+  },
+  addPlan(recipeId: string, planDate: string, servings: number): MealPlanEntry {
+    const entry: MealPlanEntry = {
+      id: `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      user_id: DEMO_USER.id,
+      recipe_id: recipeId,
+      plan_date: planDate,
+      servings,
+      created_at: new Date().toISOString(),
+    };
+    state.plans = [...state.plans, entry];
+    persist();
+    return entry;
+  },
+  updatePlanServings(id: string, servings: number) {
+    state.plans = state.plans.map((p) => (p.id === id ? { ...p, servings } : p));
+    persist();
+  },
+  removePlan(id: string) {
+    state.plans = state.plans.filter((p) => p.id !== id);
+    persist();
+  },
+  getPreferences(): Preferences {
+    return { ...state.preferences };
+  },
+  setPreferences(prefs: Preferences) {
+    state.preferences = { ...prefs };
+    persist();
+  },
+  getFollows(): string[] {
+    return [...state.follows];
+  },
+  toggleFollow(chefId: string): boolean {
+    const following = state.follows.includes(chefId);
+    state.follows = following
+      ? state.follows.filter((id) => id !== chefId)
+      : [...state.follows, chefId];
+    persist();
+    return !following;
   },
   listNotifications(): AppNotification[] {
     return [...state.notifications].sort((a, b) =>
@@ -541,6 +618,9 @@ const DEMO_TEMPLATES: Array<
     cook_time_minutes: 12,
     servings: 2,
     calories: 490,
+    protein_g: 22,
+    carbs_g: 45,
+    fat_g: 24,
     tags: ["Vegetarian", "Meal-prep", "Fresh"],
     ingredients: [
       { item: "Halloumi", quantity: "200 g (7 oz)", note: "thick slices" },
@@ -568,6 +648,9 @@ const DEMO_TEMPLATES: Array<
     cook_time_minutes: 15,
     servings: 4,
     calories: 520,
+    protein_g: 34,
+    carbs_g: 42,
+    fat_g: 20,
     tags: ["High-protein", "Sweet & spicy", "Weeknight"],
     ingredients: [
       { item: "Ground chicken or pork", quantity: "500 g (1 lb)" },
@@ -596,6 +679,9 @@ const DEMO_TEMPLATES: Array<
     cook_time_minutes: 15,
     servings: 2,
     calories: 540,
+    protein_g: 18,
+    carbs_g: 62,
+    fat_g: 22,
     tags: ["Vegetarian", "One-pan", "20-minute"],
     ingredients: [
       { item: "Shelf-stable gnocchi", quantity: "500 g (1 lb)" },
@@ -648,5 +734,29 @@ export async function demoGenerate(
   };
   demoStore.addRecipe(recipe);
   simulateEngagement(recipe);
+  return recipe;
+}
+
+/** Fakes recipe import in Demo Mode (live mode parses the real source). */
+export async function demoImport(source: {
+  url?: string;
+  text?: string;
+  hasImage?: boolean;
+}): Promise<Recipe> {
+  await new Promise((r) => setTimeout(r, 2200 + Math.random() * 900));
+  const template = DEMO_TEMPLATES[demoGenCount++ % DEMO_TEMPLATES.length];
+  const recipe: Recipe = {
+    ...template,
+    id: `imp-${Date.now()}`,
+    author_id: DEMO_USER.id,
+    author: { id: DEMO_USER.id, username: DEMO_USER.username, avatar_url: null },
+    source_prompt: "",
+    source_url: source.url ?? null,
+    net_upvotes: 0,
+    cook_count: 0,
+    comment_count: 0,
+    created_at: new Date().toISOString(),
+  };
+  demoStore.addRecipe(recipe);
   return recipe;
 }

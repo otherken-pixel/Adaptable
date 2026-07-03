@@ -15,6 +15,7 @@ import ShoppingListPage from "@/pages/ShoppingListPage";
 import ProfilePage from "@/pages/ProfilePage";
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import TasteProfilePage from "@/pages/TasteProfilePage";
 import { ChefHat } from "lucide-react";
 
 function ScrollToTop() {
@@ -60,6 +61,7 @@ function Shell() {
             <Route path="/list" element={<ShoppingListPage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/taste" element={<TasteProfilePage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="*" element={<FeedPage />} />
           </Routes>

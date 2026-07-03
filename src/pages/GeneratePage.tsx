@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowUp,
+  Camera,
   ChefHat,
+  Link2,
   Minus,
   Plus,
   Refrigerator,
@@ -13,7 +15,8 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { fetchRecipe, generateRecipe } from "@/lib/api";
+import { fetchRecipe, generateRecipe, importRecipe, type ImportSource } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import type { Recipe } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
 
@@ -50,7 +53,7 @@ const PANTRY_STAPLES = [
   "Frozen spinach",
 ];
 
-type CreateMode = "describe" | "pantry";
+type CreateMode = "describe" | "pantry" | "import";
 
 const LOADING_LINES = [
   "Reading your cravings…",
@@ -72,11 +75,56 @@ export default function GeneratePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
-  // How many people the generated recipe should serve.
-  const [serves, setServes] = useState(4);
+  const { profile } = useAuth();
+
+  // How many people the generated recipe should serve — defaults to the
+  // household size from the taste profile.
+  const [serves, setServes] = useState(profile?.preferences?.household_size ?? 4);
 
   // Pantry flow: pick what's in the fridge, we figure out the dish.
   const [mode, setMode] = useState<CreateMode>("describe");
+
+  // Import flow: URL, photo, or pasted text.
+  const [importUrl, setImportUrl] = useState("");
+  const [importText, setImportText] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const lastImportRef = useRef<ImportSource | null>(null);
+
+  const runImport = async (source: ImportSource, label: string) => {
+    if (phase === "loading") return;
+    lastImportRef.current = source;
+    setPrompt(label);
+    setPhase("loading");
+    setRecipe(null);
+    topRef.current?.scrollIntoView({ behavior: "smooth" });
+    try {
+      const result = await importRecipe(source);
+      setRecipe(result);
+      setPhase("done");
+      setImportUrl("");
+      setImportText("");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Import failed.");
+      setPhase("error");
+    }
+  };
+
+  const onPhotoPicked = (file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? "");
+      const base64 = dataUrl.split(",")[1];
+      if (base64) {
+        void runImport(
+          { imageBase64: base64, mimeType: file.type || "image/jpeg" },
+          "Photo import",
+        );
+      }
+    };
+    reader.readAsDataURL(file);
+  };
   const [pantry, setPantry] = useState<string[]>([]);
   const [pantryDraft, setPantryDraft] = useState("");
 
@@ -133,6 +181,7 @@ export default function GeneratePage() {
   const submit = async (text?: string) => {
     const p = (text ?? prompt).trim();
     if (!p || phase === "loading") return;
+    lastImportRef.current = null;
     setPrompt(p);
     setPhase("loading");
     setRecipe(null);
@@ -200,12 +249,13 @@ export default function GeneratePage() {
             </div>
           ) : (
             <>
-              {/* Describe ↔ Pantry mode toggle */}
+              {/* Describe ↔ Fridge ↔ Import mode toggle */}
               <div className="mx-auto flex w-fit rounded-full bg-sunken p-1">
                 {(
                   [
-                    { id: "describe", label: "Describe it", icon: Wand2 },
-                    { id: "pantry", label: "What's in my fridge", icon: Refrigerator },
+                    { id: "describe", label: "Describe", icon: Wand2 },
+                    { id: "pantry", label: "Fridge", icon: Refrigerator },
+                    { id: "import", label: "Import", icon: Link2 },
                   ] as const
                 ).map(({ id, label, icon: Icon }) => (
                   <button
@@ -245,7 +295,10 @@ export default function GeneratePage() {
           )}
 
           {/* Party size — passed to the AI and enforced on the result */}
-          <div className="mt-4 mb-5 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+          <div
+            className="mt-4 mb-5 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5"
+            style={{ display: !remixSource && mode === "import" ? "none" : undefined }}
+          >
             <span className="flex items-center gap-2 text-[14px] font-bold">
               <Users size={16} strokeWidth={2.4} className="text-accent" />
               Cooking for
@@ -288,6 +341,86 @@ export default function GeneratePage() {
                 ))}
               </div>
             </>
+          )}
+
+          {!remixSource && mode === "import" && (
+            <div className="pt-2">
+              <h2 className="text-xl font-extrabold tracking-tight">
+                Bring any recipe with you 📥
+              </h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                A blog link, a YouTube video, a screenshot, grandma's
+                handwritten card — the AI turns it into a clean, cookable
+                Adaptable recipe. Free, unlimited.
+              </p>
+
+              {/* URL */}
+              <div className="mt-5 flex items-center gap-2 rounded-2xl border border-line bg-raised p-1.5 pl-4">
+                <Link2 size={17} strokeWidth={2.2} className="shrink-0 text-faint" />
+                <input
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && importUrl.trim()) {
+                      e.preventDefault();
+                      void runImport({ url: importUrl.trim() }, importUrl.trim());
+                    }
+                  }}
+                  inputMode="url"
+                  placeholder="Paste a recipe link…"
+                  className="h-10 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint"
+                />
+                <button
+                  aria-label="Import from link"
+                  onClick={() => void runImport({ url: importUrl.trim() }, importUrl.trim())}
+                  disabled={!importUrl.trim()}
+                  className="pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md disabled:opacity-30"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+                  }}
+                >
+                  <ArrowUp size={18} strokeWidth={2.6} />
+                </button>
+              </div>
+
+              {/* Photo */}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => onPhotoPicked(e.target.files?.[0] ?? null)}
+              />
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="pressable mt-3 flex h-13 w-full items-center justify-center gap-2 rounded-2xl border border-line bg-raised text-[14px] font-bold shadow-sm"
+              >
+                <Camera size={17} strokeWidth={2.2} className="text-accent" />
+                Snap a cookbook page or screenshot
+              </button>
+
+              {/* Pasted text fallback */}
+              <p className="mt-5 mb-2 text-xs font-bold tracking-wide text-faint uppercase">
+                Or paste the recipe text
+              </p>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                rows={4}
+                maxLength={20000}
+                placeholder="Paste a caption, ingredients + steps, anything…"
+                className="w-full resize-none rounded-2xl border border-line bg-raised p-4 text-[15px] outline-none placeholder:text-faint focus:border-accent"
+              />
+              <button
+                onClick={() => void runImport({ text: importText.trim() }, "Pasted recipe")}
+                disabled={importText.trim().length < 20}
+                className="pressable mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-content text-[14px] font-bold text-surface disabled:opacity-40"
+              >
+                <Sparkles size={16} strokeWidth={2.2} />
+                Import from text
+              </button>
+            </div>
           )}
 
           {!remixSource && mode === "pantry" && (
@@ -422,7 +555,11 @@ export default function GeneratePage() {
           <h2 className="mt-4 text-lg font-extrabold">The kitchen hit a snag</h2>
           <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">{errorMsg}</p>
           <button
-            onClick={() => submit()}
+            onClick={() => {
+              const src = lastImportRef.current;
+              if (src) void runImport(src, prompt);
+              else void submit();
+            }}
             className="pressable mt-5 rounded-full bg-content px-6 py-2.5 text-sm font-bold text-surface"
           >
             Try again

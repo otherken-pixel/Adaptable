@@ -1,9 +1,20 @@
 /** Rows and shared shapes for the Supabase schema + Gemini output. */
 
+/** Taste profile stored in profiles.preferences (jsonb). */
+export interface Preferences {
+  diets?: string[];
+  allergies?: string[];
+  dislikes?: string[];
+  household_size?: number;
+  spice?: "Mild" | "Medium" | "Hot";
+  skill?: "Beginner" | "Confident" | "Pro";
+}
+
 export interface Profile {
   id: string;
   username: string;
   avatar_url: string | null;
+  preferences?: Preferences;
   created_at: string;
 }
 
@@ -35,10 +46,15 @@ export interface Recipe {
   cook_time_minutes: number;
   servings: number;
   calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
   tags: string[];
   ingredients: Ingredient[];
   steps: RecipeStep[];
   source_prompt: string;
+  /** Set when the recipe was imported rather than generated. */
+  source_url?: string | null;
   net_upvotes: number;
   /** Completed Cook Mode sessions — the strongest trending signal. */
   cook_count: number;
@@ -60,6 +76,29 @@ export interface Comment {
 export type VoteValue = 1 | -1;
 
 export type FeedSort = "hot" | "top" | "new";
+
+/** One planned meal (meal_plans table / local store in Demo Mode). */
+export interface MealPlanEntry {
+  id: string;
+  user_id: string;
+  recipe_id: string;
+  /** ISO date (yyyy-mm-dd). */
+  plan_date: string;
+  servings: number;
+  created_at: string;
+  recipe?: Recipe | null;
+}
+
+/** A community "I cooked it" photo. */
+export interface RecipePhoto {
+  id: string;
+  recipe_id: string;
+  user_id: string;
+  path: string;
+  created_at: string;
+  /** Public URL resolved from storage. */
+  url?: string;
+}
 
 export type NotificationType = "vote" | "comment" | "cook";
 

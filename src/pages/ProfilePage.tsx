@@ -1,18 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   ArrowBigUp,
   Bell,
   BellRing,
+  Camera,
   Check,
   ChefHat,
+  ChevronRight,
   Loader2,
   LogOut,
   Pencil,
+  SlidersHorizontal,
   Sparkles,
   Trash2,
   X,
 } from "lucide-react";
-import { fetchFeed } from "@/lib/api";
+import { fetchFeed, uploadAvatar } from "@/lib/api";
 import { enablePush, type PushStatus } from "@/lib/push";
 import type { Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
@@ -21,7 +25,23 @@ import { coverGradient } from "@/lib/gradients";
 import { compactCount } from "@/lib/format";
 
 export default function ProfilePage() {
-  const { profile, signOut, isDemo, updateUsername, deleteAccount } = useAuth();
+  const { profile, signOut, isDemo, updateUsername, deleteAccount, setAvatarUrl } =
+    useAuth();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+
+  const onAvatarPicked = async (file: File | null) => {
+    if (!file || !profile || isDemo || avatarBusy) return;
+    setAvatarBusy(true);
+    try {
+      const url = await uploadAvatar(profile.id, file);
+      setAvatarUrl(url);
+    } catch {
+      /* upload failed — avatar unchanged */
+    } finally {
+      setAvatarBusy(false);
+    }
+  };
   const [mine, setMine] = useState<Recipe[]>([]);
   const [pushState, setPushState] = useState<PushStatus | "idle" | "working">("idle");
 
@@ -100,12 +120,45 @@ export default function ProfilePage() {
       </header>
 
       <div className="animate-fade-up flex items-center gap-4 rounded-card border border-line bg-raised p-5">
-        <span
-          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-2xl font-extrabold text-white"
-          style={{ background: coverGradient(profile.username) }}
-        >
-          {profile.username.slice(0, 1).toUpperCase()}
-        </span>
+        <div className="relative shrink-0">
+          {profile.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt=""
+              className="h-16 w-16 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              className="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-extrabold text-white"
+              style={{ background: coverGradient(profile.username) }}
+            >
+              {profile.username.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          {!isDemo && (
+            <>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => void onAvatarPicked(e.target.files?.[0] ?? null)}
+              />
+              <button
+                aria-label="Change avatar"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={avatarBusy}
+                className="pressable absolute -right-1 -bottom-1 flex h-7 w-7 items-center justify-center rounded-full border-2 border-raised bg-content text-surface"
+              >
+                {avatarBusy ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Camera size={12} strokeWidth={2.4} />
+                )}
+              </button>
+            </>
+          )}
+        </div>
         <div className="min-w-0 flex-1">
           {editing ? (
             <div>
@@ -204,6 +257,23 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* Taste profile */}
+      <Link
+        to="/taste"
+        className="animate-fade-up mt-4 flex items-center gap-3 rounded-card border border-line bg-raised p-5"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+          <SlidersHorizontal size={19} strokeWidth={2.2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-extrabold">Taste Profile</h3>
+          <p className="mt-0.5 truncate text-[13px] text-muted">
+            {summarizePrefs(profile.preferences)}
+          </p>
+        </div>
+        <ChevronRight size={18} className="shrink-0 text-faint" />
+      </Link>
+
       {/* Push notifications */}
       <div className="animate-fade-up mt-7 rounded-card border border-line bg-raised p-5">
         <div className="flex items-start gap-3">
@@ -296,6 +366,20 @@ export default function ProfilePage() {
       )}
     </div>
   );
+}
+
+function summarizePrefs(prefs?: {
+  diets?: string[];
+  allergies?: string[];
+  household_size?: number;
+}): string {
+  const bits: string[] = [];
+  if (prefs?.diets?.length) bits.push(prefs.diets.join(", "));
+  if (prefs?.allergies?.length) bits.push(`no ${prefs.allergies.join(", ")}`);
+  if (prefs?.household_size) bits.push(`cooks for ${prefs.household_size}`);
+  return bits.length > 0
+    ? bits.join(" · ")
+    : "Diets, allergies, dislikes — the AI cooks around you";
 }
 
 function StatCard({

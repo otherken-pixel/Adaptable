@@ -18,6 +18,23 @@ keepers to your Cookbook.
 
 - **AI Generator** — chat-style prompt box with suggestion chips, playful
   loading states, and a fully rendered recipe card on completion.
+- **Universal Import** — paste any recipe link, snap a cookbook page or
+  screenshot, or paste raw text; Gemini extracts a clean structured
+  recipe with source attribution (`import-recipe` edge function; prefers
+  JSON-LD Recipe blocks, falls back to page text). Free and unlimited.
+- **Meal Planner** — plan any recipe onto a day with servings, then send
+  every planned meal to Groceries in one tap, quantities scaled per
+  entry. Plan changes and serving tweaks always flow to the list.
+- **Taste Profile** — diets, allergies (hard safety rule), dislikes,
+  household size, spice and skill; injected into every AI generation and
+  powering the "✨ For you" feed filter and the default party size.
+- **Macro nutrition** — calories, protein, carbs and fat per serving on
+  every recipe, plus Low-cal and High-protein feed filters.
+- **Cook Mode 2.0** — timers persist across steps with a heads-up strip
+  (tap to jump back), voice commands ("next", "back", "ingredients",
+  "start timer") via SpeechRecognition, wake-lock, and a cooked-it photo
+  share on the finish screen.
+- **Follows** — follow chefs from any recipe; "Following" feed filter.
 - **Remix** — one tap on any recipe opens the generator pre-loaded with it
   ("make it vegan", "twice as spicy", "air-fryer version"…). The app is
   called Adaptable for a reason.

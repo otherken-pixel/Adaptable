@@ -34,6 +34,9 @@ const recipeSchema = {
     cook_time_minutes: { type: "INTEGER" },
     servings: { type: "INTEGER" },
     calories: { type: "INTEGER", description: "Estimated calories per serving" },
+    protein_g: { type: "INTEGER", description: "Protein grams per serving" },
+    carbs_g: { type: "INTEGER", description: "Carbohydrate grams per serving" },
+    fat_g: { type: "INTEGER", description: "Fat grams per serving" },
     tags: { type: "ARRAY", items: { type: "STRING" }, description: "3-5 short tags" },
     ingredients: {
       type: "ARRAY",
@@ -113,6 +116,15 @@ Deno.serve(async (req) => {
       return json({ error: "GEMINI_API_KEY is not configured." }, 500);
     }
 
+    // Taste profile — injected into every generation. Allergies are a
+    // hard safety rule, everything else shapes tone and ingredients.
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("preferences")
+      .eq("id", user.id)
+      .maybeSingle();
+    const prefsText = preferencesToPrompt(profileRow?.preferences);
+
     const geminiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -127,10 +139,13 @@ Deno.serve(async (req) => {
                   (requestedServings
                     ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
                     : "") +
+                  prefsText +
                   "Respect every dietary constraint, time limit and equipment restriction in the request. " +
                   "Quantities must use both metric and imperial where sensible. " +
                   "Steps must be specific enough for a beginner to follow. " +
-                  'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag.',
+                  "Estimate calories, protein, carbs and fat per serving. " +
+                  'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +
+                  'if it has 30 g protein per serving or more, include a "High-protein" tag.',
               },
             ],
           },
@@ -172,6 +187,9 @@ Deno.serve(async (req) => {
         cook_time_minutes: recipe.cook_time_minutes ?? 0,
         servings: requestedServings ?? recipe.servings ?? 2,
         calories: recipe.calories ?? null,
+        protein_g: recipe.protein_g ?? null,
+        carbs_g: recipe.carbs_g ?? null,
+        fat_g: recipe.fat_g ?? null,
         tags: Array.isArray(recipe.tags) ? recipe.tags.slice(0, 6) : [],
         ingredients: recipe.ingredients ?? [],
         steps: recipe.steps ?? [],
@@ -197,4 +215,29 @@ function json(body: unknown, status: number): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+/** Turns the profile's taste preferences into prompt constraints. */
+// deno-lint-ignore no-explicit-any
+function preferencesToPrompt(prefs: any): string {
+  if (!prefs || typeof prefs !== "object") return "";
+  const parts: string[] = [];
+  if (Array.isArray(prefs.diets) && prefs.diets.length > 0) {
+    parts.push(`The cook follows these diets: ${prefs.diets.join(", ")}.`);
+  }
+  if (Array.isArray(prefs.allergies) && prefs.allergies.length > 0) {
+    parts.push(
+      `STRICT SAFETY RULE — the recipe must contain absolutely no ${prefs.allergies.join(", no ")}, in any form or derivative.`,
+    );
+  }
+  if (Array.isArray(prefs.dislikes) && prefs.dislikes.length > 0) {
+    parts.push(`Avoid these disliked ingredients: ${prefs.dislikes.join(", ")}.`);
+  }
+  if (typeof prefs.spice === "string" && prefs.spice) {
+    parts.push(`Preferred spice level: ${prefs.spice}.`);
+  }
+  if (typeof prefs.skill === "string" && prefs.skill) {
+    parts.push(`The cook's skill level is ${prefs.skill} — pitch technique accordingly.`);
+  }
+  return parts.length > 0 ? parts.join(" ") + " " : "";
 }

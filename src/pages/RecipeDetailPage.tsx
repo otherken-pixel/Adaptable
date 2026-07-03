@@ -1,16 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft } from "lucide-react";
-import { fetchRecipe } from "@/lib/api";
-import type { Recipe } from "@/lib/types";
+import { ChevronLeft, UserCheck, UserPlus } from "lucide-react";
+import { fetchRecipe, fetchRecipePhotos } from "@/lib/api";
+import type { Recipe, RecipePhoto } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
 import CommentsSection from "@/components/CommentsSection";
 import EmptyState from "@/components/EmptyState";
+import { useAuth } from "@/context/AuthContext";
+import { useEngagement } from "@/context/EngagementContext";
+import { timeAgo } from "@/lib/format";
 
 export default function RecipeDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { followedIds, toggleFollowChef } = useEngagement();
   const [recipe, setRecipe] = useState<Recipe | null | undefined>(undefined);
+  const [photos, setPhotos] = useState<RecipePhoto[]>([]);
 
   useEffect(() => {
     if (!id) return;
@@ -18,10 +24,18 @@ export default function RecipeDetailPage() {
     fetchRecipe(id)
       .then((r) => !cancelled && setRecipe(r))
       .catch(() => !cancelled && setRecipe(null));
+    fetchRecipePhotos(id)
+      .then((p) => !cancelled && setPhotos(p))
+      .catch(() => {
+        /* photo strip is optional */
+      });
     return () => {
       cancelled = true;
     };
   }, [id]);
+
+  const isOwnRecipe = recipe?.author_id === profile?.id;
+  const following = recipe ? followedIds.has(recipe.author_id) : false;
 
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
@@ -34,9 +48,29 @@ export default function RecipeDetailPage() {
           <ChevronLeft size={26} strokeWidth={2.4} />
         </button>
         {recipe?.author && (
-          <p className="ml-1 text-sm font-semibold text-muted">
+          <p className="ml-1 min-w-0 flex-1 truncate text-sm font-semibold text-muted">
             by <span className="text-content">{recipe.author.username}</span>
           </p>
+        )}
+        {recipe && !isOwnRecipe && (
+          <button
+            onClick={() => toggleFollowChef(recipe.author_id)}
+            className={`pressable flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
+              following
+                ? "bg-accent-soft text-accent"
+                : "bg-content text-surface shadow-sm"
+            }`}
+          >
+            {following ? (
+              <>
+                <UserCheck size={14} strokeWidth={2.6} /> Following
+              </>
+            ) : (
+              <>
+                <UserPlus size={14} strokeWidth={2.6} /> Follow
+              </>
+            )}
+          </button>
         )}
       </div>
 
@@ -68,6 +102,31 @@ export default function RecipeDetailPage() {
       {recipe && (
         <>
           <RecipeView recipe={recipe} />
+
+          {/* Community "I cooked it" photos */}
+          {photos.length > 0 && (
+            <section className="mt-8">
+              <h2 className="text-lg font-extrabold tracking-tight">
+                From the community's kitchens 📸
+              </h2>
+              <div className="scrollbar-none -mx-4 mt-3 flex gap-3 overflow-x-auto px-4">
+                {photos.map((p) => (
+                  <figure key={p.id} className="shrink-0">
+                    <img
+                      src={p.url}
+                      alt="Community cooking result"
+                      loading="lazy"
+                      className="h-36 w-36 rounded-2xl border border-line object-cover"
+                    />
+                    <figcaption className="mt-1 text-center text-[11px] text-faint">
+                      {timeAgo(p.created_at)}
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
+            </section>
+          )}
+
           <CommentsSection recipeId={recipe.id} />
         </>
       )}
