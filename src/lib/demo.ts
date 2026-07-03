@@ -1,4 +1,4 @@
-import type { Comment, Profile, Recipe, VoteValue } from "./types";
+import type { AppNotification, Comment, Profile, Recipe, VoteValue } from "./types";
 
 /**
  * Demo Mode backend — a seeded, localStorage-persisted store used when
@@ -330,9 +330,20 @@ interface DemoState {
   votes: Record<string, VoteValue>;
   saves: string[];
   comments: Comment[];
+  notifications: AppNotification[];
 }
 
-const KEY = "adaptable.demo.v2";
+/** Change events so live UI (inbox badge, feed) can react to the store. */
+const listeners = new Set<() => void>();
+
+export function subscribeDemoStore(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+const KEY = "adaptable.demo.v3";
 
 function load(): DemoState {
   try {
@@ -341,7 +352,13 @@ function load(): DemoState {
   } catch {
     /* corrupted state — reseed */
   }
-  return { recipes: SEED_RECIPES, votes: {}, saves: [], comments: SEED_COMMENTS };
+  return {
+    recipes: SEED_RECIPES,
+    votes: {},
+    saves: [],
+    comments: SEED_COMMENTS,
+    notifications: [],
+  };
 }
 
 let state: DemoState = load();
@@ -352,6 +369,7 @@ function persist() {
   } catch {
     /* storage full/unavailable — demo continues in memory */
   }
+  for (const fn of listeners) fn();
 }
 
 export const demoStore = {
@@ -427,7 +445,74 @@ export const demoStore = {
     );
     persist();
   },
+  listNotifications(): AppNotification[] {
+    return [...state.notifications].sort((a, b) =>
+      b.created_at.localeCompare(a.created_at),
+    );
+  },
+  markNotificationsRead() {
+    state.notifications = state.notifications.map((n) => ({ ...n, read: true }));
+    persist();
+  },
 };
+
+/* ---- Simulated community engagement (Demo Mode only) ----
+   A minute after you publish, demo chefs start reacting so the
+   notification inbox and trending signals come alive. */
+
+function pushDemoNotification(
+  type: AppNotification["type"],
+  actor: (typeof chefs)[keyof typeof chefs],
+  recipe: Recipe,
+) {
+  const current = state.recipes.find((r) => r.id === recipe.id);
+  if (!current) return;
+  const notification: AppNotification = {
+    id: `n-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    user_id: DEMO_USER.id,
+    actor_id: actor.id,
+    actor,
+    recipe_id: recipe.id,
+    recipe: { id: recipe.id, title: recipe.title, emoji: recipe.emoji },
+    type,
+    read: false,
+    created_at: new Date().toISOString(),
+  };
+  state.notifications = [notification, ...state.notifications];
+
+  if (type === "vote") {
+    state.recipes = state.recipes.map((r) =>
+      r.id === recipe.id ? { ...r, net_upvotes: r.net_upvotes + 1 } : r,
+    );
+  } else if (type === "cook") {
+    state.recipes = state.recipes.map((r) =>
+      r.id === recipe.id ? { ...r, cook_count: r.cook_count + 1 } : r,
+    );
+  } else if (type === "comment") {
+    state.comments = [
+      {
+        id: `c-${Date.now()}`,
+        recipe_id: recipe.id,
+        user_id: actor.id,
+        author: actor,
+        body: "Made this from your post — turned out fantastic. Instant save! 🔥",
+        created_at: new Date().toISOString(),
+      },
+      ...state.comments,
+    ];
+    state.recipes = state.recipes.map((r) =>
+      r.id === recipe.id ? { ...r, comment_count: r.comment_count + 1 } : r,
+    );
+  }
+  persist();
+}
+
+function simulateEngagement(recipe: Recipe) {
+  setTimeout(() => pushDemoNotification("vote", chefs.rafa, recipe), 7_000);
+  setTimeout(() => pushDemoNotification("comment", chefs.mika, recipe), 16_000);
+  setTimeout(() => pushDemoNotification("cook", chefs.theo, recipe), 28_000);
+  setTimeout(() => pushDemoNotification("vote", chefs.june, recipe), 40_000);
+}
 
 /* ---- Demo recipe generation (no API key required) ---- */
 
@@ -546,5 +631,6 @@ export async function demoGenerate(prompt: string): Promise<Recipe> {
     created_at: new Date().toISOString(),
   };
   demoStore.addRecipe(recipe);
+  simulateEngagement(recipe);
   return recipe;
 }

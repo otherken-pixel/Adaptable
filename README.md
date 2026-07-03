@@ -44,9 +44,11 @@ keepers to your Cookbook.
   with counts denormalized onto recipes by trigger.
 - **Voting** — one vote per user per recipe (enforced by a DB primary key),
   optimistic UI, counter maintained by a Postgres trigger.
-- **Push notifications** — Capacitor Push Notifications plugin registers
-  APNs/FCM tokens into `device_tokens` (owner-only RLS) from the Profile
-  screen on native builds; gracefully explains itself on the web.
+- **Activity inbox + notifications, 100% Supabase** — DB triggers write a
+  `notifications` row when someone votes, comments or cooks your recipe;
+  Supabase Realtime streams it to the in-app Activity inbox instantly on
+  every platform, and the `push-dispatch` edge function delivers device
+  push by calling Apple's APNs directly. No Firebase anywhere.
 - **Cookbook** — personal saves, synced live across every screen.
 - **Auth** — Supabase email/password + Google OAuth, auto-created profiles.
 - **Demo Mode** — no env vars? The app boots with seeded recipes and a local
@@ -117,16 +119,45 @@ npx cap sync
 | `shopping_items` | Grocery list rows, linked to source recipe | Owner only |
 | `comments` | Recipe discussion; trigger syncs `recipes.comment_count` | Public read, owner write |
 | `cooks` | One row per finished Cook Mode session; trigger syncs `recipes.cook_count` | Owner only |
-| `device_tokens` | APNs/FCM push targets per user | Owner only |
+| `notifications` | Inbox rows written by DB triggers on votes/comments/cooks; streamed via Realtime | Owner read/update; no client insert |
+| `device_tokens` | Raw APNs push tokens per user | Owner only |
 
-### Sending push notifications
+### Notifications — the no-Firebase pipeline
 
-Tokens land in `device_tokens`. To actually deliver, add a Supabase Edge
-Function (or DB webhook) that calls FCM's HTTP v1 API with a service
-account — e.g. notify a recipe's author when `user_votes` or `comments`
-gets a new row for their recipe. iOS additionally needs the Push
-Notifications capability enabled in Xcode and an APNs key uploaded to
-Firebase.
+Everything runs inside Supabase (plus Apple's own APNs for iOS device
+push):
+
+```
+vote / comment / cook INSERT
+        │  (security-definer trigger)
+        ▼
+public.notifications row
+        ├──► Supabase Realtime ──► in-app Activity inbox (web, iOS, Android)
+        └──► Database Webhook ──► push-dispatch edge function ──► APNs (iOS)
+```
+
+Setup for device push (iOS):
+
+1. In Xcode, enable the Push Notifications capability and create an APNs
+   auth key (.p8) in your Apple Developer account.
+2. Set the edge function secrets:
+   ```bash
+   supabase secrets set \
+     APNS_AUTH_KEY="$(cat AuthKey_XXXXXXXXXX.p8)" \
+     APNS_KEY_ID=XXXXXXXXXX \
+     APNS_TEAM_ID=YYYYYYYYYY \
+     APNS_BUNDLE_ID=com.adaptable.app \
+     PUSH_WEBHOOK_SECRET=$(openssl rand -hex 24)
+   supabase functions deploy push-dispatch --no-verify-jwt
+   ```
+3. Create a Database Webhook (Dashboard → Database → Webhooks) on
+   `INSERT` into `public.notifications`, pointing at the `push-dispatch`
+   function URL, with header `x-webhook-secret: <PUSH_WEBHOOK_SECRET>`.
+
+Android note: Google only allows background push through its FCM
+service. Since this project is Firebase-free by design, Android users
+get the live Activity inbox over Supabase Realtime instead (delivered
+whenever the app is open).
 
 ## 📱 Native builds
 

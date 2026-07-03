@@ -115,9 +115,9 @@ export default function ProfilePage() {
             <h3 className="text-[15px] font-extrabold">Push notifications</h3>
             <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
               {pushState === "enabled"
-                ? "You're set — we'll ping you when your recipes get votes and comments."
+                ? "You're set — Supabase pings APNs directly when your recipes get votes, comments and cooks."
                 : pushState === "unsupported"
-                  ? "Push lives in the native app. Run `npm run cap:ios` or `cap:android` to get notified when your recipes blow up."
+                  ? "Device push runs on the iOS app (npm run cap:ios) via Supabase → APNs, no Firebase. Everywhere else, the Activity inbox updates live over Supabase Realtime."
                   : pushState === "denied"
                     ? "Permission was declined — enable notifications for Adaptable in system settings, then try again."
                     : "Get pinged when your recipes earn votes, comments and cooks."}

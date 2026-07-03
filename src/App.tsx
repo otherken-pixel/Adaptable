@@ -3,6 +3,8 @@ import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { EngagementProvider } from "@/context/EngagementContext";
 import { ShoppingProvider } from "@/context/ShoppingContext";
+import { NotificationsProvider } from "@/context/NotificationsContext";
+import ActivityPage from "@/pages/ActivityPage";
 import BottomNav from "@/components/BottomNav";
 import FeedPage from "@/pages/FeedPage";
 import GeneratePage from "@/pages/GeneratePage";
@@ -46,18 +48,21 @@ function Shell() {
   return (
     <EngagementProvider>
       <ShoppingProvider>
-        <ScrollToTop />
-        <Routes>
-          <Route path="/" element={<FeedPage />} />
-          <Route path="/create" element={<GeneratePage />} />
-          <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-          <Route path="/cook/:id" element={<CookModePage />} />
-          <Route path="/cookbook" element={<CookbookPage />} />
-          <Route path="/list" element={<ShoppingListPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="*" element={<FeedPage />} />
-        </Routes>
-        <BottomNav />
+        <NotificationsProvider>
+          <ScrollToTop />
+          <Routes>
+            <Route path="/" element={<FeedPage />} />
+            <Route path="/create" element={<GeneratePage />} />
+            <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+            <Route path="/cook/:id" element={<CookModePage />} />
+            <Route path="/cookbook" element={<CookbookPage />} />
+            <Route path="/list" element={<ShoppingListPage />} />
+            <Route path="/activity" element={<ActivityPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<FeedPage />} />
+          </Routes>
+          <BottomNav />
+        </NotificationsProvider>
       </ShoppingProvider>
     </EngagementProvider>
   );

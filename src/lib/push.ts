@@ -4,13 +4,18 @@ import { registerDeviceToken } from "./api";
 export type PushStatus = "enabled" | "denied" | "unsupported";
 
 /**
- * Enable push notifications on native builds (iOS/Android via Capacitor).
- * On the web this is a graceful no-op — tokens only exist in the apps.
- * Delivery is server-side: an edge function reads device_tokens and sends
- * through FCM/APNs.
+ * Device push, 100% Supabase + Apple — no Firebase anywhere.
+ *
+ * iOS: the Capacitor plugin hands back the RAW APNs token (Firebase is
+ * never involved on iOS). We store it in the `device_tokens` table and
+ * the `push-dispatch` edge function delivers by calling APNs directly.
+ *
+ * Android: Google only permits background push through its own FCM
+ * service, which this project deliberately avoids. Android users get
+ * the live in-app Activity inbox (Supabase Realtime) instead.
  */
 export async function enablePush(userId: string): Promise<PushStatus> {
-  if (!Capacitor.isNativePlatform()) return "unsupported";
+  if (Capacitor.getPlatform() !== "ios") return "unsupported";
 
   const { PushNotifications } = await import("@capacitor/push-notifications");
 
@@ -19,8 +24,6 @@ export async function enablePush(userId: string): Promise<PushStatus> {
     perm = await PushNotifications.requestPermissions();
   }
   if (perm.receive !== "granted") return "denied";
-
-  const platform = Capacitor.getPlatform() as "ios" | "android";
 
   return new Promise<PushStatus>((resolve) => {
     let settled = false;
@@ -32,7 +35,7 @@ export async function enablePush(userId: string): Promise<PushStatus> {
     };
 
     void PushNotifications.addListener("registration", (token) => {
-      registerDeviceToken(userId, token.value, platform)
+      registerDeviceToken(userId, token.value, "ios")
         .then(() => settle("enabled"))
         .catch(() => settle("denied"));
     });
@@ -40,7 +43,7 @@ export async function enablePush(userId: string): Promise<PushStatus> {
 
     void PushNotifications.register();
 
-    // APNs/FCM should answer within seconds; don't hang the UI forever.
+    // APNs should answer within seconds; don't hang the UI forever.
     setTimeout(() => settle("denied"), 15_000);
   });
 }

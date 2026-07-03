@@ -2,7 +2,14 @@ import { supabase, isDemo } from "./supabase";
 import { demoStore, demoGenerate } from "./demo";
 import { shoppingLocal } from "./shoppingLocal";
 import { sortByTrending } from "./trending";
-import type { Comment, FeedSort, Recipe, ShoppingItem, VoteValue } from "./types";
+import type {
+  AppNotification,
+  Comment,
+  FeedSort,
+  Recipe,
+  ShoppingItem,
+  VoteValue,
+} from "./types";
 
 const RECIPE_SELECT = "*, author:profiles(id, username, avatar_url)";
 const COMMENT_SELECT = "*, author:profiles(id, username, avatar_url)";
@@ -179,6 +186,35 @@ export async function recordCook(userId: string, recipeId: string): Promise<void
   const { error } = await supabase!
     .from("cooks")
     .insert({ user_id: userId, recipe_id: recipeId });
+  if (error) throw error;
+}
+
+/* ---- Notifications (in-app inbox, Supabase Realtime) ---- */
+
+export async function fetchNotifications(userId: string): Promise<AppNotification[]> {
+  if (isDemo) return demoStore.listNotifications();
+  const { data, error } = await supabase!
+    .from("notifications")
+    .select(
+      "*, actor:profiles!notifications_actor_id_fkey(id, username, avatar_url), recipe:recipes(id, title, emoji)",
+    )
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []) as AppNotification[];
+}
+
+export async function markNotificationsRead(userId: string): Promise<void> {
+  if (isDemo) {
+    demoStore.markNotificationsRead();
+    return;
+  }
+  const { error } = await supabase!
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", userId)
+    .eq("read", false);
   if (error) throw error;
 }
 

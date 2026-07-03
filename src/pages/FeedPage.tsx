@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Sparkles, X } from "lucide-react";
+import { Bell, Search, Sparkles, X } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
 import type { FeedSort, Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
 import { FeedSkeleton } from "@/components/Skeletons";
 import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationsContext";
 
 type Chip =
   | { kind: "all"; label: string }
@@ -20,6 +21,7 @@ export default function FeedPage() {
   const [search, setSearch] = useState("");
   const [chipIdx, setChipIdx] = useState(0);
   const { isDemo } = useAuth();
+  const { unreadCount } = useNotifications();
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +86,21 @@ export default function FeedPage() {
             Discover
           </h1>
         </div>
-        <SortToggle sort={sort} onChange={setSort} />
+        <div className="flex flex-col items-end gap-2.5">
+          <Link
+            to="/activity"
+            aria-label="Activity"
+            className="pressable relative flex h-10 w-10 items-center justify-center rounded-full border border-line bg-raised shadow-sm"
+          >
+            <Bell size={18} strokeWidth={2.2} className="text-muted" />
+            {unreadCount > 0 && (
+              <span className="animate-pop absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-extrabold text-white">
+                {unreadCount > 99 ? "99" : unreadCount}
+              </span>
+            )}
+          </Link>
+          <SortToggle sort={sort} onChange={setSort} />
+        </div>
       </header>
 
       {/* Search + filter chips */}

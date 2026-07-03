@@ -61,6 +61,22 @@ export type VoteValue = 1 | -1;
 
 export type FeedSort = "hot" | "top" | "new";
 
+export type NotificationType = "vote" | "comment" | "cook";
+
+/** In-app notification (notifications table / local store in Demo Mode). */
+export interface AppNotification {
+  id: string;
+  /** Recipient. */
+  user_id: string;
+  actor_id: string | null;
+  recipe_id: string | null;
+  type: NotificationType;
+  read: boolean;
+  created_at: string;
+  actor?: Pick<Profile, "id" | "username" | "avatar_url"> | null;
+  recipe?: Pick<Recipe, "id" | "title" | "emoji"> | null;
+}
+
 /** One grocery row (shopping_items table / local store in Demo Mode). */
 export interface ShoppingItem {
   id: string;
