@@ -69,8 +69,12 @@ begin
   kind := tg_argv[0];
 
   -- Only celebrate upvotes; nobody wants a push about a downvote.
-  if kind = 'vote' and new.value <> 1 then
-    return new;
+  -- new.value only exists on user_votes rows, so the reference must
+  -- stay inside a vote-only branch (cook/comment rows lack the field).
+  if kind = 'vote' then
+    if new.value <> 1 then
+      return new;
+    end if;
   end if;
 
   insert into public.notifications (user_id, actor_id, recipe_id, type)

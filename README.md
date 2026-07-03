@@ -58,11 +58,14 @@ keepers to your Cookbook.
 
 ```bash
 npm install
-npm run dev          # Demo Mode — no keys needed
+cp .env.example .env # live Supabase project (or skip for Demo Mode)
+npm run dev
 ```
 
-To go live, copy `.env.example` → `.env` and fill in your Supabase URL +
-anon key.
+The production Supabase project is `ypziulvtfsyrwpotlevp`
+(https://ypziulvtfsyrwpotlevp.supabase.co). All migrations in
+`supabase/migrations/` are applied there, and the feed is seeded with
+starter recipes. Without a `.env` the app runs in local Demo Mode.
 
 ## 🛠 From-scratch initialization (reference)
 
@@ -93,20 +96,28 @@ npx cap sync
 
 ## 🗄 Supabase setup
 
-1. Create a project at [database.new](https://database.new).
-2. Run the migration in `supabase/migrations/20260703000000_init.sql`
-   (SQL Editor → paste → run), or with the CLI:
-   ```bash
-   supabase link --project-ref <your-ref>
-   supabase db push
-   ```
-3. Deploy the Gemini edge function and set its secret — **the Gemini key
-   never touches the client**:
-   ```bash
-   supabase functions deploy generate-recipe
-   supabase secrets set GEMINI_API_KEY=<your-gemini-key>
-   ```
-4. Enable the Google provider under **Auth → Providers** for OAuth.
+The live project (`ypziulvtfsyrwpotlevp`) already has every migration in
+`supabase/migrations/` applied, RLS on all tables, and seeded starter
+content. Remaining one-time steps (need the CLI or dashboard):
+
+```bash
+supabase link --project-ref ypziulvtfsyrwpotlevp
+
+# 1. AI generation — deploy the function and set the Gemini key
+#    (the key never touches the client):
+supabase functions deploy generate-recipe
+supabase secrets set GEMINI_API_KEY=<your-gemini-key>
+
+# 2. iOS device push (optional, see "Notifications" below):
+supabase functions deploy push-dispatch --no-verify-jwt
+```
+
+In the dashboard: enable the **Google** provider under Auth → Providers
+for OAuth, and consider enabling **leaked password protection** under
+Auth → Settings (flagged by the security advisor).
+
+Setting up a fresh project instead? Run the migrations with
+`supabase db push` — they are ordered and idempotent from empty.
 
 ### Schema at a glance
 
