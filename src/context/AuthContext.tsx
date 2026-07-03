@@ -20,6 +20,14 @@ interface AuthState {
   signUp: (email: string, password: string, username: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Emails a recovery link that lands on /reset-password. */
+  requestPasswordReset: (email: string) => Promise<void>;
+  /** Sets a new password for the current (recovery) session. */
+  updatePassword: (newPassword: string) => Promise<void>;
+  /** Renames the profile; throws "That username is taken" on conflict. */
+  updateUsername: (username: string) => Promise<void>;
+  /** Permanently deletes the account via the delete-account edge function. */
+  deleteAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -74,7 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase!.auth.signUp({
         email,
         password,
-        options: { data: { username } },
+        options: {
+          data: { username },
+          emailRedirectTo: window.location.origin,
+        },
       });
       if (error) throw error;
     },
@@ -94,6 +105,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase!.auth.signOut();
   }, []);
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    if (isDemo) return;
+    const { error } = await supabase!.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    if (error) throw error;
+  }, []);
+
+  const updatePassword = useCallback(async (newPassword: string) => {
+    if (isDemo) return;
+    const { error } = await supabase!.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+  }, []);
+
+  const updateUsername = useCallback(
+    async (username: string) => {
+      const clean = username.trim();
+      if (clean.length < 3 || clean.length > 24) {
+        throw new Error("Username must be 3–24 characters.");
+      }
+      if (isDemo) {
+        setProfile((p) => (p ? { ...p, username: clean } : p));
+        return;
+      }
+      if (!profile) return;
+      const { error } = await supabase!
+        .from("profiles")
+        .update({ username: clean })
+        .eq("id", profile.id);
+      if (error) {
+        throw new Error(
+          error.code === "23505" ? "That username is taken." : error.message,
+        );
+      }
+      setProfile((p) => (p ? { ...p, username: clean } : p));
+    },
+    [profile],
+  );
+
+  const deleteAccount = useCallback(async () => {
+    if (isDemo) return;
+    const { data, error } = await supabase!.functions.invoke("delete-account");
+    if (error) throw new Error(error.message ?? "Deletion failed");
+    if (data?.error) throw new Error(data.error);
+    await supabase!.auth.signOut();
+  }, []);
+
   const value = useMemo(
     () => ({
       profile,
@@ -103,8 +161,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signInWithGoogle,
       signOut,
+      requestPasswordReset,
+      updatePassword,
+      updateUsername,
+      deleteAccount,
     }),
-    [profile, loading, signInWithPassword, signUp, signInWithGoogle, signOut],
+    [
+      profile,
+      loading,
+      signInWithPassword,
+      signUp,
+      signInWithGoogle,
+      signOut,
+      requestPasswordReset,
+      updatePassword,
+      updateUsername,
+      deleteAccount,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

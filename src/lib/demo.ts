@@ -1,3 +1,4 @@
+import { scaleQuantity } from "./quantity";
 import type { AppNotification, Comment, Profile, Recipe, VoteValue } from "./types";
 
 /**
@@ -616,11 +617,26 @@ const DEMO_TEMPLATES: Array<
 let demoGenCount = 0;
 
 /** Fakes the Gemini call in Demo Mode with believable latency + output. */
-export async function demoGenerate(prompt: string): Promise<Recipe> {
+export async function demoGenerate(
+  prompt: string,
+  servings?: number,
+): Promise<Recipe> {
   await new Promise((r) => setTimeout(r, 2600 + Math.random() * 1200));
   const template = DEMO_TEMPLATES[demoGenCount++ % DEMO_TEMPLATES.length];
+  // Honor the requested party size, scaling template quantities to match.
+  const targetServings =
+    servings && servings >= 1 && servings <= 12 ? servings : template.servings;
+  const factor = targetServings / template.servings;
   const recipe: Recipe = {
     ...template,
+    servings: targetServings,
+    ingredients:
+      factor === 1
+        ? template.ingredients
+        : template.ingredients.map((ing) => ({
+            ...ing,
+            quantity: scaleQuantity(ing.quantity, factor),
+          })),
     id: `gen-${Date.now()}`,
     author_id: DEMO_USER.id,
     author: { id: DEMO_USER.id, username: DEMO_USER.username, avatar_url: null },

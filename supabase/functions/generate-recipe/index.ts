@@ -81,10 +81,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json();
+    const { prompt, servings } = await req.json();
     if (!prompt || typeof prompt !== "string" || prompt.length > 500) {
       return json({ error: "A prompt of up to 500 characters is required." }, 400);
     }
+    // Optional party size chosen in the app; enforced on the insert below.
+    const requestedServings =
+      Number.isInteger(servings) && servings >= 1 && servings <= 12
+        ? (servings as number)
+        : null;
 
     // Client scoped to the caller's JWT — every DB write below runs
     // under their identity and is subject to RLS.
@@ -119,9 +124,13 @@ Deno.serve(async (req) => {
               {
                 text:
                   `Create one complete, realistic, delicious recipe for this request: "${prompt}". ` +
+                  (requestedServings
+                    ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
+                    : "") +
                   "Respect every dietary constraint, time limit and equipment restriction in the request. " +
                   "Quantities must use both metric and imperial where sensible. " +
-                  "Steps must be specific enough for a beginner to follow.",
+                  "Steps must be specific enough for a beginner to follow. " +
+                  'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag.',
               },
             ],
           },
@@ -161,7 +170,7 @@ Deno.serve(async (req) => {
           : "Easy",
         prep_time_minutes: recipe.prep_time_minutes ?? 0,
         cook_time_minutes: recipe.cook_time_minutes ?? 0,
-        servings: recipe.servings ?? 2,
+        servings: requestedServings ?? recipe.servings ?? 2,
         calories: recipe.calories ?? null,
         tags: Array.isArray(recipe.tags) ? recipe.tags.slice(0, 6) : [],
         ingredients: recipe.ingredients ?? [],

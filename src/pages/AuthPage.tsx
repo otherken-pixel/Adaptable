@@ -2,10 +2,11 @@ import { useState, type FormEvent } from "react";
 import { ChefHat, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
-type Mode = "signin" | "signup";
+type Mode = "signin" | "signup" | "forgot";
 
 export default function AuthPage() {
-  const { signInWithPassword, signUp, signInWithGoogle } = useAuth();
+  const { signInWithPassword, signUp, signInWithGoogle, requestPasswordReset } =
+    useAuth();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,9 +23,12 @@ export default function AuthPage() {
     try {
       if (mode === "signin") {
         await signInWithPassword(email, password);
-      } else {
+      } else if (mode === "signup") {
         await signUp(email, password, username);
         setNotice("Check your inbox to confirm your email, then sign in.");
+      } else {
+        await requestPasswordReset(email);
+        setNotice("Reset link sent — check your inbox.");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -79,14 +83,30 @@ export default function AuthPage() {
           onChange={setEmail}
           placeholder="you@example.com"
         />
-        <Field
-          label="Password"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          placeholder="••••••••"
-          minLength={6}
-        />
+        {mode !== "forgot" && (
+          <Field
+            label="Password"
+            type="password"
+            value={password}
+            onChange={setPassword}
+            placeholder="••••••••"
+            minLength={6}
+          />
+        )}
+        {mode === "signin" && (
+          <button
+            type="button"
+            onClick={() => {
+              setMode("forgot");
+              setError(null);
+              setNotice(null);
+            }}
+            className="pressable -mt-1 block text-right text-[13px] font-semibold text-muted"
+            style={{ marginLeft: "auto" }}
+          >
+            Forgot password?
+          </button>
+        )}
 
         {error && (
           <p className="rounded-xl bg-down/10 px-4 py-2.5 text-[13px] font-semibold text-down">
@@ -105,23 +125,31 @@ export default function AuthPage() {
           className="pressable flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-content text-[15px] font-bold text-surface shadow-lg disabled:opacity-50"
         >
           {busy && <Loader2 size={17} className="animate-spin" />}
-          {mode === "signin" ? "Sign in" : "Create account"}
+          {mode === "signin"
+            ? "Sign in"
+            : mode === "signup"
+              ? "Create account"
+              : "Send reset link"}
         </button>
       </form>
 
-      <div className="my-5 flex items-center gap-3">
-        <span className="h-px flex-1 bg-line" />
-        <span className="text-xs font-semibold text-faint">or</span>
-        <span className="h-px flex-1 bg-line" />
-      </div>
+      {mode !== "forgot" && (
+        <>
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-line" />
+            <span className="text-xs font-semibold text-faint">or</span>
+            <span className="h-px flex-1 bg-line" />
+          </div>
 
-      <button
-        onClick={() => void google()}
-        className="pressable flex h-13 w-full items-center justify-center gap-3 rounded-2xl border border-line bg-raised text-[15px] font-bold"
-      >
-        <GoogleMark />
-        Continue with Google
-      </button>
+          <button
+            onClick={() => void google()}
+            className="pressable flex h-13 w-full items-center justify-center gap-3 rounded-2xl border border-line bg-raised text-[15px] font-bold"
+          >
+            <GoogleMark />
+            Continue with Google
+          </button>
+        </>
+      )}
 
       <button
         onClick={() => {
@@ -135,9 +163,13 @@ export default function AuthPage() {
           <>
             New here? <span className="text-accent">Create an account</span>
           </>
-        ) : (
+        ) : mode === "signup" ? (
           <>
             Already cooking? <span className="text-accent">Sign in</span>
+          </>
+        ) : (
+          <>
+            Remembered it? <span className="text-accent">Back to sign in</span>
           </>
         )}
       </button>

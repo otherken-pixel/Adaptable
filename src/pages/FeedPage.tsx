@@ -12,6 +12,7 @@ import { useNotifications } from "@/context/NotificationsContext";
 type Chip =
   | { kind: "all"; label: string }
   | { kind: "time"; label: string; maxMinutes: number }
+  | { kind: "cal"; label: string; maxCalories: number }
   | { kind: "tag"; label: string };
 
 export default function FeedPage() {
@@ -48,6 +49,7 @@ export default function FeedPage() {
     return [
       { kind: "all", label: "All" },
       { kind: "time", label: "Under 20 min", maxMinutes: 20 },
+      { kind: "cal", label: "Low-cal", maxCalories: 500 },
       { kind: "time", label: "Under 45 min", maxMinutes: 45 },
       ...topTags.map((t): Chip => ({ kind: "tag", label: t })),
     ];
@@ -66,6 +68,10 @@ export default function FeedPage() {
       }
       if (chip.kind === "time") {
         return r.prep_time_minutes + r.cook_time_minutes <= chip.maxMinutes;
+      }
+      if (chip.kind === "cal") {
+        // Recipes without calorie data can't claim to be low-cal.
+        return r.calories !== null && r.calories <= chip.maxCalories;
       }
       if (chip.kind === "tag") {
         return r.tags.some((t) => t.toLowerCase() === chip.label.toLowerCase());

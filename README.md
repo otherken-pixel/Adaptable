@@ -108,13 +108,30 @@ supabase link --project-ref ypziulvtfsyrwpotlevp
 supabase functions deploy generate-recipe
 supabase secrets set GEMINI_API_KEY=<your-gemini-key>
 
-# 2. iOS device push (optional, see "Notifications" below):
+# 2. Account deletion (required for App Store review):
+supabase functions deploy delete-account
+
+# 3. iOS device push (optional, see "Notifications" below):
 supabase functions deploy push-dispatch --no-verify-jwt
 ```
 
-In the dashboard: enable the **Google** provider under Auth → Providers
-for OAuth, and consider enabling **leaked password protection** under
-Auth → Settings (flagged by the security advisor).
+In the dashboard:
+
+- **Auth → Providers**: enable Google for OAuth.
+- **Auth → URL Configuration**: set the Site URL to your production
+  domain and add it (plus `http://localhost:5173`) to Redirect URLs —
+  email confirmation and password-reset links land there.
+- **Auth → Settings**: enable leaked password protection (flagged by the
+  security advisor).
+
+### Verifying accounts
+
+A confirmed test login exists: `test@adaptable.dev` /
+`CookSomething!42`. Click-through checklist: sign in with it → feed
+shows the seeded recipes → vote/save/comment → edit username on
+Profile → sign out → create your own account (confirmation email) →
+"Forgot password?" flow → Google sign-in → Profile → Delete account
+(needs the `delete-account` function deployed).
 
 Setting up a fresh project instead? Run the migrations with
 `supabase db push` — they are ordered and idempotent from empty.

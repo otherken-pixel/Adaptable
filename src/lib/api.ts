@@ -301,10 +301,13 @@ export async function clearCheckedShoppingItems(userId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function generateRecipe(prompt: string): Promise<Recipe> {
-  if (isDemo) return demoGenerate(prompt);
+export async function generateRecipe(
+  prompt: string,
+  servings?: number,
+): Promise<Recipe> {
+  if (isDemo) return demoGenerate(prompt, servings);
   const { data, error } = await supabase!.functions.invoke("generate-recipe", {
-    body: { prompt },
+    body: { prompt, servings },
   });
   if (error) throw new Error(error.message ?? "Generation failed");
   if (data?.error) throw new Error(data.error);

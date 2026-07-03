@@ -3,11 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowUp,
   ChefHat,
+  Minus,
   Plus,
   Refrigerator,
   RotateCcw,
   Shuffle,
   Sparkles,
+  Users,
   Wand2,
   X,
 } from "lucide-react";
@@ -69,6 +71,9 @@ export default function GeneratePage() {
   const [lineIdx, setLineIdx] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+
+  // How many people the generated recipe should serve.
+  const [serves, setServes] = useState(4);
 
   // Pantry flow: pick what's in the fridge, we figure out the dish.
   const [mode, setMode] = useState<CreateMode>("describe");
@@ -143,7 +148,7 @@ export default function GeneratePage() {
           `Adapt the recipe "${remixSource.title}" (key ingredients: ${ingredientList}). ` +
           `Requested change: ${p}`.slice(0, 480);
       }
-      const result = await generateRecipe(apiPrompt);
+      const result = await generateRecipe(apiPrompt, serves);
       setRecipe(result);
       setPhase("done");
     } catch (err) {
@@ -238,6 +243,33 @@ export default function GeneratePage() {
               )}
             </>
           )}
+
+          {/* Party size — passed to the AI and enforced on the result */}
+          <div className="mt-4 mb-5 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+            <span className="flex items-center gap-2 text-[14px] font-bold">
+              <Users size={16} strokeWidth={2.4} className="text-accent" />
+              Cooking for
+            </span>
+            <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
+              <button
+                aria-label="Fewer people"
+                onClick={() => setServes((s) => Math.max(1, s - 1))}
+                className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+              >
+                <Minus size={15} strokeWidth={2.6} />
+              </button>
+              <span className="min-w-16 text-center text-[13px] font-extrabold">
+                {serves} {serves === 1 ? "person" : "people"}
+              </span>
+              <button
+                aria-label="More people"
+                onClick={() => setServes((s) => Math.min(12, s + 1))}
+                className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+              >
+                <Plus size={15} strokeWidth={2.6} />
+              </button>
+            </div>
+          </div>
 
           {(remixSource || mode === "describe") && (
             <>

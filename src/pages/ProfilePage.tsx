@@ -1,5 +1,17 @@
 import { useEffect, useState } from "react";
-import { ArrowBigUp, Bell, BellRing, ChefHat, LogOut, Sparkles } from "lucide-react";
+import {
+  ArrowBigUp,
+  Bell,
+  BellRing,
+  Check,
+  ChefHat,
+  Loader2,
+  LogOut,
+  Pencil,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
 import { fetchFeed } from "@/lib/api";
 import { enablePush, type PushStatus } from "@/lib/push";
 import type { Recipe } from "@/lib/types";
@@ -9,14 +21,52 @@ import { coverGradient } from "@/lib/gradients";
 import { compactCount } from "@/lib/format";
 
 export default function ProfilePage() {
-  const { profile, signOut, isDemo } = useAuth();
+  const { profile, signOut, isDemo, updateUsername, deleteAccount } = useAuth();
   const [mine, setMine] = useState<Recipe[]>([]);
   const [pushState, setPushState] = useState<PushStatus | "idle" | "working">("idle");
+
+  // Username editing
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  // Account deletion
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const onEnablePush = async () => {
     if (!profile || pushState === "working") return;
     setPushState("working");
     setPushState(await enablePush(profile.id));
+  };
+
+  const saveUsername = async () => {
+    if (savingName) return;
+    setSavingName(true);
+    setNameError(null);
+    try {
+      await updateUsername(draft);
+      setEditing(false);
+    } catch (err) {
+      setNameError(err instanceof Error ? err.message : "Could not update.");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const onDeleteAccount = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      // signOut inside deleteAccount clears the session; Shell shows AuthPage.
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Deletion failed.");
+      setDeleting(false);
+    }
   };
 
   useEffect(() => {
@@ -56,8 +106,61 @@ export default function ProfilePage() {
         >
           {profile.username.slice(0, 1).toUpperCase()}
         </span>
-        <div className="min-w-0">
-          <h2 className="truncate text-lg font-extrabold">@{profile.username}</h2>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <div>
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && void saveUsername()}
+                  minLength={3}
+                  maxLength={24}
+                  className="h-10 min-w-0 flex-1 rounded-xl border border-line bg-sunken px-3 text-[15px] font-bold outline-none focus:border-accent"
+                />
+                <button
+                  aria-label="Save username"
+                  onClick={() => void saveUsername()}
+                  disabled={savingName}
+                  className="pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-white disabled:opacity-50"
+                >
+                  {savingName ? (
+                    <Loader2 size={15} className="animate-spin" />
+                  ) : (
+                    <Check size={16} strokeWidth={2.8} />
+                  )}
+                </button>
+                <button
+                  aria-label="Cancel"
+                  onClick={() => {
+                    setEditing(false);
+                    setNameError(null);
+                  }}
+                  className="pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-muted"
+                >
+                  <X size={15} strokeWidth={2.6} />
+                </button>
+              </div>
+              {nameError && (
+                <p className="mt-1.5 text-xs font-semibold text-down">{nameError}</p>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <h2 className="truncate text-lg font-extrabold">@{profile.username}</h2>
+              <button
+                aria-label="Edit username"
+                onClick={() => {
+                  setDraft(profile.username);
+                  setEditing(true);
+                }}
+                className="pressable flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sunken text-muted"
+              >
+                <Pencil size={13} strokeWidth={2.4} />
+              </button>
+            </div>
+          )}
           <p className="text-sm text-muted">
             {isDemo ? "Demo chef — data stays on this device" : "Adaptable chef"}
           </p>
@@ -136,13 +239,60 @@ export default function ProfilePage() {
       </div>
 
       {!isDemo && (
-        <button
-          onClick={() => void signOut()}
-          className="pressable mt-8 flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-raised py-3.5 text-[15px] font-bold text-down"
-        >
-          <LogOut size={17} strokeWidth={2.2} />
-          Sign out
-        </button>
+        <>
+          <button
+            onClick={() => void signOut()}
+            className="pressable mt-8 flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-raised py-3.5 text-[15px] font-bold"
+          >
+            <LogOut size={17} strokeWidth={2.2} />
+            Sign out
+          </button>
+
+          {/* Danger zone */}
+          <div className="mt-6 rounded-card border border-down/25 p-4">
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="pressable flex w-full items-center justify-center gap-2 text-[14px] font-bold text-down"
+              >
+                <Trash2 size={15} strokeWidth={2.2} />
+                Delete account
+              </button>
+            ) : (
+              <div className="text-center">
+                <p className="text-sm leading-relaxed font-semibold">
+                  Permanently delete your account?
+                </p>
+                <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                  Your recipes, votes, saves, comments and groceries will be
+                  erased. This cannot be undone.
+                </p>
+                {deleteError && (
+                  <p className="mt-2 text-[13px] font-semibold text-down">
+                    {deleteError}
+                  </p>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
+                    className="pressable h-11 flex-1 rounded-2xl border border-line bg-raised text-[14px] font-bold"
+                  >
+                    Keep my account
+                  </button>
+                  <button
+                    onClick={() => void onDeleteAccount()}
+                    disabled={deleting}
+                    className="pressable flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-down text-[14px] font-bold text-white disabled:opacity-60"
+                  >
+                    {deleting && <Loader2 size={15} className="animate-spin" />}
+                    Delete forever
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
