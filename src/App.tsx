@@ -2,11 +2,14 @@ import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { EngagementProvider } from "@/context/EngagementContext";
+import { ShoppingProvider } from "@/context/ShoppingContext";
 import BottomNav from "@/components/BottomNav";
 import FeedPage from "@/pages/FeedPage";
 import GeneratePage from "@/pages/GeneratePage";
 import RecipeDetailPage from "@/pages/RecipeDetailPage";
+import CookModePage from "@/pages/CookModePage";
 import CookbookPage from "@/pages/CookbookPage";
+import ShoppingListPage from "@/pages/ShoppingListPage";
 import ProfilePage from "@/pages/ProfilePage";
 import AuthPage from "@/pages/AuthPage";
 import { ChefHat } from "lucide-react";
@@ -42,16 +45,20 @@ function Shell() {
 
   return (
     <EngagementProvider>
-      <ScrollToTop />
-      <Routes>
-        <Route path="/" element={<FeedPage />} />
-        <Route path="/create" element={<GeneratePage />} />
-        <Route path="/recipe/:id" element={<RecipeDetailPage />} />
-        <Route path="/cookbook" element={<CookbookPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="*" element={<FeedPage />} />
-      </Routes>
-      <BottomNav />
+      <ShoppingProvider>
+        <ScrollToTop />
+        <Routes>
+          <Route path="/" element={<FeedPage />} />
+          <Route path="/create" element={<GeneratePage />} />
+          <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+          <Route path="/cook/:id" element={<CookModePage />} />
+          <Route path="/cookbook" element={<CookbookPage />} />
+          <Route path="/list" element={<ShoppingListPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="*" element={<FeedPage />} />
+        </Routes>
+        <BottomNav />
+      </ShoppingProvider>
     </EngagementProvider>
   );
 }

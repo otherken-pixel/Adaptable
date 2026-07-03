@@ -1,13 +1,36 @@
 import { useState } from "react";
-import { Check, Clock, CookingPot, Flame, Gauge, Lightbulb, Share2, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  Check,
+  ChefHat,
+  Clock,
+  CookingPot,
+  Flame,
+  Gauge,
+  Lightbulb,
+  Minus,
+  Plus,
+  Share2,
+  ShoppingBasket,
+  Shuffle,
+  Users,
+} from "lucide-react";
 import type { Recipe } from "@/lib/types";
 import { coverGradient } from "@/lib/gradients";
+import { scaleQuantity } from "@/lib/quantity";
+import { useShopping } from "@/context/ShoppingContext";
 import VotePill from "./VotePill";
 import SaveButton from "./SaveButton";
 
-/** Full recipe render: hero, stats, tappable ingredient checklist, steps. */
+/** Full recipe render: hero, stats, scalable ingredient checklist, steps. */
 export default function RecipeView({ recipe }: { recipe: Recipe }) {
+  const navigate = useNavigate();
+  const { addRecipe } = useShopping();
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [servings, setServings] = useState(recipe.servings);
+  const [addedToList, setAddedToList] = useState(false);
+
+  const factor = servings / recipe.servings;
 
   const toggle = (i: number) =>
     setChecked((prev) => {
@@ -25,6 +48,13 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
     } catch {
       /* user dismissed the share sheet */
     }
+  };
+
+  const addToGroceries = () => {
+    if (addedToList) return;
+    addRecipe(recipe, factor);
+    setAddedToList(true);
+    setTimeout(() => setAddedToList(false), 2500);
   };
 
   return (
@@ -66,22 +96,56 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
       <div className="mt-5 grid grid-cols-4 gap-2 rounded-card border border-line bg-raised p-3">
         <Stat icon={Clock} value={`${recipe.prep_time_minutes + recipe.cook_time_minutes}m`} label="Total" />
         <Stat icon={CookingPot} value={`${recipe.cook_time_minutes}m`} label="Cook" />
-        <Stat icon={Users} value={String(recipe.servings)} label="Serves" />
+        <Stat icon={Users} value={String(servings)} label="Serves" />
         {recipe.calories ? (
-          <Stat icon={Flame} value={String(recipe.calories)} label="Cal" />
+          <Stat
+            icon={Flame}
+            value={String(Math.round(recipe.calories))}
+            label="Cal/serv"
+          />
         ) : (
           <Stat icon={Gauge} value={recipe.difficulty} label="Level" />
         )}
       </div>
 
+      {/* Start cooking CTA */}
+      <button
+        onClick={() => navigate(`/cook/${recipe.id}?servings=${servings}`)}
+        className="pressable mt-4 flex h-14 w-full items-center justify-center gap-2.5 rounded-2xl text-[16px] font-extrabold text-white shadow-lg shadow-accent/25"
+        style={{
+          background:
+            "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+        }}
+      >
+        <ChefHat size={20} strokeWidth={2.2} />
+        Start Cooking
+      </button>
+
       {/* Ingredients */}
       <section className="mt-7">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-center justify-between">
           <h2 className="text-lg font-extrabold tracking-tight">Ingredients</h2>
-          <span className="text-xs font-semibold text-faint">
-            {checked.size}/{recipe.ingredients.length} gathered
-          </span>
+          <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
+            <button
+              aria-label="Fewer servings"
+              onClick={() => setServings((s) => Math.max(1, s - 1))}
+              className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+            >
+              <Minus size={15} strokeWidth={2.6} />
+            </button>
+            <span className="min-w-16 text-center text-[13px] font-extrabold">
+              {servings} {servings === 1 ? "serving" : "servings"}
+            </span>
+            <button
+              aria-label="More servings"
+              onClick={() => setServings((s) => Math.min(24, s + 1))}
+              className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+            >
+              <Plus size={15} strokeWidth={2.6} />
+            </button>
+          </div>
         </div>
+
         <div className="mt-3 overflow-hidden rounded-card border border-line bg-raised">
           {recipe.ingredients.map((ing, i) => {
             const done = checked.has(i);
@@ -109,12 +173,33 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
                   )}
                 </span>
                 <span className="shrink-0 text-sm font-bold text-muted tabular-nums">
-                  {ing.quantity}
+                  {scaleQuantity(ing.quantity, factor)}
                 </span>
               </button>
             );
           })}
         </div>
+
+        <button
+          onClick={addToGroceries}
+          className={`pressable mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border text-[14px] font-bold transition-colors ${
+            addedToList
+              ? "border-accent bg-accent-soft text-accent"
+              : "border-line bg-raised text-content"
+          }`}
+        >
+          {addedToList ? (
+            <>
+              <Check size={17} strokeWidth={2.6} className="animate-pop" />
+              {recipe.ingredients.length} items added to Groceries
+            </>
+          ) : (
+            <>
+              <ShoppingBasket size={17} strokeWidth={2.2} />
+              Add all to Groceries
+            </>
+          )}
+        </button>
       </section>
 
       {/* Steps */}
@@ -157,6 +242,15 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
           <Share2 size={19} strokeWidth={2.2} />
         </button>
       </div>
+
+      {/* Remix */}
+      <button
+        onClick={() => navigate(`/create?remix=${recipe.id}`)}
+        className="pressable mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-[14px] font-bold text-muted"
+      >
+        <Shuffle size={16} strokeWidth={2.2} className="text-accent" />
+        Remix this recipe — make it yours
+      </button>
     </div>
   );
 }

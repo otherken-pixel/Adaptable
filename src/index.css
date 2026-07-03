@@ -100,6 +100,17 @@
   }
 }
 
+@keyframes confetti-fall {
+  from {
+    transform: translateY(-8vh) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(108vh) rotate(680deg);
+    opacity: 0.85;
+  }
+}
+
 html,
 body {
   height: 100%;

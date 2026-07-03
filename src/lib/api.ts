@@ -1,6 +1,7 @@
 import { supabase, isDemo } from "./supabase";
 import { demoStore, demoGenerate } from "./demo";
-import type { FeedSort, Recipe, VoteValue } from "./types";
+import { shoppingLocal } from "./shoppingLocal";
+import type { FeedSort, Recipe, ShoppingItem, VoteValue } from "./types";
 
 const RECIPE_SELECT = "*, author:profiles(id, username, avatar_url)";
 
@@ -119,6 +120,75 @@ export async function toggleSave(
     .upsert({ user_id: userId, recipe_id: recipeId });
   if (error) throw error;
   return true;
+}
+
+/* ---- Shopping list ---- */
+
+export async function fetchShoppingItems(userId: string): Promise<ShoppingItem[]> {
+  if (isDemo) return shoppingLocal.list();
+  const { data, error } = await supabase!
+    .from("shopping_items")
+    .select("id, recipe_id, recipe_title, item, quantity, checked, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as ShoppingItem[];
+}
+
+export async function addShoppingItems(
+  userId: string,
+  rows: Array<Pick<ShoppingItem, "recipe_id" | "recipe_title" | "item" | "quantity">>,
+): Promise<ShoppingItem[]> {
+  if (isDemo) return shoppingLocal.add(rows);
+  const { data, error } = await supabase!
+    .from("shopping_items")
+    .insert(rows.map((r) => ({ ...r, user_id: userId })))
+    .select("id, recipe_id, recipe_title, item, quantity, checked, created_at");
+  if (error) throw error;
+  return (data ?? []) as ShoppingItem[];
+}
+
+export async function setShoppingItemChecked(
+  userId: string,
+  id: string,
+  checked: boolean,
+): Promise<void> {
+  if (isDemo) {
+    shoppingLocal.setChecked(id, checked);
+    return;
+  }
+  const { error } = await supabase!
+    .from("shopping_items")
+    .update({ checked })
+    .eq("user_id", userId)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function removeShoppingItem(userId: string, id: string): Promise<void> {
+  if (isDemo) {
+    shoppingLocal.remove(id);
+    return;
+  }
+  const { error } = await supabase!
+    .from("shopping_items")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function clearCheckedShoppingItems(userId: string): Promise<void> {
+  if (isDemo) {
+    shoppingLocal.clearChecked();
+    return;
+  }
+  const { error } = await supabase!
+    .from("shopping_items")
+    .delete()
+    .eq("user_id", userId)
+    .eq("checked", true);
+  if (error) throw error;
 }
 
 export async function generateRecipe(prompt: string): Promise<Recipe> {

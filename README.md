@@ -14,12 +14,26 @@ keepers to your Cookbook.
 | AI | Google Gemini (structured JSON output) |
 | Hosting | Vercel (SPA) |
 
-## ✨ MVP features
+## ✨ Features
 
 - **AI Generator** — chat-style prompt box with suggestion chips, playful
   loading states, and a fully rendered recipe card on completion.
+- **Remix** — one tap on any recipe opens the generator pre-loaded with it
+  ("make it vegan", "twice as spicy", "air-fryer version"…). The app is
+  called Adaptable for a reason.
+- **Cook Mode** — full-screen guided cooking: one step at a time in huge
+  type, one-tap timers parsed straight from the instructions (beep +
+  vibration), an always-available ingredients sheet, a screen wake-lock so
+  the phone never sleeps mid-sauté, and a confetti finish that funnels
+  straight into voting.
+- **Serving scaler** — stepper on every recipe rescales quantities in place
+  (fraction-aware: "1 ½ cups" → "2 ¼ cups").
+- **Groceries** — add a recipe's ingredients (scaled) to a shopping list,
+  grouped by recipe, with check-off, per-recipe progress and a badge on the
+  tab bar. Synced via Supabase (`shopping_items`), local in Demo Mode.
 - **Discovery Feed** — community recipes sorted by net upvotes (or newest),
-  with deterministic gradient covers so every card looks designed.
+  full-text search plus time and tag filter chips, deterministic gradient
+  covers so every card looks designed.
 - **Voting** — one vote per user per recipe (enforced by a DB primary key),
   optimistic UI, counter maintained by a Postgres trigger.
 - **Cookbook** — personal saves, synced live across every screen.
@@ -89,6 +103,7 @@ npx cap sync
 | `recipes` | Structured Gemini output + `net_upvotes` counter | Public read, author insert/update/delete |
 | `user_votes` | One row per (user, recipe), value ∈ {-1, 1} | Owner only; trigger syncs `recipes.net_upvotes` |
 | `saves` | Personal cookbook junction table | Owner only |
+| `shopping_items` | Grocery list rows, linked to source recipe | Owner only |
 
 ## 📱 Native builds
 

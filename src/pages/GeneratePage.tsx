@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, ChefHat, RotateCcw, Sparkles } from "lucide-react";
-import { generateRecipe } from "@/lib/api";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowUp, ChefHat, RotateCcw, Shuffle, Sparkles, X } from "lucide-react";
+import { fetchRecipe, generateRecipe } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
 
@@ -11,6 +12,15 @@ const SUGGESTIONS = [
   "Kid-friendly hidden-veggie dinner 🥦",
   "Spicy 15-minute noodles 🌶️",
   "Impressive dessert, minimal effort 🍫",
+];
+
+const REMIX_SUGGESTIONS = [
+  "Make it vegan 🌱",
+  "Gluten-free version 🌾",
+  "Twice as spicy 🔥",
+  "Halve the cook time ⏱️",
+  "Budget-friendly swaps 💸",
+  "Air-fryer version 💨",
 ];
 
 const LOADING_LINES = [
@@ -33,6 +43,26 @@ export default function GeneratePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
+  // Remix flow: /create?remix=<recipeId> adapts an existing recipe.
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const remixId = params.get("remix");
+  const [remixSource, setRemixSource] = useState<Recipe | null>(null);
+
+  useEffect(() => {
+    if (!remixId) {
+      setRemixSource(null);
+      return;
+    }
+    let cancelled = false;
+    fetchRecipe(remixId)
+      .then((r) => !cancelled && setRemixSource(r))
+      .catch(() => !cancelled && setRemixSource(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [remixId]);
+
   useEffect(() => {
     if (phase !== "loading") return;
     setLineIdx(0);
@@ -51,7 +81,17 @@ export default function GeneratePage() {
     setRecipe(null);
     topRef.current?.scrollIntoView({ behavior: "smooth" });
     try {
-      const result = await generateRecipe(p);
+      let apiPrompt = p;
+      if (remixSource) {
+        const ingredientList = remixSource.ingredients
+          .slice(0, 10)
+          .map((i) => i.item)
+          .join(", ");
+        apiPrompt =
+          `Adapt the recipe "${remixSource.title}" (key ingredients: ${ingredientList}). ` +
+          `Requested change: ${p}`.slice(0, 480);
+      }
+      const result = await generateRecipe(apiPrompt);
       setRecipe(result);
       setPhase("done");
     } catch (err) {
@@ -64,6 +104,7 @@ export default function GeneratePage() {
     setPhase("idle");
     setRecipe(null);
     setPrompt("");
+    if (remixId) navigate("/create", { replace: true });
     inputRef.current?.focus();
   };
 
@@ -81,30 +122,51 @@ export default function GeneratePage() {
 
       {phase === "idle" && (
         <div className="animate-fade-up">
-          <div className="flex flex-col items-center pt-8 pb-10 text-center">
-            <div
-              className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl shadow-xl shadow-accent/25"
-              style={{
-                background:
-                  "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
-              }}
-            >
-              <ChefHat size={38} className="text-white" strokeWidth={2} />
+          {remixSource ? (
+            <div className="mb-5 flex items-center gap-3 rounded-card border border-line bg-raised p-4">
+              <span className="text-4xl">{remixSource.emoji}</span>
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-accent uppercase">
+                  <Shuffle size={12} strokeWidth={2.6} /> Remixing
+                </p>
+                <p className="truncate text-[15px] font-extrabold">
+                  {remixSource.title}
+                </p>
+              </div>
+              <button
+                aria-label="Cancel remix"
+                onClick={() => navigate("/create", { replace: true })}
+                className="pressable flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sunken text-muted"
+              >
+                <X size={15} strokeWidth={2.4} />
+              </button>
             </div>
-            <h2 className="mt-5 text-xl font-extrabold tracking-tight">
-              What are we cooking tonight?
-            </h2>
-            <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">
-              Describe cravings, constraints, time limits or whatever's in the
-              fridge — get a complete recipe in seconds.
-            </p>
-          </div>
+          ) : (
+            <div className="flex flex-col items-center pt-8 pb-10 text-center">
+              <div
+                className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl shadow-xl shadow-accent/25"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
+                }}
+              >
+                <ChefHat size={38} className="text-white" strokeWidth={2} />
+              </div>
+              <h2 className="mt-5 text-xl font-extrabold tracking-tight">
+                What are we cooking tonight?
+              </h2>
+              <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">
+                Describe cravings, constraints, time limits or whatever's in the
+                fridge — get a complete recipe in seconds.
+              </p>
+            </div>
+          )}
 
           <p className="mb-2 text-xs font-bold tracking-wide text-faint uppercase">
-            Try one of these
+            {remixSource ? "How should we change it?" : "Try one of these"}
           </p>
           <div className="flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
+            {(remixSource ? REMIX_SUGGESTIONS : SUGGESTIONS).map((s) => (
               <button
                 key={s}
                 onClick={() => submit(s)}

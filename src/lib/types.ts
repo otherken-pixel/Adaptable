@@ -49,6 +49,17 @@ export type VoteValue = 1 | -1;
 
 export type FeedSort = "top" | "new";
 
+/** One grocery row (shopping_items table / local store in Demo Mode). */
+export interface ShoppingItem {
+  id: string;
+  recipe_id: string | null;
+  recipe_title: string;
+  item: string;
+  quantity: string;
+  checked: boolean;
+  created_at: string;
+}
+
 /** Shape the Gemini edge function is asked to produce (before insert). */
 export interface GeneratedRecipe {
   title: string;
