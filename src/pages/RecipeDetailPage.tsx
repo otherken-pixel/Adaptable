@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { fetchRecipe } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
+import CommentsSection from "@/components/CommentsSection";
 import EmptyState from "@/components/EmptyState";
 
 export default function RecipeDetailPage() {
@@ -64,7 +65,12 @@ export default function RecipeDetailPage() {
         />
       )}
 
-      {recipe && <RecipeView recipe={recipe} />}
+      {recipe && (
+        <>
+          <RecipeView recipe={recipe} />
+          <CommentsSection recipeId={recipe.id} />
+        </>
+      )}
     </div>
   );
 }

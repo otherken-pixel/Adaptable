@@ -9,11 +9,13 @@ import {
   PartyPopper,
   X,
 } from "lucide-react";
-import { fetchRecipe } from "@/lib/api";
+import { fetchRecipe, recordCook } from "@/lib/api";
 import { extractTimerSeconds } from "@/lib/duration";
 import { scaleQuantity } from "@/lib/quantity";
 import { coverGradient } from "@/lib/gradients";
+import { compactCount } from "@/lib/format";
 import type { Recipe } from "@/lib/types";
+import { useAuth } from "@/context/AuthContext";
 import StepTimer from "@/components/StepTimer";
 import VotePill from "@/components/VotePill";
 import SaveButton from "@/components/SaveButton";
@@ -27,11 +29,13 @@ export default function CookModePage() {
   const { id } = useParams<{ id: string }>();
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   // 0 = mise en place, 1..N = steps, N+1 = done
   const [idx, setIdx] = useState(0);
   const [gathered, setGathered] = useState<Set<number>>(new Set());
   const [sheetOpen, setSheetOpen] = useState(false);
+  const cookRecordedRef = useRef(false);
 
   const servings = Number(params.get("servings")) || undefined;
   const factor = recipe && servings ? servings / recipe.servings : 1;
@@ -79,6 +83,18 @@ export default function CookModePage() {
 
   const steps = recipe?.steps ?? [];
   const total = steps.length;
+
+  // Reaching the finish screen counts as "Cooked it" — once per session.
+  const reachedDone = recipe !== null && idx === total + 1;
+  useEffect(() => {
+    if (reachedDone && profile && recipe && !cookRecordedRef.current) {
+      cookRecordedRef.current = true;
+      recordCook(profile.id, recipe.id).catch(() => {
+        /* trending signal only — never block the celebration */
+      });
+    }
+  }, [reachedDone, profile, recipe]);
+
   const timerSeconds = useMemo(() => {
     if (idx < 1 || idx > total) return null;
     return extractTimerSeconds(steps[idx - 1].instruction);
@@ -230,6 +246,10 @@ export default function CookModePage() {
             <p className="mt-2 max-w-64 text-[15px] leading-relaxed text-muted">
               You just cooked <strong>{recipe.title}</strong>. How did it turn
               out? Your vote shapes the community feed.
+            </p>
+            <p className="mt-3 rounded-full bg-accent-soft px-4 py-1.5 text-[13px] font-bold text-accent">
+              🍳 You're cook #{compactCount(recipe.cook_count + 1)} — this
+              fuels the Trending feed
             </p>
             <div className="mt-7 flex w-full max-w-xs items-center gap-3">
               <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} size="lg" />

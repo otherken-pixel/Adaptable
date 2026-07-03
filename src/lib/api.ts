@@ -1,25 +1,30 @@
 import { supabase, isDemo } from "./supabase";
 import { demoStore, demoGenerate } from "./demo";
 import { shoppingLocal } from "./shoppingLocal";
-import type { FeedSort, Recipe, ShoppingItem, VoteValue } from "./types";
+import { sortByTrending } from "./trending";
+import type { Comment, FeedSort, Recipe, ShoppingItem, VoteValue } from "./types";
 
 const RECIPE_SELECT = "*, author:profiles(id, username, avatar_url)";
+const COMMENT_SELECT = "*, author:profiles(id, username, avatar_url)";
 
 export async function fetchFeed(sort: FeedSort): Promise<Recipe[]> {
   if (isDemo) {
     const list = demoStore.listRecipes();
-    return sort === "top"
-      ? list.sort((a, b) => b.net_upvotes - a.net_upvotes)
-      : list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    if (sort === "top") return list.sort((a, b) => b.net_upvotes - a.net_upvotes);
+    if (sort === "new") return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return sortByTrending(list);
   }
   let query = supabase!.from("recipes").select(RECIPE_SELECT).limit(50);
+  // "hot" fetches the newest window and ranks it with the time-decayed
+  // trending score client-side (cheap at feed scale, no DB function needed).
   query =
     sort === "top"
       ? query.order("net_upvotes", { ascending: false }).order("created_at", { ascending: false })
       : query.order("created_at", { ascending: false });
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []) as Recipe[];
+  const rows = (data ?? []) as Recipe[];
+  return sort === "hot" ? sortByTrending(rows) : rows;
 }
 
 export async function fetchRecipe(id: string): Promise<Recipe | null> {
@@ -120,6 +125,75 @@ export async function toggleSave(
     .upsert({ user_id: userId, recipe_id: recipeId });
   if (error) throw error;
   return true;
+}
+
+/* ---- Comments ---- */
+
+export async function fetchComments(recipeId: string): Promise<Comment[]> {
+  if (isDemo) return demoStore.listComments(recipeId);
+  const { data, error } = await supabase!
+    .from("comments")
+    .select(COMMENT_SELECT)
+    .eq("recipe_id", recipeId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return (data ?? []) as Comment[];
+}
+
+export async function addComment(
+  userId: string,
+  recipeId: string,
+  body: string,
+): Promise<Comment> {
+  if (isDemo) return demoStore.addComment(recipeId, body);
+  const { data, error } = await supabase!
+    .from("comments")
+    .insert({ user_id: userId, recipe_id: recipeId, body })
+    .select(COMMENT_SELECT)
+    .single();
+  if (error) throw error;
+  return data as Comment;
+}
+
+export async function deleteComment(userId: string, commentId: string): Promise<void> {
+  if (isDemo) {
+    demoStore.deleteComment(commentId);
+    return;
+  }
+  const { error } = await supabase!
+    .from("comments")
+    .delete()
+    .eq("user_id", userId)
+    .eq("id", commentId);
+  if (error) throw error;
+}
+
+/* ---- Cooks ("Cooked it" — feeds the Trending sort) ---- */
+
+export async function recordCook(userId: string, recipeId: string): Promise<void> {
+  if (isDemo) {
+    demoStore.recordCook(recipeId);
+    return;
+  }
+  const { error } = await supabase!
+    .from("cooks")
+    .insert({ user_id: userId, recipe_id: recipeId });
+  if (error) throw error;
+}
+
+/* ---- Push notification device tokens ---- */
+
+export async function registerDeviceToken(
+  userId: string,
+  token: string,
+  platform: "ios" | "android" | "web" | "unknown",
+): Promise<void> {
+  if (isDemo) return;
+  const { error } = await supabase!
+    .from("device_tokens")
+    .upsert({ token, user_id: userId, platform });
+  if (error) throw error;
 }
 
 /* ---- Shopping list ---- */

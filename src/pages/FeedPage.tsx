@@ -14,7 +14,7 @@ type Chip =
   | { kind: "tag"; label: string };
 
 export default function FeedPage() {
-  const [sort, setSort] = useState<FeedSort>("top");
+  const [sort, setSort] = useState<FeedSort>("hot");
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -188,17 +188,22 @@ function SortToggle({
   sort: FeedSort;
   onChange: (s: FeedSort) => void;
 }) {
+  const options: Array<{ id: FeedSort; label: string }> = [
+    { id: "hot", label: "🔥 Hot" },
+    { id: "top", label: "Top" },
+    { id: "new", label: "New" },
+  ];
   return (
     <div className="flex rounded-full bg-sunken p-1">
-      {(["top", "new"] as const).map((s) => (
+      {options.map(({ id, label }) => (
         <button
-          key={s}
-          onClick={() => onChange(s)}
-          className={`pressable rounded-full px-4 py-1.5 text-[13px] font-bold capitalize transition-colors ${
-            sort === s ? "bg-raised text-content shadow-sm" : "text-muted"
+          key={id}
+          onClick={() => onChange(id)}
+          className={`pressable rounded-full px-3 py-1.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
+            sort === id ? "bg-raised text-content shadow-sm" : "text-muted"
           }`}
         >
-          {s}
+          {label}
         </button>
       ))}
     </div>

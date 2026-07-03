@@ -90,6 +90,13 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
             ))}
           </div>
         )}
+        {recipe.cook_count > 0 && (
+          <p className="text-[13px] font-semibold text-muted">
+            🍳 Cooked{" "}
+            <span className="text-content">{recipe.cook_count.toLocaleString()}</span>{" "}
+            {recipe.cook_count === 1 ? "time" : "times"} by the community
+          </p>
+        )}
       </div>
 
       {/* Stat band */}

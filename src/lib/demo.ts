@@ -1,4 +1,4 @@
-import type { Profile, Recipe, VoteValue } from "./types";
+import type { Comment, Profile, Recipe, VoteValue } from "./types";
 
 /**
  * Demo Mode backend — a seeded, localStorage-persisted store used when
@@ -59,6 +59,8 @@ const SEED_RECIPES: Recipe[] = [
     ],
     source_prompt: "quick high-protein salmon dinner",
     net_upvotes: 482,
+    cook_count: 214,
+    comment_count: 3,
     created_at: daysAgo(6),
   },
   {
@@ -93,6 +95,8 @@ const SEED_RECIPES: Recipe[] = [
     ],
     source_prompt: "vegan pantry curry in 20 minutes",
     net_upvotes: 391,
+    cook_count: 178,
+    comment_count: 2,
     created_at: daysAgo(4),
   },
   {
@@ -127,6 +131,8 @@ const SEED_RECIPES: Recipe[] = [
     ],
     source_prompt: "smash burger tacos for four",
     net_upvotes: 357,
+    cook_count: 342,
+    comment_count: 2,
     created_at: daysAgo(2),
   },
   {
@@ -160,6 +166,8 @@ const SEED_RECIPES: Recipe[] = [
     ],
     source_prompt: "easy vegetarian pasta with lemon",
     net_upvotes: 289,
+    cook_count: 96,
+    comment_count: 1,
     created_at: daysAgo(1),
   },
   {
@@ -191,6 +199,8 @@ const SEED_RECIPES: Recipe[] = [
     ],
     source_prompt: "fast high protein breakfast",
     net_upvotes: 214,
+    cook_count: 511,
+    comment_count: 1,
     created_at: daysAgo(0.5),
   },
   {
@@ -226,7 +236,92 @@ const SEED_RECIPES: Recipe[] = [
     ],
     source_prompt: "fancy instant ramen with mushrooms",
     net_upvotes: 176,
+    cook_count: 88,
+    comment_count: 1,
     created_at: daysAgo(0.2),
+  },
+];
+
+const SEED_COMMENTS: Comment[] = [
+  {
+    id: "c-1",
+    recipe_id: "seed-miso-salmon",
+    user_id: chefs.theo.id,
+    author: chefs.theo,
+    body: "Made this twice this week. The broil step is not optional — that caramelized edge is everything.",
+    created_at: daysAgo(4),
+  },
+  {
+    id: "c-2",
+    recipe_id: "seed-miso-salmon",
+    user_id: chefs.june.id,
+    author: chefs.june,
+    body: "Swapped maple for honey and it worked great. 10/10 weeknight dinner.",
+    created_at: daysAgo(3),
+  },
+  {
+    id: "c-3",
+    recipe_id: "seed-miso-salmon",
+    user_id: chefs.rafa.id,
+    author: chefs.rafa,
+    body: "Remixed this with gochujang instead of miso 🔥 highly recommend.",
+    created_at: daysAgo(1),
+  },
+  {
+    id: "c-4",
+    recipe_id: "seed-chickpea-curry",
+    user_id: chefs.mika.id,
+    author: chefs.mika,
+    body: "The crispy chickpea topping is genius. Doubled it, no regrets.",
+    created_at: daysAgo(2),
+  },
+  {
+    id: "c-5",
+    recipe_id: "seed-chickpea-curry",
+    user_id: chefs.june.id,
+    author: chefs.june,
+    body: "Used frozen spinach and it was still fantastic. True pantry hero.",
+    created_at: daysAgo(1),
+  },
+  {
+    id: "c-6",
+    recipe_id: "seed-smash-tacos",
+    user_id: chefs.mika.id,
+    author: chefs.mika,
+    body: "\"Eat immediately over the sink\" — accurate. Family demolished these.",
+    created_at: daysAgo(1),
+  },
+  {
+    id: "c-7",
+    recipe_id: "seed-smash-tacos",
+    user_id: chefs.theo.id,
+    author: chefs.theo,
+    body: "Cast iron + a bacon press = perfect crust every time.",
+    created_at: daysAgo(0.5),
+  },
+  {
+    id: "c-8",
+    recipe_id: "seed-lemon-pasta",
+    user_id: chefs.rafa.id,
+    author: chefs.rafa,
+    body: "Off-heat tip saved me — first attempt on heat went grainy, second was silk.",
+    created_at: daysAgo(0.4),
+  },
+  {
+    id: "c-9",
+    recipe_id: "seed-breakfast-tacos",
+    user_id: chefs.june.id,
+    author: chefs.june,
+    body: "The cottage cheese thing sounded wrong. It is extremely right.",
+    created_at: daysAgo(0.3),
+  },
+  {
+    id: "c-10",
+    recipe_id: "seed-mushroom-ramen",
+    user_id: chefs.mika.id,
+    author: chefs.mika,
+    body: "Dry-pan mushroom sear is a game changer. Never crowding the pan again.",
+    created_at: daysAgo(0.1),
   },
 ];
 
@@ -234,9 +329,10 @@ interface DemoState {
   recipes: Recipe[];
   votes: Record<string, VoteValue>;
   saves: string[];
+  comments: Comment[];
 }
 
-const KEY = "adaptable.demo.v1";
+const KEY = "adaptable.demo.v2";
 
 function load(): DemoState {
   try {
@@ -245,7 +341,7 @@ function load(): DemoState {
   } catch {
     /* corrupted state — reseed */
   }
-  return { recipes: SEED_RECIPES, votes: {}, saves: [] };
+  return { recipes: SEED_RECIPES, votes: {}, saves: [], comments: SEED_COMMENTS };
 }
 
 let state: DemoState = load();
@@ -293,11 +389,61 @@ export const demoStore = {
     persist();
     return !saved;
   },
+  listComments(recipeId: string): Comment[] {
+    return state.comments
+      .filter((c) => c.recipe_id === recipeId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  },
+  addComment(recipeId: string, body: string): Comment {
+    const comment: Comment = {
+      id: `c-${Date.now()}`,
+      recipe_id: recipeId,
+      user_id: DEMO_USER.id,
+      author: { id: DEMO_USER.id, username: DEMO_USER.username, avatar_url: null },
+      body,
+      created_at: new Date().toISOString(),
+    };
+    state.comments = [comment, ...state.comments];
+    state.recipes = state.recipes.map((r) =>
+      r.id === recipeId ? { ...r, comment_count: r.comment_count + 1 } : r,
+    );
+    persist();
+    return comment;
+  },
+  deleteComment(commentId: string) {
+    const target = state.comments.find((c) => c.id === commentId);
+    if (!target) return;
+    state.comments = state.comments.filter((c) => c.id !== commentId);
+    state.recipes = state.recipes.map((r) =>
+      r.id === target.recipe_id
+        ? { ...r, comment_count: Math.max(0, r.comment_count - 1) }
+        : r,
+    );
+    persist();
+  },
+  recordCook(recipeId: string) {
+    state.recipes = state.recipes.map((r) =>
+      r.id === recipeId ? { ...r, cook_count: r.cook_count + 1 } : r,
+    );
+    persist();
+  },
 };
 
 /* ---- Demo recipe generation (no API key required) ---- */
 
-const DEMO_TEMPLATES: Array<Omit<Recipe, "id" | "author_id" | "author" | "source_prompt" | "net_upvotes" | "created_at">> = [
+const DEMO_TEMPLATES: Array<
+  Omit<
+    Recipe,
+    | "id"
+    | "author_id"
+    | "author"
+    | "source_prompt"
+    | "net_upvotes"
+    | "cook_count"
+    | "comment_count"
+    | "created_at"
+  >
+> = [
   {
     title: "Charred Corn & Halloumi Grain Bowl",
     description:
@@ -395,6 +541,8 @@ export async function demoGenerate(prompt: string): Promise<Recipe> {
     author: { id: DEMO_USER.id, username: DEMO_USER.username, avatar_url: null },
     source_prompt: prompt,
     net_upvotes: 0,
+    cook_count: 0,
+    comment_count: 0,
     created_at: new Date().toISOString(),
   };
   demoStore.addRecipe(recipe);

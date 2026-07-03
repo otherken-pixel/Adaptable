@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { Clock, Flame, Gauge } from "lucide-react";
+import { Clock, CookingPot, Flame, Gauge, MessageCircle } from "lucide-react";
+import { compactCount } from "@/lib/format";
 import type { Recipe } from "@/lib/types";
 import { coverGradient } from "@/lib/gradients";
 import { timeAgo, totalMinutes } from "@/lib/format";
@@ -50,6 +51,12 @@ export default function RecipeCard({
           <Meta icon={Clock} label={totalMinutes(recipe.prep_time_minutes, recipe.cook_time_minutes)} />
           <Meta icon={Gauge} label={recipe.difficulty} />
           {recipe.calories ? <Meta icon={Flame} label={`${recipe.calories} cal`} /> : null}
+          {recipe.cook_count > 0 && (
+            <Meta icon={CookingPot} label={`${compactCount(recipe.cook_count)} cooked`} accent />
+          )}
+          {recipe.comment_count > 0 && (
+            <Meta icon={MessageCircle} label={compactCount(recipe.comment_count)} />
+          )}
         </div>
 
         <div className="flex items-center justify-between border-t border-line pt-3">
@@ -77,12 +84,18 @@ export default function RecipeCard({
 function Meta({
   icon: Icon,
   label,
+  accent = false,
 }: {
   icon: typeof Clock;
   label: string;
+  accent?: boolean;
 }) {
   return (
-    <span className="flex items-center gap-1 rounded-full bg-sunken px-2.5 py-1 text-xs font-semibold text-muted">
+    <span
+      className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+        accent ? "bg-accent-soft text-accent" : "bg-sunken text-muted"
+      }`}
+    >
       <Icon size={13} strokeWidth={2.2} />
       {label}
     </span>

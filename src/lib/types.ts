@@ -40,14 +40,26 @@ export interface Recipe {
   steps: RecipeStep[];
   source_prompt: string;
   net_upvotes: number;
+  /** Completed Cook Mode sessions — the strongest trending signal. */
+  cook_count: number;
+  comment_count: number;
   created_at: string;
   /** Joined author profile (select `author:profiles(...)`). */
   author?: Pick<Profile, "id" | "username" | "avatar_url"> | null;
 }
 
+export interface Comment {
+  id: string;
+  recipe_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  author?: Pick<Profile, "id" | "username" | "avatar_url"> | null;
+}
+
 export type VoteValue = 1 | -1;
 
-export type FeedSort = "top" | "new";
+export type FeedSort = "hot" | "top" | "new";
 
 /** One grocery row (shopping_items table / local store in Demo Mode). */
 export interface ShoppingItem {

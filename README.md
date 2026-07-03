@@ -31,11 +31,22 @@ keepers to your Cookbook.
 - **Groceries** — add a recipe's ingredients (scaled) to a shopping list,
   grouped by recipe, with check-off, per-recipe progress and a badge on the
   tab bar. Synced via Supabase (`shopping_items`), local in Demo Mode.
-- **Discovery Feed** — community recipes sorted by net upvotes (or newest),
+- **Pantry mode** — "What's in my fridge": pick ingredients (quick-add
+  staples or type your own) and the AI builds the best dish around them,
+  minimizing anything you'd have to buy.
+- **Discovery Feed** — 🔥 Hot (time-decayed trending), Top and New sorts,
   full-text search plus time and tag filter chips, deterministic gradient
   covers so every card looks designed.
+- **Trending algorithm** — Hacker-News-style decay where an actual cook
+  counts 3×, a comment 2× and a vote 1×: finishing Cook Mode records a
+  "Cooked it" that pushes recipes up the Hot feed.
+- **Comments** — public discussion on every recipe (tips, swaps, results),
+  with counts denormalized onto recipes by trigger.
 - **Voting** — one vote per user per recipe (enforced by a DB primary key),
   optimistic UI, counter maintained by a Postgres trigger.
+- **Push notifications** — Capacitor Push Notifications plugin registers
+  APNs/FCM tokens into `device_tokens` (owner-only RLS) from the Profile
+  screen on native builds; gracefully explains itself on the web.
 - **Cookbook** — personal saves, synced live across every screen.
 - **Auth** — Supabase email/password + Google OAuth, auto-created profiles.
 - **Demo Mode** — no env vars? The app boots with seeded recipes and a local
@@ -104,6 +115,18 @@ npx cap sync
 | `user_votes` | One row per (user, recipe), value ∈ {-1, 1} | Owner only; trigger syncs `recipes.net_upvotes` |
 | `saves` | Personal cookbook junction table | Owner only |
 | `shopping_items` | Grocery list rows, linked to source recipe | Owner only |
+| `comments` | Recipe discussion; trigger syncs `recipes.comment_count` | Public read, owner write |
+| `cooks` | One row per finished Cook Mode session; trigger syncs `recipes.cook_count` | Owner only |
+| `device_tokens` | APNs/FCM push targets per user | Owner only |
+
+### Sending push notifications
+
+Tokens land in `device_tokens`. To actually deliver, add a Supabase Edge
+Function (or DB webhook) that calls FCM's HTTP v1 API with a service
+account — e.g. notify a recipe's author when `user_votes` or `comments`
+gets a new row for their recipe. iOS additionally needs the Push
+Notifications capability enabled in Xcode and an APNs key uploaded to
+Firebase.
 
 ## 📱 Native builds
 

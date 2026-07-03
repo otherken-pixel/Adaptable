@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowBigUp, ChefHat, LogOut, Sparkles } from "lucide-react";
+import { ArrowBigUp, Bell, BellRing, ChefHat, LogOut, Sparkles } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
+import { enablePush, type PushStatus } from "@/lib/push";
 import type { Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
 import { useAuth } from "@/context/AuthContext";
@@ -10,6 +11,13 @@ import { compactCount } from "@/lib/format";
 export default function ProfilePage() {
   const { profile, signOut, isDemo } = useAuth();
   const [mine, setMine] = useState<Recipe[]>([]);
+  const [pushState, setPushState] = useState<PushStatus | "idle" | "working">("idle");
+
+  const onEnablePush = async () => {
+    if (!profile || pushState === "working") return;
+    setPushState("working");
+    setPushState(await enablePush(profile.id));
+  };
 
   useEffect(() => {
     if (!profile) return;
@@ -92,6 +100,40 @@ export default function ProfilePage() {
           </p>
         </div>
       )}
+
+      {/* Push notifications */}
+      <div className="animate-fade-up mt-7 rounded-card border border-line bg-raised p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent">
+            {pushState === "enabled" ? (
+              <BellRing size={19} strokeWidth={2.2} />
+            ) : (
+              <Bell size={19} strokeWidth={2.2} />
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[15px] font-extrabold">Push notifications</h3>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-muted">
+              {pushState === "enabled"
+                ? "You're set — we'll ping you when your recipes get votes and comments."
+                : pushState === "unsupported"
+                  ? "Push lives in the native app. Run `npm run cap:ios` or `cap:android` to get notified when your recipes blow up."
+                  : pushState === "denied"
+                    ? "Permission was declined — enable notifications for Adaptable in system settings, then try again."
+                    : "Get pinged when your recipes earn votes, comments and cooks."}
+            </p>
+          </div>
+          {pushState !== "enabled" && pushState !== "unsupported" && (
+            <button
+              onClick={() => void onEnablePush()}
+              disabled={pushState === "working"}
+              className="pressable shrink-0 rounded-full bg-content px-4 py-2 text-[13px] font-bold text-surface disabled:opacity-50"
+            >
+              {pushState === "working" ? "…" : "Enable"}
+            </button>
+          )}
+        </div>
+      </div>
 
       {!isDemo && (
         <button

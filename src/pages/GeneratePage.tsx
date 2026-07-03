@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowUp, ChefHat, RotateCcw, Shuffle, Sparkles, X } from "lucide-react";
+import {
+  ArrowUp,
+  ChefHat,
+  Plus,
+  Refrigerator,
+  RotateCcw,
+  Shuffle,
+  Sparkles,
+  Wand2,
+  X,
+} from "lucide-react";
 import { fetchRecipe, generateRecipe } from "@/lib/api";
 import type { Recipe } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
@@ -23,6 +33,23 @@ const REMIX_SUGGESTIONS = [
   "Air-fryer version 💨",
 ];
 
+const PANTRY_STAPLES = [
+  "Eggs",
+  "Rice",
+  "Pasta",
+  "Chicken",
+  "Canned tomatoes",
+  "Onions",
+  "Garlic",
+  "Potatoes",
+  "Black beans",
+  "Cheese",
+  "Tortillas",
+  "Frozen spinach",
+];
+
+type CreateMode = "describe" | "pantry";
+
 const LOADING_LINES = [
   "Reading your cravings…",
   "Raiding the flavor archives…",
@@ -42,6 +69,31 @@ export default function GeneratePage() {
   const [lineIdx, setLineIdx] = useState(0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+
+  // Pantry flow: pick what's in the fridge, we figure out the dish.
+  const [mode, setMode] = useState<CreateMode>("describe");
+  const [pantry, setPantry] = useState<string[]>([]);
+  const [pantryDraft, setPantryDraft] = useState("");
+
+  const addPantryItem = (raw: string) => {
+    const item = raw.trim();
+    if (!item) return;
+    setPantry((prev) =>
+      prev.some((p) => p.toLowerCase() === item.toLowerCase())
+        ? prev
+        : [...prev, item],
+    );
+    setPantryDraft("");
+  };
+
+  const cookFromPantry = () => {
+    if (pantry.length < 2) return;
+    void submit(
+      `What can I make with what I have on hand: ${pantry.join(", ")}? ` +
+        "Use mainly these ingredients (basic staples like oil, salt, pepper and water are available). " +
+        "Minimize anything I'd need to buy.",
+    );
+  };
 
   // Remix flow: /create?remix=<recipeId> adapts an existing recipe.
   const [params] = useSearchParams();
@@ -142,40 +194,157 @@ export default function GeneratePage() {
               </button>
             </div>
           ) : (
-            <div className="flex flex-col items-center pt-8 pb-10 text-center">
-              <div
-                className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl shadow-xl shadow-accent/25"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
-                }}
-              >
-                <ChefHat size={38} className="text-white" strokeWidth={2} />
+            <>
+              {/* Describe ↔ Pantry mode toggle */}
+              <div className="mx-auto flex w-fit rounded-full bg-sunken p-1">
+                {(
+                  [
+                    { id: "describe", label: "Describe it", icon: Wand2 },
+                    { id: "pantry", label: "What's in my fridge", icon: Refrigerator },
+                  ] as const
+                ).map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setMode(id)}
+                    className={`pressable flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold whitespace-nowrap transition-colors ${
+                      mode === id ? "bg-raised text-content shadow-sm" : "text-muted"
+                    }`}
+                  >
+                    <Icon size={14} strokeWidth={2.4} />
+                    {label}
+                  </button>
+                ))}
               </div>
-              <h2 className="mt-5 text-xl font-extrabold tracking-tight">
-                What are we cooking tonight?
-              </h2>
-              <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">
-                Describe cravings, constraints, time limits or whatever's in the
-                fridge — get a complete recipe in seconds.
-              </p>
-            </div>
+
+              {mode === "describe" && (
+                <div className="flex flex-col items-center pt-8 pb-10 text-center">
+                  <div
+                    className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl shadow-xl shadow-accent/25"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
+                    }}
+                  >
+                    <ChefHat size={38} className="text-white" strokeWidth={2} />
+                  </div>
+                  <h2 className="mt-5 text-xl font-extrabold tracking-tight">
+                    What are we cooking tonight?
+                  </h2>
+                  <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">
+                    Describe cravings, constraints, time limits or whatever's in
+                    the fridge — get a complete recipe in seconds.
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
-          <p className="mb-2 text-xs font-bold tracking-wide text-faint uppercase">
-            {remixSource ? "How should we change it?" : "Try one of these"}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {(remixSource ? REMIX_SUGGESTIONS : SUGGESTIONS).map((s) => (
+          {(remixSource || mode === "describe") && (
+            <>
+              <p className="mb-2 text-xs font-bold tracking-wide text-faint uppercase">
+                {remixSource ? "How should we change it?" : "Try one of these"}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(remixSource ? REMIX_SUGGESTIONS : SUGGESTIONS).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => submit(s)}
+                    className="pressable rounded-full border border-line bg-raised px-4 py-2.5 text-left text-[13px] leading-snug font-semibold shadow-sm"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {!remixSource && mode === "pantry" && (
+            <div className="pt-6">
+              <h2 className="text-xl font-extrabold tracking-tight">
+                What's in the fridge? 🧺
+              </h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">
+                Pick at least two ingredients and the AI builds the best
+                possible dish around them — no store run required.
+              </p>
+
+              {/* Selected items */}
+              {pantry.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {pantry.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() =>
+                        setPantry((prev) => prev.filter((p) => p !== item))
+                      }
+                      className="pressable flex items-center gap-1.5 rounded-full bg-accent-soft px-3.5 py-2 text-[13px] font-bold text-accent"
+                    >
+                      {item}
+                      <X size={13} strokeWidth={2.8} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Add custom item */}
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-line bg-raised p-1.5 pl-4">
+                <input
+                  value={pantryDraft}
+                  onChange={(e) => setPantryDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addPantryItem(pantryDraft);
+                    }
+                  }}
+                  maxLength={40}
+                  placeholder="Add an ingredient…"
+                  className="h-10 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint"
+                />
+                <button
+                  aria-label="Add ingredient"
+                  onClick={() => addPantryItem(pantryDraft)}
+                  disabled={!pantryDraft.trim()}
+                  className="pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-muted disabled:opacity-30"
+                >
+                  <Plus size={17} strokeWidth={2.6} />
+                </button>
+              </div>
+
+              {/* Staples quick-add */}
+              <p className="mt-5 mb-2 text-xs font-bold tracking-wide text-faint uppercase">
+                Quick add
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {PANTRY_STAPLES.filter(
+                  (s) => !pantry.some((p) => p.toLowerCase() === s.toLowerCase()),
+                ).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => addPantryItem(s)}
+                    className="pressable rounded-full border border-line bg-raised px-3.5 py-2 text-[13px] font-semibold shadow-sm"
+                  >
+                    + {s}
+                  </button>
+                ))}
+              </div>
+
               <button
-                key={s}
-                onClick={() => submit(s)}
-                className="pressable rounded-full border border-line bg-raised px-4 py-2.5 text-left text-[13px] leading-snug font-semibold shadow-sm"
+                onClick={cookFromPantry}
+                disabled={pantry.length < 2}
+                className="pressable mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-[16px] font-extrabold text-white shadow-lg shadow-accent/25 transition-opacity disabled:opacity-40"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+                }}
               >
-                {s}
+                <Sparkles size={19} strokeWidth={2.2} />
+                {pantry.length < 2
+                  ? "Pick at least 2 ingredients"
+                  : `What can I make? (${pantry.length} items)`}
               </button>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -247,8 +416,9 @@ export default function GeneratePage() {
         </>
       )}
 
-      {/* Composer — pinned above the bottom nav */}
-      {(phase === "idle" || phase === "error") && (
+      {/* Composer — pinned above the bottom nav (pantry mode has its own CTA) */}
+      {(phase === "idle" || phase === "error") &&
+        (phase === "error" || mode === "describe" || remixSource !== null) && (
         <div
           className="fixed inset-x-0 z-30"
           style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
