@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, Search, Sparkles, X } from "lucide-react";
+import { Bell, Search, X } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
 import type { FeedSort, Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
@@ -30,7 +30,7 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeChipId, setActiveChipId] = useState("all");
-  const { isDemo, profile } = useAuth();
+  const { profile } = useAuth();
   const { unreadCount } = useNotifications();
   const { followedIds } = useEngagement();
 
@@ -212,15 +212,14 @@ export default function FeedPage() {
             </button>
           ))}
         </div>
+        {/* Confirms a filter took effect even when the top card doesn't
+            change (e.g. one recipe qualifying for several filters). */}
+        {filtered !== null && (activeChip.id !== "all" || search) && (
+          <p className="px-1 text-xs font-semibold text-faint">
+            {filtered.length} {filtered.length === 1 ? "recipe" : "recipes"}
+          </p>
+        )}
       </div>
-
-      {isDemo && (
-        <div className="animate-fade-up mb-4 flex items-center gap-2.5 rounded-2xl bg-accent-soft px-4 py-3 text-[13px] leading-snug font-medium text-accent">
-          <Sparkles size={16} className="shrink-0" />
-          Demo Mode — add Supabase keys in .env to go live. Everything here still
-          works locally.
-        </div>
-      )}
 
       {error && (
         <EmptyState

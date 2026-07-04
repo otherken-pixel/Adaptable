@@ -204,7 +204,7 @@ const SEED_RECIPES: Recipe[] = [
     prep_time_minutes: 2,
     cook_time_minutes: 3,
     servings: 1,
-    calories: 480,
+    calories: 520,
     protein_g: 38,
     carbs_g: 28,
     fat_g: 24,
@@ -238,7 +238,7 @@ const SEED_RECIPES: Recipe[] = [
     cuisine: "Japanese-ish",
     difficulty: "Medium",
     prep_time_minutes: 10,
-    cook_time_minutes: 15,
+    cook_time_minutes: 40,
     servings: 2,
     calories: 540,
     protein_g: 19,
@@ -373,7 +373,7 @@ export function subscribeDemoStore(fn: () => void): () => void {
   };
 }
 
-const KEY = "adaptable.demo.v4";
+const KEY = "adaptable.demo.v5";
 
 function load(): DemoState {
   try {
