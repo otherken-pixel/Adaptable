@@ -19,6 +19,7 @@ import {
 import type { Recipe } from "@/lib/types";
 import { coverGradient } from "@/lib/gradients";
 import { scaleQuantity } from "@/lib/quantity";
+import { localISODate } from "@/lib/format";
 import { addMealPlan } from "@/lib/api";
 import { useShopping } from "@/context/ShoppingContext";
 import { useAuth } from "@/context/AuthContext";
@@ -30,7 +31,8 @@ function nextDays(count: number): Array<{ iso: string; label: string }> {
   return Array.from({ length: count }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
-    const iso = d.toISOString().slice(0, 10);
+    // Local date, not toISOString(): UTC is already tomorrow in US evenings.
+    const iso = localISODate(d);
     const label = i === 0 ? "Today" : i === 1 ? "Tomorrow" : fmt.format(d);
     return { iso, label };
   });
@@ -106,12 +108,13 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
         {recipe.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {recipe.tags.map((t) => (
-              <span
+              <button
                 key={t}
-                className="rounded-full bg-accent-soft px-3 py-1 text-xs font-bold text-accent"
+                onClick={() => navigate(`/?tag=${encodeURIComponent(t)}`)}
+                className="pressable rounded-full bg-accent-soft px-3 py-1 text-xs font-bold text-accent"
               >
                 {t}
-              </span>
+              </button>
             ))}
           </div>
         )}

@@ -61,7 +61,9 @@ export default function TasteProfilePage() {
         skill,
       });
       setSaved(true);
-      setTimeout(() => navigate(-1), 900);
+      // Explicit destination: navigate(-1) could leave the app when this
+      // page is the first history entry (e.g. opened from a shared link).
+      setTimeout(() => navigate("/profile", { replace: true }), 900);
     } catch {
       setSaving(false);
     }

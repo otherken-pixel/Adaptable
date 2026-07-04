@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Bell, Search, Sparkles, X } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
 import type { FeedSort, Recipe } from "@/lib/types";
@@ -11,67 +11,104 @@ import { useNotifications } from "@/context/NotificationsContext";
 import { useEngagement } from "@/context/EngagementContext";
 
 type Chip =
-  | { kind: "all"; label: string }
-  | { kind: "foryou"; label: string }
-  | { kind: "following"; label: string }
-  | { kind: "time"; label: string; maxMinutes: number }
-  | { kind: "cal"; label: string; maxCalories: number }
-  | { kind: "protein"; label: string; minProtein: number }
-  | { kind: "tag"; label: string };
+  | { id: string; kind: "all"; label: string }
+  | { id: string; kind: "foryou"; label: string }
+  | { id: string; kind: "following"; label: string }
+  | { id: string; kind: "time"; label: string; maxMinutes: number }
+  | { id: string; kind: "cal"; label: string; maxCalories: number }
+  | { id: string; kind: "protein"; label: string; minProtein: number }
+  | { id: string; kind: "tag"; label: string };
+
+const tagChipId = (label: string) => `tag:${label.toLowerCase()}`;
+
+// Tags that would duplicate a built-in filter chip.
+const BUILTIN_TAG_LABELS = new Set(["high-protein", "low-cal"]);
 
 export default function FeedPage() {
   const [sort, setSort] = useState<FeedSort>("hot");
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [chipIdx, setChipIdx] = useState(0);
+  const [activeChipId, setActiveChipId] = useState("all");
   const { isDemo, profile } = useAuth();
   const { unreadCount } = useNotifications();
   const { followedIds } = useEngagement();
 
+  // Deep link: /?tag=High-protein (recipe tag pills navigate here).
+  const [params, setParams] = useSearchParams();
+  const tagParam = params.get("tag");
   useEffect(() => {
+    if (tagParam) setActiveChipId(tagChipId(tagParam));
+  }, [tagParam]);
+
+  const load = useCallback(() => {
     let cancelled = false;
     setRecipes(null);
     setError(null);
     fetchFeed(sort)
       .then((r) => !cancelled && setRecipes(r))
-      .catch(() => !cancelled && setError("Couldn't load the feed. Pull to retry."));
+      .catch(() => !cancelled && setError("Couldn't load the feed."));
     return () => {
       cancelled = true;
     };
   }, [sort]);
 
-  // Filter chips: fixed time filters + the most common tags in the feed.
+  useEffect(() => load(), [load]);
+
+  // Filter chips: fixed filters + the most common tags in the feed,
+  // deduped against built-ins. Identified by stable ids so async chips
+  // (For you / Following) appearing never shifts the active selection.
   const chips = useMemo<Chip[]>(() => {
     const counts = new Map<string, number>();
     for (const r of recipes ?? []) {
       for (const t of r.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     }
     const topTags = [...counts.entries()]
+      .filter(([t]) => !BUILTIN_TAG_LABELS.has(t.toLowerCase()))
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([t]) => t);
-    const list: Chip[] = [{ kind: "all", label: "All" }];
+
+    const list: Chip[] = [{ id: "all", kind: "all", label: "All" }];
     if (profile?.preferences?.diets?.length) {
-      list.push({ kind: "foryou", label: "✨ For you" });
+      list.push({ id: "foryou", kind: "foryou", label: "✨ For you" });
     }
     if (followedIds.size > 0) {
-      list.push({ kind: "following", label: "Following" });
+      list.push({ id: "following", kind: "following", label: "Following" });
     }
     list.push(
-      { kind: "time", label: "Under 20 min", maxMinutes: 20 },
-      { kind: "cal", label: "Low-cal", maxCalories: 500 },
-      { kind: "protein", label: "High-protein", minProtein: 30 },
-      { kind: "time", label: "Under 45 min", maxMinutes: 45 },
-      ...topTags.map((t): Chip => ({ kind: "tag", label: t })),
+      { id: "time20", kind: "time", label: "Under 20 min", maxMinutes: 20 },
+      { id: "cal500", kind: "cal", label: "Low-cal", maxCalories: 500 },
+      { id: "protein30", kind: "protein", label: "High-protein", minProtein: 30 },
+      { id: "time45", kind: "time", label: "Under 45 min", maxMinutes: 45 },
+      ...topTags.map(
+        (t): Chip => ({ id: tagChipId(t), kind: "tag", label: t }),
+      ),
     );
+
+    // A deep-linked tag that isn't in the top tags still gets a chip.
+    if (
+      tagParam &&
+      !BUILTIN_TAG_LABELS.has(tagParam.toLowerCase()) &&
+      !list.some((c) => c.id === tagChipId(tagParam))
+    ) {
+      list.push({ id: tagChipId(tagParam), kind: "tag", label: tagParam });
+    }
     return list;
-  }, [recipes, profile, followedIds]);
+  }, [recipes, profile, followedIds, tagParam]);
+
+  const activeChip = chips.find((c) => c.id === activeChipId) ?? chips[0];
+
+  const pickChip = (chip: Chip) => {
+    setActiveChipId(chip.id);
+    // Manual picks replace any deep-linked tag in the URL.
+    if (tagParam) setParams({}, { replace: true });
+  };
 
   const filtered = useMemo(() => {
     if (!recipes) return null;
     const q = search.trim().toLowerCase();
-    const chip = chips[Math.min(chipIdx, chips.length - 1)];
+    const chip = activeChip;
     return recipes.filter((r) => {
       if (q) {
         const haystack = [r.title, r.description, r.cuisine, ...r.tags]
@@ -79,32 +116,37 @@ export default function FeedPage() {
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
-      if (chip.kind === "time") {
-        return r.prep_time_minutes + r.cook_time_minutes <= chip.maxMinutes;
+      switch (chip.kind) {
+        case "time":
+          return r.prep_time_minutes + r.cook_time_minutes <= chip.maxMinutes;
+        case "cal":
+          // Recipes without calorie data can't claim to be low-cal.
+          return r.calories !== null && r.calories <= chip.maxCalories;
+        case "protein":
+          return (
+            (r.protein_g !== null && r.protein_g >= chip.minProtein) ||
+            r.tags.some((t) => t.toLowerCase() === "high-protein")
+          );
+        case "foryou": {
+          const diets = (profile?.preferences?.diets ?? []).map((d) =>
+            d.toLowerCase(),
+          );
+          return r.tags.some((t) => diets.includes(t.toLowerCase()));
+        }
+        case "following":
+          return followedIds.has(r.author_id);
+        case "tag":
+          return r.tags.some(
+            (t) => t.toLowerCase() === chip.label.toLowerCase(),
+          );
+        default:
+          return true;
       }
-      if (chip.kind === "cal") {
-        // Recipes without calorie data can't claim to be low-cal.
-        return r.calories !== null && r.calories <= chip.maxCalories;
-      }
-      if (chip.kind === "protein") {
-        return (
-          (r.protein_g !== null && r.protein_g >= chip.minProtein) ||
-          r.tags.some((t) => t.toLowerCase() === "high-protein")
-        );
-      }
-      if (chip.kind === "foryou") {
-        const diets = (profile?.preferences?.diets ?? []).map((d) => d.toLowerCase());
-        return r.tags.some((t) => diets.includes(t.toLowerCase()));
-      }
-      if (chip.kind === "following") {
-        return followedIds.has(r.author_id);
-      }
-      if (chip.kind === "tag") {
-        return r.tags.some((t) => t.toLowerCase() === chip.label.toLowerCase());
-      }
-      return true;
     });
-  }, [recipes, search, chipIdx, chips, profile, followedIds]);
+  }, [recipes, search, activeChip, profile, followedIds]);
+
+  const filteredEmpty = filtered !== null && filtered.length === 0;
+  const isForYouEmpty = filteredEmpty && activeChip.kind === "foryou";
 
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
@@ -156,12 +198,12 @@ export default function FeedPage() {
           )}
         </div>
         <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4">
-          {chips.map((c, i) => (
+          {chips.map((c) => (
             <button
-              key={c.label}
-              onClick={() => setChipIdx(i)}
+              key={c.id}
+              onClick={() => pickChip(c)}
               className={`pressable shrink-0 rounded-full px-4 py-1.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                i === chipIdx
+                c.id === activeChip.id
                   ? "bg-content text-surface"
                   : "border border-line bg-raised text-muted"
               }`}
@@ -187,7 +229,7 @@ export default function FeedPage() {
           body={error}
           action={
             <button
-              onClick={() => setSort((s) => s)}
+              onClick={load}
               className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
             >
               Retry
@@ -198,12 +240,30 @@ export default function FeedPage() {
 
       {!error && filtered === null && <FeedSkeleton />}
 
-      {!error && filtered !== null && filtered.length === 0 && (
+      {!error && isForYouEmpty && (
         <EmptyState
-          emoji={search || chipIdx > 0 ? "🔍" : "🍳"}
-          title={search || chipIdx > 0 ? "No matches" : "Nothing cooking yet"}
+          emoji="🥗"
+          title="Nothing matches your diets yet"
+          body={`No community recipes are tagged ${(profile?.preferences?.diets ?? []).join(" or ")} right now — generate one and the AI will cook to your taste profile automatically.`}
+          action={
+            <Link
+              to="/create"
+              className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+            >
+              Generate one for my diet
+            </Link>
+          }
+        />
+      )}
+
+      {!error && filteredEmpty && !isForYouEmpty && (
+        <EmptyState
+          emoji={search || activeChip.kind !== "all" ? "🔍" : "🍳"}
+          title={
+            search || activeChip.kind !== "all" ? "No matches" : "Nothing cooking yet"
+          }
           body={
-            search || chipIdx > 0
+            search || activeChip.kind !== "all"
               ? "Try a different search or filter — or generate exactly what you're craving."
               : "Be the first — describe what you're craving and let the AI take it from there."
           }

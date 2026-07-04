@@ -80,6 +80,19 @@ export default function GeneratePage() {
   // How many people the generated recipe should serve — defaults to the
   // household size from the taste profile.
   const [serves, setServes] = useState(profile?.preferences?.household_size ?? 4);
+  const servesTouchedRef = useRef(false);
+
+  // In live mode the profile (and its household_size) can arrive after
+  // mount; adopt it unless the user has already adjusted the stepper.
+  useEffect(() => {
+    const size = profile?.preferences?.household_size;
+    if (size && !servesTouchedRef.current) setServes(size);
+  }, [profile?.preferences?.household_size]);
+
+  const adjustServes = (delta: number) => {
+    servesTouchedRef.current = true;
+    setServes((s) => Math.min(12, Math.max(1, s + delta)));
+  };
 
   // Pantry flow: pick what's in the fridge, we figure out the dish.
   const [mode, setMode] = useState<CreateMode>("describe");
@@ -306,7 +319,7 @@ export default function GeneratePage() {
             <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
               <button
                 aria-label="Fewer people"
-                onClick={() => setServes((s) => Math.max(1, s - 1))}
+                onClick={() => adjustServes(-1)}
                 className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
               >
                 <Minus size={15} strokeWidth={2.6} />
@@ -316,7 +329,7 @@ export default function GeneratePage() {
               </span>
               <button
                 aria-label="More people"
-                onClick={() => setServes((s) => Math.min(12, s + 1))}
+                onClick={() => adjustServes(1)}
                 className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
               >
                 <Plus size={15} strokeWidth={2.6} />

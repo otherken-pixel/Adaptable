@@ -23,6 +23,17 @@ export function timeAgo(iso: string): string {
   });
 }
 
+/**
+ * Local-timezone yyyy-mm-dd. Never use toISOString() for calendar dates:
+ * it returns UTC, which is already "tomorrow" during US evenings.
+ */
+export function localISODate(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function compactCount(n: number): string {
   if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k`;
   return String(n);

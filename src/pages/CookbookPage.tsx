@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useEngagement } from "@/context/EngagementContext";
 import { useShopping } from "@/context/ShoppingContext";
 import { coverGradient } from "@/lib/gradients";
+import { localISODate } from "@/lib/format";
 
 type Tab = "saved" | "planner";
 
@@ -49,7 +50,7 @@ export default function CookbookPage() {
   // Upcoming plans grouped by day (past entries hidden).
   const grouped = useMemo(() => {
     if (!plans) return null;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localISODate();
     const upcoming = plans.filter((p) => p.plan_date >= today && p.recipe);
     const byDay = new Map<string, MealPlanEntry[]>();
     for (const p of upcoming) {
@@ -63,8 +64,8 @@ export default function CookbookPage() {
   const upcomingCount = grouped?.reduce((n, [, list]) => n + list.length, 0) ?? 0;
 
   const dayLabel = (iso: string) => {
-    const today = new Date().toISOString().slice(0, 10);
-    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const today = localISODate();
+    const tomorrow = localISODate(new Date(Date.now() + 86_400_000));
     if (iso === today) return "Today";
     if (iso === tomorrow) return "Tomorrow";
     return new Date(iso + "T12:00:00").toLocaleDateString(undefined, {
