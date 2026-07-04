@@ -172,6 +172,11 @@ export default function GeneratePage() {
       setRemixSource(null);
       return;
     }
+    // Entering remix must show the remix UI even if we were already on
+    // /create displaying a finished generation (same route, no remount).
+    setPhase("idle");
+    setRecipe(null);
+    setPrompt("");
     let cancelled = false;
     fetchRecipe(remixId)
       .then((r) => !cancelled && setRemixSource(r))
