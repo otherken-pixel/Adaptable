@@ -37,14 +37,19 @@ final class VoiceCommandListener: ObservableObject {
 
     private func beginSession() {
         guard let recognizer, recognizer.isAvailable else { lastError = true; return }
+        // NOTE: The audio session category must already be configured by
+         // CookModeManager.startCookMode() before this method is called.
+        // We activate the session (required for mic input) without changing
+        // the category — leaving .playAndRecord with .mixWithOthers intact
+         // so background music keeps playing at reduced volume.
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
+         } catch {
+            print("Failed to activate audio session for voice recognition: \(error)")
             lastError = true
             return
-        }
+          }
 
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = false

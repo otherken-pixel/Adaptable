@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import {
   Camera,
   Check,
@@ -39,7 +44,12 @@ interface SpeechRecognitionLike {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>>; resultIndex: number }) => void) | null;
+  onresult:
+    | ((event: {
+        results: ArrayLike<ArrayLike<{ transcript: string }>>;
+        resultIndex: number;
+      }) => void)
+    | null;
   onend: (() => void) | null;
   onerror: (() => void) | null;
   start: () => void;
@@ -78,7 +88,9 @@ export default function CookModePage() {
 
   // Cooked-it photo (live mode only)
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const [photoState, setPhotoState] = useState<"idle" | "uploading" | "done">("idle");
+  const [photoState, setPhotoState] = useState<"idle" | "uploading" | "done">(
+    "idle",
+  );
 
   const servings = Number(params.get("servings")) || undefined;
   const factor = recipe && servings ? servings / recipe.servings : 1;
@@ -119,7 +131,9 @@ export default function CookModePage() {
   const wakeLockRef = useRef<{ release: () => Promise<void> } | null>(null);
   useEffect(() => {
     const nav = navigator as Navigator & {
-      wakeLock?: { request: (type: "screen") => Promise<{ release: () => Promise<void> }> };
+      wakeLock?: {
+        request: (type: "screen") => Promise<{ release: () => Promise<void> }>;
+      };
     };
     let active = true;
     const acquire = () => {
@@ -199,48 +213,73 @@ export default function CookModePage() {
   const actionsRef = useRef({ goNext, goBack, startTimer, setSheetOpen });
   actionsRef.current = { goNext, goBack, startTimer, setSheetOpen };
 
+  /// Max consecutive restart attempts to prevent infinite loops if the
+  /// recognition API enters a broken state (Chrome's known issue).
+  const restartCountRef = useRef(0);
+  const MAX_RESTARTS = 5;
+
   useEffect(() => {
     if (!voiceOn || !SR) return;
     let stopped = false;
-    const rec = new SR();
-    rec.continuous = true;
-    rec.interimResults = false;
-    rec.lang = "en-US";
-    rec.onresult = (event) => {
-      const last = event.results[event.results.length - 1];
-      const heard = (last?.[0]?.transcript ?? "").toLowerCase();
-      const a = actionsRef.current;
-      if (/\b(next|continue|done|forward)\b/.test(heard)) a.goNext();
-      else if (/\b(back|previous)\b/.test(heard)) a.goBack();
-      else if (/\bingredient/.test(heard)) a.setSheetOpen(true);
-      else if (/\b(close|hide)\b/.test(heard)) a.setSheetOpen(false);
-      else if (/\btimer\b/.test(heard)) a.startTimer();
-    };
-    rec.onend = () => {
-      // Browsers stop recognition periodically; keep listening.
-      if (!stopped) {
-        try {
-          rec.start();
-        } catch {
-          /* already restarting */
+    let rec: SpeechRecognitionLike | null = null;
+
+    const startRecognition = () => {
+      restartCountRef.current = 0; // Reset on fresh start
+      rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.lang = "en-US";
+      rec.onresult = (event) => {
+        const last = event.results[event.results.length - 1];
+        const heard = (last?.[0]?.transcript ?? "").toLowerCase();
+        const a = actionsRef.current;
+        if (/\b(next|continue|done|forward)\b/.test(heard)) a.goNext();
+        else if (/\b(back|previous)\b/.test(heard)) a.goBack();
+        else if (/\bingredient/.test(heard)) a.setSheetOpen(true);
+        else if (/\b(close|hide)\b/.test(heard)) a.setSheetOpen(false);
+        else if (/\btimer\b/.test(heard)) a.startTimer();
+      };
+      rec.onend = () => {
+        // Browsers silently stop recognition after ~5 minutes. Restart
+        // automatically but with a small delay and max attempt limit.
+        if (stopped) return;
+        restartCountRef.current++;
+        if (restartCountRef.current > MAX_RESTARTS) {
+          // Recognition API is in a broken state — give up gracefully.
+          setVoiceOn(false);
+          return;
         }
+        // Short delay prevents rapid-fire restart loops.
+        setTimeout(() => {
+          if (stopped) return;
+          try {
+            rec?.start();
+          } catch {
+            /* already restarting */
+          }
+        }, 100 * restartCountRef.current); // Exponential-ish backoff
+      };
+      rec.onerror = () => {
+        if (!stopped) setVoiceOn(false);
+      };
+      try {
+        rec.start();
+      } catch {
+        setVoiceOn(false);
       }
     };
-    rec.onerror = () => {
-      if (!stopped) setVoiceOn(false);
-    };
-    try {
-      rec.start();
-    } catch {
-      setVoiceOn(false);
-    }
+
+    startRecognition();
+
     return () => {
       stopped = true;
-      rec.onend = null;
-      try {
-        rec.stop();
-      } catch {
-        /* already stopped */
+      restartCountRef.current = MAX_RESTARTS; // Prevent any more starts
+      if (rec) {
+        try {
+          rec.stop();
+        } catch {
+          /* already stopped */
+        }
       }
     };
   }, [voiceOn, SR]);
@@ -303,7 +342,9 @@ export default function CookModePage() {
           </div>
           {SR && (
             <button
-              aria-label={voiceOn ? "Disable voice control" : "Enable voice control"}
+              aria-label={
+                voiceOn ? "Disable voice control" : "Enable voice control"
+              }
               onClick={() => setVoiceOn((v) => !v)}
               className={`pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
                 voiceOn ? "bg-accent text-white" : "bg-sunken text-muted"
@@ -335,7 +376,9 @@ export default function CookModePage() {
                 return (
                   <button
                     key={t.step}
-                    onClick={() => (finished ? clearTimer(t.step) : setIdx(t.step))}
+                    onClick={() =>
+                      finished ? clearTimer(t.step) : setIdx(t.step)
+                    }
                     className={`pressable flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-extrabold tabular-nums ${
                       finished
                         ? "animate-pulse bg-accent text-white"
@@ -394,12 +437,22 @@ export default function CookModePage() {
                   >
                     <span
                       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-                        done ? "border-accent bg-accent text-white" : "border-line"
+                        done
+                          ? "border-accent bg-accent text-white"
+                          : "border-line"
                       }`}
                     >
-                      {done && <Check size={14} strokeWidth={3} className="animate-pop" />}
+                      {done && (
+                        <Check
+                          size={14}
+                          strokeWidth={3}
+                          className="animate-pop"
+                        />
+                      )}
                     </span>
-                    <span className={`flex-1 text-[15px] font-semibold ${done ? "line-through" : ""}`}>
+                    <span
+                      className={`flex-1 text-[15px] font-semibold ${done ? "line-through" : ""}`}
+                    >
                       {ing.item}
                     </span>
                     <span className="text-sm font-bold text-muted tabular-nums">
@@ -433,12 +486,21 @@ export default function CookModePage() {
             {currentTimerSeconds && (
               <div className="mt-5 flex items-center gap-3 rounded-2xl border border-line bg-raised px-4 py-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
-                  <TimerIcon size={17} strokeWidth={2.4} className="text-accent" />
+                  <TimerIcon
+                    size={17}
+                    strokeWidth={2.4}
+                    className="text-accent"
+                  />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xl leading-none font-extrabold tracking-tight tabular-nums">
                     {currentTimer
-                      ? formatClock(Math.max(0, Math.round((currentTimer.endsAt - now) / 1000)))
+                      ? formatClock(
+                          Math.max(
+                            0,
+                            Math.round((currentTimer.endsAt - now) / 1000),
+                          ),
+                        )
                       : formatClock(currentTimerSeconds)}
                   </p>
                   <p className="mt-0.5 text-[11px] font-semibold text-faint">
@@ -459,7 +521,12 @@ export default function CookModePage() {
                         "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
                     }}
                   >
-                    <Play size={18} strokeWidth={2.4} fill="currentColor" className="ml-0.5" />
+                    <Play
+                      size={18}
+                      strokeWidth={2.4}
+                      fill="currentColor"
+                      className="ml-0.5"
+                    />
                   </button>
                 ) : (
                   <button
@@ -476,7 +543,10 @@ export default function CookModePage() {
         )}
 
         {isDone && (
-          <div className="relative flex flex-col items-center py-10 text-center" key="done">
+          <div
+            className="relative flex flex-col items-center py-10 text-center"
+            key="done"
+          >
             <Confetti />
             <div
               className="animate-pop flex h-24 w-24 items-center justify-center rounded-full text-white shadow-xl shadow-accent/30"
@@ -492,11 +562,15 @@ export default function CookModePage() {
               out? Your vote shapes the community feed.
             </p>
             <p className="mt-3 rounded-full bg-accent-soft px-4 py-1.5 text-[13px] font-bold text-accent">
-              🍳 You're cook #{compactCount(recipe.cook_count + 1)} — this
-              fuels the Trending feed
+              🍳 You're cook #{compactCount(recipe.cook_count + 1)} — this fuels
+              the Trending feed
             </p>
             <div className="mt-7 flex w-full max-w-xs items-center gap-3">
-              <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} size="lg" />
+              <VotePill
+                recipeId={recipe.id}
+                baseCount={recipe.net_upvotes}
+                size="lg"
+              />
               <SaveButton recipeId={recipe.id} variant="bar" />
             </div>
 
@@ -508,10 +582,14 @@ export default function CookModePage() {
                   accept="image/*"
                   capture="environment"
                   className="hidden"
-                  onChange={(e) => void onPhotoPicked(e.target.files?.[0] ?? null)}
+                  onChange={(e) =>
+                    void onPhotoPicked(e.target.files?.[0] ?? null)
+                  }
                 />
                 <button
-                  onClick={() => photoState !== "done" && photoInputRef.current?.click()}
+                  onClick={() =>
+                    photoState !== "done" && photoInputRef.current?.click()
+                  }
                   disabled={photoState === "uploading"}
                   className={`pressable mt-4 flex h-12 w-full max-w-xs items-center justify-center gap-2 rounded-2xl border text-[14px] font-bold ${
                     photoState === "done"
@@ -523,12 +601,20 @@ export default function CookModePage() {
                     <Loader2 size={16} className="animate-spin" />
                   ) : photoState === "done" ? (
                     <>
-                      <Check size={16} strokeWidth={2.6} className="animate-pop" />
+                      <Check
+                        size={16}
+                        strokeWidth={2.6}
+                        className="animate-pop"
+                      />
                       Photo shared with the community
                     </>
                   ) : (
                     <>
-                      <Camera size={16} strokeWidth={2.2} className="text-accent" />
+                      <Camera
+                        size={16}
+                        strokeWidth={2.2}
+                        className="text-accent"
+                      />
                       Show off your plate 📸
                     </>
                   )}
@@ -567,8 +653,14 @@ export default function CookModePage() {
                   "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
               }}
             >
-              {isPrep ? "Let's cook" : idx === total ? "Finish 🎉" : "Next step"}
-              {!isPrep && idx < total && <ChevronRight size={20} strokeWidth={2.6} />}
+              {isPrep
+                ? "Let's cook"
+                : idx === total
+                  ? "Finish 🎉"
+                  : "Next step"}
+              {!isPrep && idx < total && (
+                <ChevronRight size={20} strokeWidth={2.6} />
+              )}
             </button>
           </div>
         </div>
@@ -585,7 +677,9 @@ export default function CookModePage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-line" />
-            <h3 className="text-lg font-extrabold tracking-tight">Ingredients</h3>
+            <h3 className="text-lg font-extrabold tracking-tight">
+              Ingredients
+            </h3>
             <div className="mt-3 mb-4 overflow-hidden rounded-card border border-line bg-raised">
               {recipe.ingredients.map((ing, i) => (
                 <div
@@ -608,7 +702,14 @@ export default function CookModePage() {
   );
 }
 
-const CONFETTI_COLORS = ["#fb923c", "#f43f5e", "#22c55e", "#3b82f6", "#eab308", "#a855f7"];
+const CONFETTI_COLORS = [
+  "#fb923c",
+  "#f43f5e",
+  "#22c55e",
+  "#3b82f6",
+  "#eab308",
+  "#a855f7",
+];
 
 function Confetti() {
   const pieces = useMemo(

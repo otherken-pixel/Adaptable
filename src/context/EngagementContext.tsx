@@ -73,21 +73,33 @@ export function EngagementProvider({ children }: { children: ReactNode }) {
   const castVote = useCallback(
     (recipeId: string, value: VoteValue) => {
       if (!profile) return;
+      // Capture the vote before and after state immediately so the
+      // rollback doesn't depend on stale closure variables.
       setVotes((prev) => {
         const current = prev[recipeId] ?? 0;
         const next: VoteValue | null = current === value ? null : value;
-        setVoteDelta((d) => ({
-          ...d,
-          [recipeId]: (d[recipeId] ?? 0) - current + (next ?? 0),
-        }));
+        // Snapshot deltas NOW so the catch block uses correct values
+        // rather than whatever prev was when .catch() actually runs.
+        const rollbackVoteDelta = current - (next ?? 0);
+
         setVote(profile.id, recipeId, next).catch(() => {
-          // Roll back on failure.
-          setVotes((p) => ({ ...p, [recipeId]: current as VoteValue }));
+          // Rollback using captured deltas — guaranteed to match
+          // the optimistic update that was applied.
+          setVotes((p) => {
+            const copy = { ...p };
+            if (next === null) {
+              delete copy[recipeId];
+            } else {
+              copy[recipeId] = current as VoteValue;
+            }
+            return copy;
+          });
           setVoteDelta((d) => ({
             ...d,
-            [recipeId]: (d[recipeId] ?? 0) + current - (next ?? 0),
+            [recipeId]: (d[recipeId] ?? 0) + rollbackVoteDelta,
           }));
         });
+
         const copy = { ...prev };
         if (next === null) delete copy[recipeId];
         else copy[recipeId] = next;
@@ -151,7 +163,15 @@ export function EngagementProvider({ children }: { children: ReactNode }) {
       toggleSaved,
       toggleFollowChef,
     }),
-    [votes, savedIds, followedIds, voteDelta, castVote, toggleSaved, toggleFollowChef],
+    [
+      votes,
+      savedIds,
+      followedIds,
+      voteDelta,
+      castVote,
+      toggleSaved,
+      toggleFollowChef,
+    ],
   );
 
   return (
@@ -163,6 +183,7 @@ export function EngagementProvider({ children }: { children: ReactNode }) {
 
 export function useEngagement(): EngagementState {
   const ctx = useContext(EngagementContext);
-  if (!ctx) throw new Error("useEngagement must be used within EngagementProvider");
+  if (!ctx)
+    throw new Error("useEngagement must be used within EngagementProvider");
   return ctx;
 }

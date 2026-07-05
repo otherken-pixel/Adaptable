@@ -8,14 +8,14 @@ import SwiftUI
 @Observable
 final class AuthManager: NSObject {
     static let shared = AuthManager()
-    
+
     // Hold a strong reference to prevent immediate deallocation
     private var webAuthSession: ASWebAuthenticationSession?
-    
+
     private override init() {
         super.init()
     }
-    
+
     /// Start Google Sign In Flow
     func signInWithGoogle(client: SupabaseClient) async throws {
         // Supabase authorization URL
@@ -25,41 +25,54 @@ final class AuthManager: NSObject {
         ) else {
             throw AuthError.invalidURL
         }
-        
+
+        var hasResumed = false
+
         return try await withCheckedThrowingContinuation { continuation in
+            func resume<T>(_ body: () throws -> T) {
+                guard !hasResumed else { return }
+                hasResumed = true
+                do {
+                    _ = try body()
+                    continuation.resume()
+                 } catch {
+                    continuation.resume(throwing: error)
+                 }
+             }
+
             let session = ASWebAuthenticationSession(url: authURL, callbackURLScheme: "com.adaptable.app") { callbackURL, error in
                 if let error = error {
-                    continuation.resume(throwing: error)
+                    resume { throw error }
                     return
-                }
-                
+                 }
+
                 guard let callbackURL = callbackURL else {
-                    continuation.resume(throwing: AuthError.missingCallbackURL)
+                    resume { throw AuthError.missingCallbackURL }
                     return
-                }
-                
+                 }
+
                 Task {
                     do {
-                        // Hand the callback URL back to Supabase to exchange for a session
+                         // Hand the callback URL back to Supabase to exchange for a session
                         try await client.auth.session(from: callbackURL)
-                        continuation.resume()
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-            
-            // Set to false so the browser can reuse existing Google cookies (SSO)
+                        resume {}
+                     } catch {
+                        resume { throw error }
+                     }
+                 }
+             }
+
+             // Set to false so the browser can reuse existing Google cookies (SSO)
             session.prefersEphemeralWebBrowserSession = false
-            
-            // Requires ASWebAuthenticationPresentationContextProviding
+
+             // Requires ASWebAuthenticationPresentationContextProviding
             session.presentationContextProvider = self
-            
+
             self.webAuthSession = session
             session.start()
-        }
-    }
-    
+         }
+     }
+
     enum AuthError: Error {
         case invalidURL
         case missingCallbackURL

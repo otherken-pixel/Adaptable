@@ -39,11 +39,14 @@ export async function enablePush(userId: string): Promise<PushStatus> {
         .then(() => settle("enabled"))
         .catch(() => settle("denied"));
     });
-    void PushNotifications.addListener("registrationError", () => settle("denied"));
+    void PushNotifications.addListener("registrationError", () =>
+      settle("denied"),
+    );
 
     void PushNotifications.register();
 
-    // APNs should answer within seconds; don't hang the UI forever.
-    setTimeout(() => settle("denied"), 15_000);
+    // APNs should answer within seconds; extend to 30s to account for
+    // slow networks, CRL downloads on first launch, or device provisioning delays.
+    setTimeout(() => settle("denied"), 30_000);
   });
 }
