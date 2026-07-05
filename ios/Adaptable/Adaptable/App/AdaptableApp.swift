@@ -37,9 +37,14 @@ struct AdaptableApp: App {
                 _ = try? await SupabaseManager.client.auth.session(from: url)
                 showResetPassword = true
             }
+        } else if url.host == "login-callback" {
+            Task {
+                do {
+                    try await SupabaseManager.client.auth.session(from: url)
+                } catch {
+                    print("OAuth callback session exchange failed: \(error)")
+                }
+            }
         }
-        // OAuth callbacks (login-callback) are consumed internally by the
-        // ASWebAuthenticationSession that `signInWithOAuth` presents and
-        // never reach here.
     }
 }

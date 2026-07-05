@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
  * Supabase Edge Function to dispatch Apple Push Notifications (APNs).
@@ -15,9 +16,15 @@ const APNS_KEY_ID = Deno.env.get("APNS_KEY_ID")!;
 const APNS_TEAM_ID = Deno.env.get("APNS_TEAM_ID")!;
 const APNS_BUNDLE_ID = Deno.env.get("APNS_BUNDLE_ID")!;
 
+// Supabase admin client for token pruning
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+
 serve(async (req) => {
   try {
-    const { deviceToken, isSandbox, title, body, customData } = await req.json();
+    const { deviceToken, isSandbox, title, body, customData } =
+      await req.json();
 
     if (!deviceToken || !title || !body) {
       return new Response("Missing required fields", { status: 400 });
@@ -30,7 +37,7 @@ serve(async (req) => {
         iss: APNS_TEAM_ID,
         iat: getNumericDate(0), // Issued at (now)
       },
-      APNS_PRIVATE_KEY
+      APNS_PRIVATE_KEY,
     );
 
     // APNs JSON Payload structure
@@ -49,14 +56,14 @@ serve(async (req) => {
     const host = isSandbox
       ? "api.sandbox.push.apple.com"
       : "api.push.apple.com";
-    
+
     const url = `https://${host}/3/device/${deviceToken}`;
 
     // Execute HTTP/2 request to Apple
     const apnsResponse = await fetch(url, {
       method: "POST",
       headers: {
-        "authorization": `bearer ${jwt}`,
+        authorization: `bearer ${jwt}`,
         "apns-topic": APNS_BUNDLE_ID,
         "apns-push-type": "alert", // required for alert notifications
         "Content-Type": "application/json",
@@ -68,13 +75,31 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: true }), {
         headers: { "Content-Type": "application/json" },
       });
+    } else if (apnsResponse.status === 410) {
+      // Token is no longer valid. Prune it from the database.
+      console.log(`Token ${deviceToken} is invalid (410). Removing...`);
+      await supabaseAdmin
+        .from("profiles") // Assuming tokens are in profiles table or a related push_tokens table
+        .update({ push_token: null })
+        .eq("push_token", deviceToken);
+
+      return new Response(
+        JSON.stringify({ success: false, error: "Device token expired" }),
+        {
+          status: 410,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     } else {
       const errorText = await apnsResponse.text();
       console.error("APNs Error:", errorText);
-      return new Response(JSON.stringify({ success: false, error: errorText }), {
-        status: apnsResponse.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ success: false, error: errorText }),
+        {
+          status: apnsResponse.status,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
   } catch (error) {
     console.error("Edge Function Error:", error);

@@ -43,16 +43,16 @@ struct Preferences: Codable, Equatable {
 
 struct ProfileLite: Codable, Equatable, Identifiable {
     var id: String
-    var username: String
+    var username: String?
     var avatar_url: String?
 }
 
 struct Profile: Codable, Equatable, Identifiable {
     var id: String
-    var username: String
+    var username: String?
     var avatar_url: String?
     var preferences: Preferences?
-    var created_at: String
+    var created_at: String?
 
     var lite: ProfileLite { ProfileLite(id: id, username: username, avatar_url: avatar_url) }
 }
@@ -83,41 +83,41 @@ struct RecipeStep: Codable, Equatable, Identifiable {
 
 struct Recipe: Codable, Equatable, Identifiable {
     var id: String
-    var author_id: String
-    var title: String
-    var description: String
-    var emoji: String
-    var cuisine: String
-    var difficulty: Difficulty
-    var prep_time_minutes: Int
-    var cook_time_minutes: Int
-    var servings: Int
+    var author_id: String?
+    var title: String?
+    var description: String?
+    var emoji: String?
+    var cuisine: String?
+    var difficulty: Difficulty?
+    var prep_time_minutes: Int?
+    var cook_time_minutes: Int?
+    var servings: Int?
     var calories: Int?
     var protein_g: Int?
     var carbs_g: Int?
     var fat_g: Int?
-    var tags: [String]
-    var ingredients: [Ingredient]
-    var steps: [RecipeStep]
-    var source_prompt: String
+    var tags: [String]?
+    var ingredients: [Ingredient]?
+    var steps: [RecipeStep]?
+    var source_prompt: String?
     var source_url: String?
-    var net_upvotes: Int
-    var cook_count: Int
-    var comment_count: Int
-    var created_at: String
+    var net_upvotes: Int?
+    var cook_count: Int?
+    var comment_count: Int?
+    var created_at: String?
     var author: ProfileLite?
 
-    var totalMinutes: Int { prep_time_minutes + cook_time_minutes }
+    var totalMinutes: Int { (prep_time_minutes ?? 0) + (cook_time_minutes ?? 0) }
 }
 
 // MARK: - Comment
 
 struct Comment: Codable, Equatable, Identifiable {
     var id: String
-    var recipe_id: String
-    var user_id: String
-    var body: String
-    var created_at: String
+    var recipe_id: String?
+    var user_id: String?
+    var body: String?
+    var created_at: String?
     var author: ProfileLite?
 }
 
