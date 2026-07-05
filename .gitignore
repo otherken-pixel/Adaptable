@@ -6,9 +6,11 @@ dist-ssr
 .env.*
 !.env.example
 
-# Capacitor native shells (regenerate with `npx cap add ios|android`)
-ios/
+# Capacitor's Android shell (regenerate with `npx cap add android`)
 android/
+
+# Note: ios/ is NOT ignored — ios/Adaptable is a hand-authored native
+# SwiftUI app (not a Capacitor-generated shell) and is committed.
 
 # Editor
 .vscode/*
