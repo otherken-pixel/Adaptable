@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -12,19 +12,15 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C2A23FC8515912AF1CDD1DF6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		3A59389BF828AEC81EE44731 /* Adaptable Cooking.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Adaptable Cooking.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6A06AFC9A34A7562D4E1BE34 /* Adaptable.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Adaptable.entitlements; sourceTree = "<group>"; };
-		F5D6396A8FECE6711F81FA80 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
-		3A59389BF828AEC81EE44731 /* Adaptable.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Adaptable.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2A23FC8515912AF1CDD1DF6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C3C086C565DB021B2F7BE5A0 /* seed-recipes.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "seed-recipes.json"; path = "../../shared/seed-recipes.json"; sourceTree = "<group>"; };
+		F5D6396A8FECE6711F81FA80 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		4260E8BA1B772421F90CB656 /* Adaptable */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Adaptable;
-			sourceTree = "<group>";
-		};
+		4260E8BA1B772421F90CB656 /* Adaptable */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Adaptable; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -39,24 +35,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		913CA3184E24F90554B929D2 = {
-			isa = PBXGroup;
-			children = (
-				4260E8BA1B772421F90CB656 /* Adaptable */,
-				1A00000000000000000030AA /* Support */,
-				1A00000000000000000040AA /* Shared */,
-				709C16F143AE65667932FFA7 /* Products */,
-			);
-			sourceTree = "<group>";
-		};
-		1A00000000000000000040AA /* Shared */ = {
-			isa = PBXGroup;
-			children = (
-				C3C086C565DB021B2F7BE5A0 /* seed-recipes.json */,
-			);
-			name = Shared;
-			sourceTree = "<group>";
-		};
 		1A00000000000000000030AA /* Support */ = {
 			isa = PBXGroup;
 			children = (
@@ -67,20 +45,38 @@
 			path = Support;
 			sourceTree = "<group>";
 		};
+		1A00000000000000000040AA /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				C3C086C565DB021B2F7BE5A0 /* seed-recipes.json */,
+			);
+			name = Shared;
+			sourceTree = "<group>";
+		};
 		709C16F143AE65667932FFA7 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				3A59389BF828AEC81EE44731 /* Adaptable.app */,
+				3A59389BF828AEC81EE44731 /* Adaptable Cooking.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		913CA3184E24F90554B929D2 = {
+			isa = PBXGroup;
+			children = (
+				4260E8BA1B772421F90CB656 /* Adaptable */,
+				1A00000000000000000030AA /* Support */,
+				1A00000000000000000040AA /* Shared */,
+				709C16F143AE65667932FFA7 /* Products */,
+			);
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0B0C759B754D34059A8A552A /* Adaptable */ = {
+		0B0C759B754D34059A8A552A /* Adaptable Cooking */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 575FBD27EA3E8532173CA429 /* Build configuration list for PBXNativeTarget "Adaptable" */;
+			buildConfigurationList = 575FBD27EA3E8532173CA429 /* Build configuration list for PBXNativeTarget "Adaptable Cooking" */;
 			buildPhases = (
 				121F368430A15A31FC70431A /* Sources */,
 				51CA5795725841176D88636C /* Frameworks */,
@@ -93,12 +89,12 @@
 			fileSystemSynchronizedGroups = (
 				4260E8BA1B772421F90CB656 /* Adaptable */,
 			);
-			name = Adaptable;
+			name = "Adaptable Cooking";
 			packageProductDependencies = (
 				0BAE4B90BE32FA90AB8459C7 /* Supabase */,
 			);
 			productName = Adaptable;
-			productReference = 3A59389BF828AEC81EE44731 /* Adaptable.app */;
+			productReference = 3A59389BF828AEC81EE44731 /* Adaptable Cooking.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -133,7 +129,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0B0C759B754D34059A8A552A /* Adaptable */,
+				0B0C759B754D34059A8A552A /* Adaptable Cooking */,
 			);
 		};
 /* End PBXProject section */
@@ -160,6 +156,70 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		2428970D033C12BFCCF6ED22 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5D6396A8FECE6711F81FA80 /* Config.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Support/Adaptable.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = ZWXG4354ZC;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Adaptable Cooking";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8E6EC30B5B1DB40031358EF1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = F5D6396A8FECE6711F81FA80 /* Config.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Support/Adaptable.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = ZWXG4354ZC;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Support/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Adaptable Cooking";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.food-and-drink";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		9DC11C068181C914CA5DAFD4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -277,81 +337,23 @@
 			};
 			name = Release;
 		};
-		8E6EC30B5B1DB40031358EF1 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = F5D6396A8FECE6711F81FA80 /* Config.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = Support/Adaptable.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "";
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Support/Info.plist;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		2428970D033C12BFCCF6ED22 /* Release */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = F5D6396A8FECE6711F81FA80 /* Config.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = Support/Adaptable.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_ASSET_PATHS = "";
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Support/Info.plist;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		575FBD27EA3E8532173CA429 /* Build configuration list for PBXNativeTarget "Adaptable Cooking" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8E6EC30B5B1DB40031358EF1 /* Debug */,
+				2428970D033C12BFCCF6ED22 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		D5CEE6393E6B9F96878A7585 /* Build configuration list for PBXProject "Adaptable" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				9DC11C068181C914CA5DAFD4 /* Debug */,
 				A00C221B0C49B2517CAF5A80 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		575FBD27EA3E8532173CA429 /* Build configuration list for PBXNativeTarget "Adaptable" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				8E6EC30B5B1DB40031358EF1 /* Debug */,
-				2428970D033C12BFCCF6ED22 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
