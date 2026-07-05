@@ -1,0 +1,1084 @@
+{
+  "_comment": "Canonical seed content shared by web Demo Mode, iOS Demo Mode, and the live Supabase seed migration. Edit here only — see scripts/generate-seed-sql.mjs for the SQL generator.",
+  "chefs": [
+    { "username": "mika.eats", "existing": true },
+    { "username": "theo_cooks", "existing": true },
+    { "username": "june.bakes", "existing": true },
+    { "username": "rafa.fuego", "existing": true },
+    { "username": "nori.kitchen", "existing": false },
+    { "username": "saltandsage", "existing": false },
+    { "username": "elpatron.bbq", "existing": false }
+  ],
+  "recipes": [
+    {
+      "id": "seed-miso-salmon",
+      "author": "mika.eats",
+      "title": "Caramelized Miso Salmon Bowl",
+      "description": "Silky salmon lacquered in sweet-savory miso glaze over sushi rice with quick-pickled cucumber. Weeknight fancy in 25 minutes.",
+      "emoji": "🍣",
+      "cuisine": "Japanese",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 15,
+      "servings": 2,
+      "calories": 560, "protein_g": 38, "carbs_g": 52, "fat_g": 21,
+      "tags": ["High-protein", "Pescatarian", "Weeknight"],
+      "ingredients": [
+        { "item": "Salmon fillets", "quantity": "2 × 150 g (5 oz)", "note": "skin on" },
+        { "item": "White miso paste", "quantity": "2 tbsp" },
+        { "item": "Maple syrup", "quantity": "1 tbsp" },
+        { "item": "Soy sauce", "quantity": "1 tbsp" },
+        { "item": "Rice vinegar", "quantity": "2 tbsp" },
+        { "item": "Sushi rice", "quantity": "150 g (¾ cup)", "note": "rinsed" },
+        { "item": "Persian cucumber", "quantity": "1", "note": "ribboned" },
+        { "item": "Scallions + sesame", "quantity": "to finish" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Cook the rice. While it steams, whisk miso, maple, soy and 1 tbsp water into a glossy glaze." },
+        { "step": 2, "instruction": "Toss cucumber ribbons with rice vinegar and a pinch of salt. Set aside to pickle.", "tip": "A pinch of sugar rounds out the pickle." },
+        { "step": 3, "instruction": "Sear salmon skin-side down 4 minutes in a hot pan. Flip, brush thickly with glaze, cook 3 more minutes." },
+        { "step": 4, "instruction": "Broil 90 seconds until the glaze bubbles and caramelizes at the edges.", "tip": "Watch closely — miso goes from bronzed to burnt fast." },
+        { "step": 5, "instruction": "Build bowls: rice, salmon, drained pickles. Shower with scallions and sesame." }
+      ],
+      "source_prompt": "quick high-protein salmon dinner",
+      "net_upvotes": 482, "cook_count": 214, "comment_count": 3, "days_ago": 6,
+      "comments": [
+        { "author": "theo_cooks", "body": "Made this twice this week. The broil step is not optional — that caramelized edge is everything." },
+        { "author": "june.bakes", "body": "Swapped maple for honey and it worked great. 10/10 weeknight dinner." },
+        { "author": "rafa.fuego", "body": "Remixed this with gochujang instead of miso 🔥 highly recommend." }
+      ]
+    },
+    {
+      "id": "seed-chickpea-curry",
+      "author": "theo_cooks",
+      "title": "20-Minute Coconut Chickpea Curry",
+      "description": "Creamy, gently spiced and entirely from the pantry. The crispy chickpea topping is the move.",
+      "emoji": "🍛",
+      "cuisine": "Indian-ish",
+      "difficulty": "Easy",
+      "prep_time_minutes": 5,
+      "cook_time_minutes": 15,
+      "servings": 4,
+      "calories": 430, "protein_g": 16, "carbs_g": 48, "fat_g": 22,
+      "tags": ["Vegan", "Pantry", "One-pan", "Gluten-free"],
+      "ingredients": [
+        { "item": "Chickpeas", "quantity": "2 cans (800 g)", "note": "drained, ½ cup reserved" },
+        { "item": "Coconut milk", "quantity": "1 can (400 ml)", "note": "full fat" },
+        { "item": "Crushed tomatoes", "quantity": "200 g (1 cup)" },
+        { "item": "Yellow onion", "quantity": "1", "note": "diced" },
+        { "item": "Garlic + ginger", "quantity": "3 cloves + 1 inch", "note": "grated" },
+        { "item": "Curry powder", "quantity": "2 tbsp" },
+        { "item": "Baby spinach", "quantity": "2 big handfuls" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Crisp the reserved chickpeas in olive oil with a pinch of curry powder and salt. Set aside." },
+        { "step": 2, "instruction": "In the same pan, soften onion 3 minutes. Add garlic, ginger and curry powder; bloom 60 seconds.", "tip": "Toasting spices in oil unlocks their flavor." },
+        { "step": 3, "instruction": "Add tomatoes, coconut milk and chickpeas. Simmer 8 minutes until it thickens slightly." },
+        { "step": 4, "instruction": "Wilt in the spinach, season with salt and a squeeze of lime. Top with crispy chickpeas." }
+      ],
+      "source_prompt": "vegan pantry curry in 20 minutes",
+      "net_upvotes": 391, "cook_count": 178, "comment_count": 2, "days_ago": 4,
+      "comments": [
+        { "author": "mika.eats", "body": "The crispy chickpea topping is genius. Doubled it, no regrets." },
+        { "author": "june.bakes", "body": "Used frozen spinach and it was still fantastic. True pantry hero." }
+      ]
+    },
+    {
+      "id": "seed-smash-tacos",
+      "author": "rafa.fuego",
+      "title": "Crispy Smash Burger Tacos",
+      "description": "A smash patty seared directly onto a tortilla — burger flavor, taco format, ridiculous crust.",
+      "emoji": "🌮",
+      "cuisine": "Tex-Mex",
+      "difficulty": "Medium",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 10,
+      "servings": 4,
+      "calories": 610, "protein_g": 33, "carbs_g": 38, "fat_g": 34,
+      "tags": ["Crowd-pleaser", "30-minute", "Beef"],
+      "ingredients": [
+        { "item": "Ground beef (80/20)", "quantity": "500 g (1 lb)" },
+        { "item": "Small flour tortillas", "quantity": "8" },
+        { "item": "American cheese", "quantity": "8 slices" },
+        { "item": "White onion", "quantity": "½", "note": "shaved paper-thin" },
+        { "item": "Shredded lettuce", "quantity": "2 cups" },
+        { "item": "Mayo + ketchup + pickle brine", "quantity": "¼ cup + 2 tbsp + 1 tbsp", "note": "burger sauce" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Stir the burger sauce together. Divide beef into 8 loose 60 g balls — don't compact them." },
+        { "step": 2, "instruction": "Press a beef ball thinly onto each tortilla so it reaches the edges." },
+        { "step": 3, "instruction": "Sear beef-side down in a screaming hot pan, pressing firmly, 2–3 minutes until deeply crusted.", "tip": "A second pan on top makes a great press." },
+        { "step": 4, "instruction": "Flip, add cheese and onion, cook 1 minute until the tortilla crisps." },
+        { "step": 5, "instruction": "Fold, stuff with lettuce and sauce, eat immediately over the sink." }
+      ],
+      "source_prompt": "smash burger tacos for four",
+      "net_upvotes": 357, "cook_count": 342, "comment_count": 2, "days_ago": 2,
+      "comments": [
+        { "author": "mika.eats", "body": "\"Eat immediately over the sink\" — accurate. Family demolished these." },
+        { "author": "theo_cooks", "body": "Cast iron + a bacon press = perfect crust every time." }
+      ]
+    },
+    {
+      "id": "seed-lemon-pasta",
+      "author": "june.bakes",
+      "title": "One-Pot Lemon Ricotta Rigatoni",
+      "description": "Bright, creamy and done before the table is set. The pasta water does all the sauce work.",
+      "emoji": "🍋",
+      "cuisine": "Italian",
+      "difficulty": "Easy",
+      "prep_time_minutes": 5,
+      "cook_time_minutes": 15,
+      "servings": 3,
+      "calories": 520, "protein_g": 21, "carbs_g": 68, "fat_g": 18,
+      "tags": ["Vegetarian", "One-pot", "15-minute"],
+      "ingredients": [
+        { "item": "Rigatoni", "quantity": "300 g (10 oz)" },
+        { "item": "Whole-milk ricotta", "quantity": "250 g (1 cup)" },
+        { "item": "Lemon", "quantity": "1", "note": "zest + juice" },
+        { "item": "Parmesan", "quantity": "40 g (½ cup)", "note": "finely grated" },
+        { "item": "Black pepper", "quantity": "lots" },
+        { "item": "Basil", "quantity": "a handful" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Boil rigatoni in well-salted water until just shy of al dente. Reserve 1 cup of pasta water." },
+        { "step": 2, "instruction": "Whisk ricotta, parmesan, lemon zest and juice with ½ cup pasta water into a silky sauce." },
+        { "step": 3, "instruction": "Toss pasta with the sauce off-heat, loosening with more pasta water until it coats every tube.", "tip": "Off-heat keeps the ricotta creamy instead of grainy." },
+        { "step": 4, "instruction": "Finish with basil, black pepper and a drizzle of good olive oil." }
+      ],
+      "source_prompt": "easy vegetarian pasta with lemon",
+      "net_upvotes": 289, "cook_count": 96, "comment_count": 1, "days_ago": 1,
+      "comments": [
+        { "author": "rafa.fuego", "body": "Off-heat tip saved me — first attempt on heat went grainy, second was silk." }
+      ]
+    },
+    {
+      "id": "seed-breakfast-tacos",
+      "author": "mika.eats",
+      "title": "5-Minute Protein Breakfast Wrap",
+      "description": "Soft scramble, crispy cheese skirt, one pan, five minutes. 38 g of protein before your coffee cools.",
+      "emoji": "🌯",
+      "cuisine": "American",
+      "difficulty": "Easy",
+      "prep_time_minutes": 2,
+      "cook_time_minutes": 3,
+      "servings": 1,
+      "calories": 520, "protein_g": 38, "carbs_g": 28, "fat_g": 24,
+      "tags": ["High-protein", "Breakfast", "5-minute"],
+      "ingredients": [
+        { "item": "Eggs", "quantity": "3" },
+        { "item": "Cottage cheese", "quantity": "2 tbsp", "note": "trust the process" },
+        { "item": "Large tortilla", "quantity": "1" },
+        { "item": "Cheddar", "quantity": "30 g (⅓ cup)", "note": "shredded" },
+        { "item": "Hot sauce", "quantity": "to taste" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Whisk eggs with cottage cheese and a pinch of salt. Soft-scramble over medium-low, stopping while glossy." },
+        { "step": 2, "instruction": "Push eggs aside, scatter cheddar in the pan, and lay the tortilla on top. 60 seconds makes a crispy cheese skirt.", "tip": "The cheese glues the wrap shut." },
+        { "step": 3, "instruction": "Flip the tortilla cheese-side up, pile on eggs and hot sauce, roll tightly and sear the seam." }
+      ],
+      "source_prompt": "fast high protein breakfast",
+      "net_upvotes": 214, "cook_count": 511, "comment_count": 1, "days_ago": 0.5,
+      "comments": [
+        { "author": "june.bakes", "body": "The cottage cheese thing sounded wrong. It is extremely right." }
+      ]
+    },
+    {
+      "id": "seed-mushroom-ramen",
+      "author": "theo_cooks",
+      "title": "Midnight Garlic Butter Mushroom Ramen",
+      "description": "Instant noodles glow-up: umami-bomb broth, jammy egg, torched mushrooms. Better than the shop, cheaper than delivery.",
+      "emoji": "🍜",
+      "cuisine": "Japanese-ish",
+      "difficulty": "Medium",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 40,
+      "servings": 2,
+      "calories": 540, "protein_g": 19, "carbs_g": 58, "fat_g": 26,
+      "tags": ["Vegetarian", "Comfort", "Late-night"],
+      "ingredients": [
+        { "item": "Instant ramen", "quantity": "2 packs", "note": "noodles only" },
+        { "item": "Mixed mushrooms", "quantity": "300 g (10 oz)", "note": "torn" },
+        { "item": "Butter", "quantity": "3 tbsp" },
+        { "item": "Garlic", "quantity": "4 cloves", "note": "sliced" },
+        { "item": "White miso", "quantity": "1 tbsp" },
+        { "item": "Soy sauce", "quantity": "2 tbsp" },
+        { "item": "Eggs", "quantity": "2", "note": "jammy-boiled 6:30" },
+        { "item": "Chili crisp", "quantity": "to finish" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Boil eggs 6½ minutes, then ice bath. Peel when cool." },
+        { "step": 2, "instruction": "Sear mushrooms dry in a hot pan until deeply browned, then add butter and garlic and baste 2 minutes.", "tip": "Dry pan first = maximum browning, zero sog." },
+        { "step": 3, "instruction": "Whisk miso and soy into 700 ml hot water. Simmer half the mushrooms in it 5 minutes." },
+        { "step": 4, "instruction": "Cook noodles in the broth 2 minutes. Bowl up with remaining mushrooms, halved eggs and chili crisp." }
+      ],
+      "source_prompt": "fancy instant ramen with mushrooms",
+      "net_upvotes": 176, "cook_count": 88, "comment_count": 1, "days_ago": 0.2,
+      "comments": [
+        { "author": "mika.eats", "body": "Dry-pan mushroom sear is a game changer. Never crowding the pan again." }
+      ]
+    },
+    {
+      "id": "garlic-butter-shrimp",
+      "author": "saltandsage",
+      "title": "15-Minute Garlic Butter Shrimp",
+      "description": "Juicy shrimp in a lemony brown-butter garlic sauce, done before the rice finishes steaming. The pan sauce alone is worth the recipe.",
+      "emoji": "🍤",
+      "cuisine": "Mediterranean",
+      "difficulty": "Easy",
+      "prep_time_minutes": 5,
+      "cook_time_minutes": 10,
+      "servings": 4,
+      "calories": 380, "protein_g": 32, "carbs_g": 6, "fat_g": 24,
+      "tags": ["Pescatarian", "High-protein", "Low-cal", "Gluten-free", "15-minute"],
+      "ingredients": [
+        { "item": "Large shrimp", "quantity": "700 g (1.5 lb)", "note": "peeled, deveined, tails on" },
+        { "item": "Butter", "quantity": "4 tbsp", "note": "divided" },
+        { "item": "Garlic", "quantity": "6 cloves", "note": "minced" },
+        { "item": "Lemon", "quantity": "1", "note": "zest + juice" },
+        { "item": "Red pepper flakes", "quantity": "½ tsp" },
+        { "item": "White wine or broth", "quantity": "¼ cup" },
+        { "item": "Parsley", "quantity": "a handful", "note": "chopped" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Pat shrimp dry and season with salt and pepper. Melt 2 tbsp butter in a wide skillet over medium-high heat." },
+        { "step": 2, "instruction": "Sear shrimp 90 seconds per side until just pink. Remove to a plate — they'll finish cooking in the sauce.", "tip": "Don't crowd the pan; work in two batches if needed." },
+        { "step": 3, "instruction": "Add remaining butter, garlic and red pepper flakes to the pan. Cook 60 seconds until fragrant, then deglaze with the wine and simmer 2 minutes." },
+        { "step": 4, "instruction": "Return shrimp to the pan with lemon zest and juice, toss 1 minute to coat and rewarm. Finish with parsley." }
+      ],
+      "source_prompt": "quick garlic butter shrimp for weeknight dinner",
+      "net_upvotes": 512, "cook_count": 388, "comment_count": 3, "days_ago": 6,
+      "comments": [
+        { "author": "nori.kitchen", "body": "The brown-butter step is what elevates this. Doubled the garlic, no regrets." },
+        { "author": "june.bakes", "body": "Served over grits instead of rice — this sauce belongs on everything." },
+        { "author": "theo_cooks", "body": "15 minutes was accurate to the second. New weeknight staple." }
+      ]
+    },
+    {
+      "id": "egg-roll-in-a-bowl",
+      "author": "elpatron.bbq",
+      "title": "Egg Roll in a Bowl",
+      "description": "All the crave-worthy flavor of a crispy egg roll, none of the wrapper — just a fast skillet of pork, cabbage and ginger-sesame sauce.",
+      "emoji": "🥡",
+      "cuisine": "Asian-inspired",
+      "difficulty": "Easy",
+      "prep_time_minutes": 8,
+      "cook_time_minutes": 9,
+      "servings": 4,
+      "calories": 340, "protein_g": 31, "carbs_g": 12, "fat_g": 20,
+      "tags": ["Keto", "Low-carb", "Gluten-free", "High-protein", "20-minute"],
+      "ingredients": [
+        { "item": "Ground pork or turkey", "quantity": "500 g (1 lb)" },
+        { "item": "Coleslaw mix (cabbage + carrot)", "quantity": "1 bag (350 g)" },
+        { "item": "Garlic + ginger", "quantity": "3 cloves + 1 inch", "note": "grated" },
+        { "item": "Green onions", "quantity": "4", "note": "sliced, whites and greens separated" },
+        { "item": "Tamari or soy sauce", "quantity": "3 tbsp" },
+        { "item": "Toasted sesame oil", "quantity": "1 tbsp" },
+        { "item": "Sesame seeds", "quantity": "1 tsp", "note": "to finish" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Brown the pork in a large skillet over medium-high heat, breaking it up, about 5 minutes. Drain excess fat." },
+        { "step": 2, "instruction": "Add garlic, ginger and green onion whites; cook 60 seconds until fragrant.", "tip": "Push the meat aside to bloom the aromatics directly on the hot pan." },
+        { "step": 3, "instruction": "Add the coleslaw mix and tamari. Cook 4 minutes, stirring, until the cabbage wilts but still has crunch." },
+        { "step": 4, "instruction": "Off heat, stir in sesame oil. Top with green onion tops and sesame seeds." }
+      ],
+      "source_prompt": "low carb egg roll in a bowl",
+      "net_upvotes": 467, "cook_count": 502, "comment_count": 3, "days_ago": 11,
+      "comments": [
+        { "author": "mika.eats", "body": "Meal-prepped this for the week — reheats perfectly and the cabbage doesn't go soggy." },
+        { "author": "rafa.fuego", "body": "Added a fried egg on top and it turned into breakfast. 10/10." },
+        { "author": "saltandsage", "body": "Sriracha mayo drizzle takes this over the top if anyone's wondering." }
+      ]
+    },
+    {
+      "id": "honey-garlic-salmon-sheet-pan",
+      "author": "nori.kitchen",
+      "title": "Sheet-Pan Honey Garlic Salmon",
+      "description": "Salmon and broccoli roast together in a sticky honey-garlic glaze — one pan, one rinse, dinner-party good.",
+      "emoji": "🐟",
+      "cuisine": "Asian-inspired",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 20,
+      "servings": 4,
+      "calories": 460, "protein_g": 34, "carbs_g": 28, "fat_g": 22,
+      "tags": ["Pescatarian", "High-protein", "Low-cal", "Gluten-free", "Sheet-pan"],
+      "ingredients": [
+        { "item": "Salmon fillets", "quantity": "4 × 150 g (5 oz)" },
+        { "item": "Broccoli florets", "quantity": "500 g (1 lb)" },
+        { "item": "Honey", "quantity": "3 tbsp" },
+        { "item": "Soy sauce", "quantity": "3 tbsp" },
+        { "item": "Garlic", "quantity": "4 cloves", "note": "minced" },
+        { "item": "Rice vinegar", "quantity": "1 tbsp" },
+        { "item": "Sesame seeds", "quantity": "1 tsp", "note": "to finish" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Preheat oven to 425°F (220°C). Whisk honey, soy sauce, garlic and rice vinegar into a glaze." },
+        { "step": 2, "instruction": "Toss broccoli with a little oil and salt on a sheet pan. Roast 8 minutes to get it started." },
+        { "step": 3, "instruction": "Push broccoli aside, add salmon skin-down, brush generously with glaze. Roast 12 minutes until salmon flakes easily.", "tip": "Reserve some glaze unbrushed to drizzle on right before serving." },
+        { "step": 4, "instruction": "Drizzle with the reserved glaze and sesame seeds before serving." }
+      ],
+      "source_prompt": "sheet pan honey garlic salmon and broccoli",
+      "net_upvotes": 598, "cook_count": 415, "comment_count": 3, "days_ago": 3,
+      "comments": [
+        { "author": "elpatron.bbq", "body": "Broiled the last 2 minutes for a caramelized top — incredible." },
+        { "author": "theo_cooks", "body": "One pan, one dishes to wash, restaurant-quality result. Perfect." },
+        { "author": "june.bakes", "body": "Used frozen broccoli straight from the bag, worked great, just patted it dry first." }
+      ]
+    },
+    {
+      "id": "weeknight-chicken-tikka-masala",
+      "author": "saltandsage",
+      "title": "Weeknight Chicken Tikka Masala",
+      "description": "Creamy, deeply spiced tomato curry with tender chicken thighs — the takeout favorite, on the table in 40 minutes.",
+      "emoji": "🍗",
+      "cuisine": "Indian",
+      "difficulty": "Medium",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 25,
+      "servings": 4,
+      "calories": 480, "protein_g": 36, "carbs_g": 18, "fat_g": 26,
+      "tags": ["High-protein", "Gluten-free", "Comfort", "Weeknight"],
+      "ingredients": [
+        { "item": "Chicken thighs", "quantity": "700 g (1.5 lb)", "note": "boneless, cubed" },
+        { "item": "Plain yogurt", "quantity": "½ cup", "note": "for marinade" },
+        { "item": "Garam masala", "quantity": "2 tbsp", "note": "divided" },
+        { "item": "Crushed tomatoes", "quantity": "1 can (800 g)" },
+        { "item": "Heavy cream", "quantity": "½ cup" },
+        { "item": "Yellow onion", "quantity": "1", "note": "diced" },
+        { "item": "Garlic + ginger", "quantity": "4 cloves + 1 inch", "note": "grated" },
+        { "item": "Butter", "quantity": "2 tbsp" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Toss chicken with yogurt and half the garam masala. Marinate 10 minutes while you prep everything else.", "tip": "Even 10 minutes helps — an hour in the fridge is even better if you have time." },
+        { "step": 2, "instruction": "Sear marinated chicken in a hot pan 5 minutes until charred at the edges. Remove and set aside." },
+        { "step": 3, "instruction": "In the same pan, melt butter and soften onion 4 minutes. Add garlic, ginger and remaining garam masala; bloom 60 seconds." },
+        { "step": 4, "instruction": "Add tomatoes and simmer 15 minutes until thickened. Stir in cream and return chicken; simmer 5 more minutes." }
+      ],
+      "source_prompt": "creamy chicken tikka masala for weeknight",
+      "net_upvotes": 621, "cook_count": 447, "comment_count": 3, "days_ago": 15,
+      "comments": [
+        { "author": "nori.kitchen", "body": "Better than my local takeout spot, and I'm not exaggerating. The marinade step matters." },
+        { "author": "mika.eats", "body": "Subbed coconut milk for the cream to make it dairy-free-ish — still incredible." },
+        { "author": "elpatron.bbq", "body": "Charring the chicken before it hits the sauce is the whole trick. Don't skip it." }
+      ]
+    },
+    {
+      "id": "turkey-black-bean-chili",
+      "author": "elpatron.bbq",
+      "title": "Turkey & Black Bean Chili",
+      "description": "Lean, hearty, and freezer-friendly — a big pot of smoky chili that tastes even better the next day.",
+      "emoji": "🌶️",
+      "cuisine": "American",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 30,
+      "servings": 6,
+      "calories": 410, "protein_g": 33, "carbs_g": 34, "fat_g": 14,
+      "tags": ["High-protein", "Low-cal", "Gluten-free", "Meal-prep", "One-pot"],
+      "ingredients": [
+        { "item": "Ground turkey", "quantity": "700 g (1.5 lb)" },
+        { "item": "Black beans", "quantity": "2 cans (800 g)", "note": "drained" },
+        { "item": "Crushed tomatoes", "quantity": "1 can (800 g)" },
+        { "item": "Yellow onion", "quantity": "1", "note": "diced" },
+        { "item": "Bell pepper", "quantity": "1", "note": "diced" },
+        { "item": "Chili powder + cumin", "quantity": "3 tbsp + 1 tbsp" },
+        { "item": "Chipotle in adobo", "quantity": "1 tbsp", "note": "minced" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Brown turkey in a large pot over medium-high heat, breaking it up, about 6 minutes." },
+        { "step": 2, "instruction": "Add onion and bell pepper; soften 5 minutes. Stir in chili powder, cumin and chipotle; bloom 60 seconds." },
+        { "step": 3, "instruction": "Add tomatoes and beans. Bring to a simmer and cook 20 minutes, stirring occasionally, until thickened.", "tip": "The longer it simmers the deeper the flavor — 30-40 minutes if you have the time." },
+        { "step": 4, "instruction": "Taste and season with salt. Serve with any toppings you like." }
+      ],
+      "source_prompt": "healthy turkey chili meal prep",
+      "net_upvotes": 389, "cook_count": 296, "comment_count": 3, "days_ago": 21,
+      "comments": [
+        { "author": "saltandsage", "body": "Made a double batch and froze half — reheats like it was made fresh." },
+        { "author": "june.bakes", "body": "The chipotle is non-negotiable, it adds a smokiness you can't get otherwise." },
+        { "author": "rafa.fuego", "body": "Topped with pickled jalapeños and cotija. Chili's night rotation forever." }
+      ]
+    },
+    {
+      "id": "cacio-e-pepe",
+      "author": "june.bakes",
+      "title": "Cacio e Pepe",
+      "description": "Three ingredients, one pan, pure silk — the Roman classic that lives or dies by technique, demystified.",
+      "emoji": "🧀",
+      "cuisine": "Italian",
+      "difficulty": "Medium",
+      "prep_time_minutes": 5,
+      "cook_time_minutes": 15,
+      "servings": 2,
+      "calories": 560, "protein_g": 19, "carbs_g": 64, "fat_g": 22,
+      "tags": ["Vegetarian", "Comfort", "20-minute", "Italian"],
+      "ingredients": [
+        { "item": "Spaghetti or tonnarelli", "quantity": "200 g (7 oz)" },
+        { "item": "Pecorino Romano", "quantity": "100 g (1 cup)", "note": "finely grated" },
+        { "item": "Black pepper", "quantity": "2 tsp", "note": "coarsely cracked" },
+        { "item": "Olive oil", "quantity": "1 tbsp" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Toast cracked pepper in a dry pan over medium heat 60 seconds until fragrant. Add a splash of pasta water and set aside." },
+        { "step": 2, "instruction": "Boil pasta in well-salted water until just shy of al dente, about 8 minutes. Reserve 1½ cups pasta water before draining.", "tip": "Salt the water less than usual — the cheese brings plenty of salt." },
+        { "step": 3, "instruction": "Off heat, whisk pecorino with a little pasta water in a separate bowl into a smooth paste — this prevents clumping." },
+        { "step": 4, "instruction": "Toss pasta with the pepper pan off-heat, then fold in the cheese paste, adding pasta water gradually until glossy and coats every strand." }
+      ],
+      "source_prompt": "authentic cacio e pepe technique",
+      "net_upvotes": 445, "cook_count": 210, "comment_count": 3, "days_ago": 9,
+      "comments": [
+        { "author": "nori.kitchen", "body": "The off-heat cheese paste trick finally fixed my clumping problem. Silky every time now." },
+        { "author": "mika.eats", "body": "Used a food processor to get the pecorino extra fine — made a real difference." },
+        { "author": "theo_cooks", "body": "Simple recipe, but the technique notes are what make this actually work." }
+      ]
+    },
+    {
+      "id": "shakshuka",
+      "author": "nori.kitchen",
+      "title": "Shakshuka",
+      "description": "Eggs poached in a smoky, sweet tomato-pepper sauce — brunch's best one-pan trick, ready in half an hour.",
+      "emoji": "🍳",
+      "cuisine": "Middle Eastern",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 20,
+      "servings": 4,
+      "calories": 320, "protein_g": 18, "carbs_g": 22, "fat_g": 18,
+      "tags": ["Vegetarian", "Gluten-free", "Low-cal", "Brunch"],
+      "ingredients": [
+        { "item": "Eggs", "quantity": "6" },
+        { "item": "Crushed tomatoes", "quantity": "1 can (800 g)" },
+        { "item": "Red bell pepper", "quantity": "1", "note": "diced" },
+        { "item": "Yellow onion", "quantity": "1", "note": "diced" },
+        { "item": "Garlic", "quantity": "3 cloves", "note": "minced" },
+        { "item": "Cumin + smoked paprika", "quantity": "1 tsp each" },
+        { "item": "Feta", "quantity": "60 g (½ cup)", "note": "crumbled, to finish" },
+        { "item": "Parsley", "quantity": "a handful", "note": "chopped" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Soften onion and bell pepper in olive oil over medium heat, about 6 minutes. Add garlic, cumin and paprika; bloom 60 seconds." },
+        { "step": 2, "instruction": "Add tomatoes and simmer 12 minutes until thickened into a sauce, seasoning with salt.", "tip": "The sauce should hold a spoon-trail shape — that's when it's ready for eggs." },
+        { "step": 3, "instruction": "Make 6 small wells in the sauce and crack an egg into each. Cover and cook 6 minutes until whites are set but yolks are still jammy." },
+        { "step": 4, "instruction": "Top with crumbled feta and parsley. Serve straight from the pan with warm bread." }
+      ],
+      "source_prompt": "classic shakshuka for brunch",
+      "net_upvotes": 356, "cook_count": 188, "comment_count": 3, "days_ago": 13,
+      "comments": [
+        { "author": "saltandsage", "body": "Covering the pan for the egg step is key — otherwise the tops never set. Perfect jammy yolks." },
+        { "author": "elpatron.bbq", "body": "Added a spoon of harissa to the sauce for extra heat. Would make again immediately." },
+        { "author": "june.bakes", "body": "Great lazy-Sunday brunch. Crusty bread is mandatory for scooping." }
+      ]
+    },
+    {
+      "id": "chickpea-kale-caesar",
+      "author": "mika.eats",
+      "title": "Crispy Chickpea Kale Caesar",
+      "description": "Massaged kale, a lemony vegan Caesar dressing, and oven-crisped chickpeas standing in for croutons.",
+      "emoji": "🥗",
+      "cuisine": "American",
+      "difficulty": "Easy",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 10,
+      "servings": 4,
+      "calories": 430, "protein_g": 16, "carbs_g": 38, "fat_g": 24,
+      "tags": ["Vegan", "Gluten-free", "Low-cal", "Salad"],
+      "ingredients": [
+        { "item": "Chickpeas", "quantity": "1 can (400 g)", "note": "drained, patted dry" },
+        { "item": "Curly kale", "quantity": "1 large bunch", "note": "stemmed, torn" },
+        { "item": "Tahini", "quantity": "3 tbsp" },
+        { "item": "Lemon", "quantity": "1", "note": "juiced" },
+        { "item": "Garlic", "quantity": "1 clove", "note": "grated" },
+        { "item": "Dijon mustard", "quantity": "1 tsp" },
+        { "item": "Nutritional yeast", "quantity": "2 tbsp" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Preheat oven to 400°F (200°C). Toss chickpeas with oil and salt; roast 18 minutes, shaking the pan halfway, until crisp.", "tip": "Bone-dry chickpeas crisp up best — pat them very dry before oiling." },
+        { "step": 2, "instruction": "Whisk tahini, lemon juice, garlic, mustard and nutritional yeast with 3-4 tbsp water into a pourable dressing." },
+        { "step": 3, "instruction": "Massage the kale with a pinch of salt and a little dressing for 2 minutes until it softens and darkens." },
+        { "step": 4, "instruction": "Toss kale with remaining dressing, top with warm crispy chickpeas." }
+      ],
+      "source_prompt": "vegan caesar salad with crispy chickpeas",
+      "net_upvotes": 274, "cook_count": 152, "comment_count": 3, "days_ago": 19,
+      "comments": [
+        { "author": "theo_cooks", "body": "Didn't miss the anchovies at all — the nutritional yeast brings all the umami needed." },
+        { "author": "rafa.fuego", "body": "Roasted extra chickpeas because they don't survive the walk from oven to bowl." },
+        { "author": "nori.kitchen", "body": "Massaging the kale really does make a textural difference, worth the extra 2 minutes." }
+      ]
+    },
+    {
+      "id": "beef-broccoli-stir-fry",
+      "author": "nori.kitchen",
+      "title": "Beef & Broccoli Stir-Fry",
+      "description": "Velvety beef, crisp-tender broccoli, glossy garlic sauce — better than takeout and faster than delivery.",
+      "emoji": "🥦",
+      "cuisine": "Chinese-American",
+      "difficulty": "Medium",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 10,
+      "servings": 4,
+      "calories": 480, "protein_g": 35, "carbs_g": 22, "fat_g": 24,
+      "tags": ["High-protein", "Low-cal", "Gluten-free", "Weeknight", "Stir-fry"],
+      "ingredients": [
+        { "item": "Flank steak", "quantity": "500 g (1 lb)", "note": "thinly sliced against the grain" },
+        { "item": "Broccoli florets", "quantity": "400 g (14 oz)" },
+        { "item": "Tamari or soy sauce", "quantity": "¼ cup", "note": "divided" },
+        { "item": "Cornstarch", "quantity": "2 tbsp", "note": "divided" },
+        { "item": "Garlic + ginger", "quantity": "3 cloves + 1 inch", "note": "minced" },
+        { "item": "Oyster sauce", "quantity": "2 tbsp" },
+        { "item": "Beef broth", "quantity": "½ cup" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Toss beef with 1 tbsp tamari and 1 tbsp cornstarch; let it sit 10 minutes to velvet while you prep everything else.", "tip": "This coating is what gives takeout-style beef its silky texture." },
+        { "step": 2, "instruction": "Blanch broccoli in boiling water 90 seconds, then shock in cold water. Drain well." },
+        { "step": 3, "instruction": "Sear beef in a screaming hot wok or skillet 2 minutes until just browned. Remove." },
+        { "step": 4, "instruction": "Add garlic and ginger, cook 30 seconds, then broth, remaining tamari, oyster sauce and remaining cornstarch slurry. Simmer 2 minutes until glossy, then return beef and broccoli and toss 1 minute to coat." }
+      ],
+      "source_prompt": "beef and broccoli better than takeout",
+      "net_upvotes": 533, "cook_count": 421, "comment_count": 3, "days_ago": 4,
+      "comments": [
+        { "author": "june.bakes", "body": "The velveting step is the whole secret. Beef came out so tender." },
+        { "author": "saltandsage", "body": "Blanching the broccoli first keeps it perfectly crisp-tender in the final toss." },
+        { "author": "elpatron.bbq", "body": "Faster than ordering delivery and genuinely tastes better. Wok stayed hot the whole time which helped." }
+      ]
+    },
+    {
+      "id": "chicken-lettuce-wraps",
+      "author": "theo_cooks",
+      "title": "Chicken Lettuce Wraps",
+      "description": "Savory-sweet minced chicken and water chestnuts spooned into cool, crunchy lettuce cups — the appetizer everyone actually finishes.",
+      "emoji": "🥬",
+      "cuisine": "Asian-inspired",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 10,
+      "servings": 4,
+      "calories": 340, "protein_g": 31, "carbs_g": 16, "fat_g": 16,
+      "tags": ["High-protein", "Low-cal", "Low-carb", "Gluten-free", "Appetizer"],
+      "ingredients": [
+        { "item": "Ground chicken", "quantity": "500 g (1 lb)" },
+        { "item": "Water chestnuts", "quantity": "1 can (225 g)", "note": "diced" },
+        { "item": "Butter lettuce", "quantity": "1 head", "note": "leaves separated" },
+        { "item": "Hoisin sauce", "quantity": "3 tbsp" },
+        { "item": "Tamari or soy sauce", "quantity": "2 tbsp" },
+        { "item": "Garlic + ginger", "quantity": "3 cloves + 1 inch", "note": "minced" },
+        { "item": "Green onions", "quantity": "3", "note": "sliced" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Brown chicken in a hot skillet, breaking it up, about 6 minutes until no longer pink." },
+        { "step": 2, "instruction": "Add garlic and ginger, cook 60 seconds until fragrant." },
+        { "step": 3, "instruction": "Stir in water chestnuts, hoisin and tamari. Cook 2 minutes until glossy and well coated.", "tip": "Water chestnuts add crunch — don't skip them for a texture contrast." },
+        { "step": 4, "instruction": "Spoon into lettuce cups, top with green onions, and eat immediately while the lettuce is still crisp." }
+      ],
+      "source_prompt": "PF Changs style lettuce wraps at home",
+      "net_upvotes": 402, "cook_count": 367, "comment_count": 3, "days_ago": 17,
+      "comments": [
+        { "author": "mika.eats", "body": "The water chestnut crunch against the soft filling is exactly right. Great party appetizer." },
+        { "author": "rafa.fuego", "body": "Doubled the filling, used it as a rice bowl the next day too — very versatile." },
+        { "author": "nori.kitchen", "body": "Butter lettuce holds up so much better than iceberg for this. Worth seeking out." }
+      ]
+    },
+    {
+      "id": "creamy-tuscan-chicken",
+      "author": "saltandsage",
+      "title": "Creamy Tuscan Chicken",
+      "description": "Seared chicken breasts in a sun-dried tomato and spinach cream sauce — restaurant-fancy, one skillet, thirty minutes.",
+      "emoji": "🍅",
+      "cuisine": "Italian",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 20,
+      "servings": 4,
+      "calories": 520, "protein_g": 38, "carbs_g": 10, "fat_g": 34,
+      "tags": ["High-protein", "Keto", "Low-carb", "Gluten-free", "Comfort"],
+      "ingredients": [
+        { "item": "Chicken breasts", "quantity": "4 × 180 g (6 oz)" },
+        { "item": "Sun-dried tomatoes", "quantity": "½ cup", "note": "chopped" },
+        { "item": "Baby spinach", "quantity": "3 cups" },
+        { "item": "Heavy cream", "quantity": "1 cup" },
+        { "item": "Parmesan", "quantity": "50 g (½ cup)", "note": "grated" },
+        { "item": "Garlic", "quantity": "3 cloves", "note": "minced" },
+        { "item": "Chicken broth", "quantity": "½ cup" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Season chicken and sear in olive oil over medium-high heat, 5 minutes per side until golden and cooked through. Remove." },
+        { "step": 2, "instruction": "Add garlic and sun-dried tomatoes to the pan; cook 60 seconds until fragrant." },
+        { "step": 3, "instruction": "Pour in broth and cream, bring to a simmer, then stir in parmesan until melted, about 3 minutes.", "tip": "Simmer gently — boiling cream sauce can break it." },
+        { "step": 4, "instruction": "Wilt in the spinach, return chicken to the pan and spoon sauce over top. Simmer 2 minutes to rewarm." }
+      ],
+      "source_prompt": "creamy tuscan chicken one pan",
+      "net_upvotes": 487, "cook_count": 340, "comment_count": 3, "days_ago": 7,
+      "comments": [
+        { "author": "june.bakes", "body": "Tastes like something from an Italian restaurant menu, not a Tuesday night dinner." },
+        { "author": "elpatron.bbq", "body": "Served over pasta and mopped up every drop of sauce. Family favorite now." },
+        { "author": "theo_cooks", "body": "Pounded the chicken thin first so it cooked faster and evenly — worked great." }
+      ]
+    },
+    {
+      "id": "zuppa-toscana",
+      "author": "elpatron.bbq",
+      "title": "Zuppa Toscana",
+      "description": "Spicy Italian sausage, white beans and kale in a creamy garlic broth — the copycat soup that beats the original.",
+      "emoji": "🍲",
+      "cuisine": "Italian",
+      "difficulty": "Easy",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 25,
+      "servings": 6,
+      "calories": 470, "protein_g": 30, "carbs_g": 26, "fat_g": 28,
+      "tags": ["High-protein", "Gluten-free", "Low-cal", "Soup", "Comfort"],
+      "ingredients": [
+        { "item": "Spicy Italian sausage", "quantity": "500 g (1 lb)", "note": "casings removed" },
+        { "item": "White beans", "quantity": "1 can (400 g)", "note": "drained" },
+        { "item": "Curly kale", "quantity": "1 bunch", "note": "stemmed, chopped" },
+        { "item": "Yellow onion", "quantity": "1", "note": "diced" },
+        { "item": "Garlic", "quantity": "4 cloves", "note": "minced" },
+        { "item": "Chicken broth", "quantity": "6 cups" },
+        { "item": "Heavy cream", "quantity": "½ cup" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Brown the sausage in a large pot over medium-high heat, breaking it up, about 6 minutes. Remove." },
+        { "step": 2, "instruction": "Soften onion in the drippings 4 minutes, add garlic and cook 60 seconds more." },
+        { "step": 3, "instruction": "Add broth and beans, bring to a boil, then simmer 15 minutes.", "tip": "Mash a few beans against the pot to naturally thicken the broth." },
+        { "step": 4, "instruction": "Stir in kale and cream, simmer 3 minutes until the kale wilts, then return the sausage and heat through." }
+      ],
+      "source_prompt": "copycat zuppa toscana soup",
+      "net_upvotes": 361, "cook_count": 244, "comment_count": 3, "days_ago": 25,
+      "comments": [
+        { "author": "saltandsage", "body": "Mashing beans into the broth is such a smart way to thicken it without a roux." },
+        { "author": "nori.kitchen", "body": "Genuinely better than the restaurant version and a fraction of the sodium." },
+        { "author": "mika.eats", "body": "White beans instead of potatoes was a great swap — more protein, same comfort." }
+      ]
+    },
+    {
+      "id": "greek-chicken-bowls",
+      "author": "mika.eats",
+      "title": "Greek Chicken Bowls",
+      "description": "Lemon-oregano marinated chicken over rice with a tangy cucumber salad and tzatziki — meal-prep perfection.",
+      "emoji": "🥙",
+      "cuisine": "Mediterranean",
+      "difficulty": "Easy",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 15,
+      "servings": 4,
+      "calories": 450, "protein_g": 40, "carbs_g": 38, "fat_g": 14,
+      "tags": ["High-protein", "Low-cal", "Gluten-free", "Meal-prep", "Mediterranean"],
+      "ingredients": [
+        { "item": "Chicken thighs", "quantity": "700 g (1.5 lb)", "note": "boneless" },
+        { "item": "Lemon", "quantity": "1", "note": "zest + juice" },
+        { "item": "Oregano", "quantity": "1 tbsp", "note": "dried" },
+        { "item": "Garlic", "quantity": "3 cloves", "note": "minced" },
+        { "item": "Cucumber", "quantity": "1", "note": "diced" },
+        { "item": "Cherry tomatoes", "quantity": "1 cup", "note": "halved" },
+        { "item": "Feta", "quantity": "80 g (⅔ cup)", "note": "crumbled" },
+        { "item": "Cooked rice", "quantity": "3 cups", "note": "for serving" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Toss chicken with lemon zest and juice, oregano, garlic and a glug of olive oil. Marinate 10 minutes." },
+        { "step": 2, "instruction": "Sear chicken in a hot pan 6 minutes per side until charred and cooked through. Rest 5 minutes, then slice.", "tip": "Resting keeps the juices in when you slice it." },
+        { "step": 3, "instruction": "Toss cucumber and tomatoes with a pinch of salt and a splash of olive oil for a quick salad." },
+        { "step": 4, "instruction": "Build bowls: rice, sliced chicken, cucumber-tomato salad, feta, and a dollop of tzatziki or yogurt." }
+      ],
+      "source_prompt": "greek chicken meal prep bowls",
+      "net_upvotes": 456, "cook_count": 389, "comment_count": 3, "days_ago": 27,
+      "comments": [
+        { "author": "theo_cooks", "body": "Meal-prepped 4 days of these — held up beautifully in the fridge, chicken stayed juicy." },
+        { "author": "rafa.fuego", "body": "The resting-then-slicing tip made a real difference in juiciness." },
+        { "author": "elpatron.bbq", "body": "Grilled the chicken outside instead of pan-searing — even better with a little char." }
+      ]
+    },
+    {
+      "id": "coconut-red-lentil-dal",
+      "author": "nori.kitchen",
+      "title": "Coconut Red Lentil Dal",
+      "description": "Silky, gently spiced lentils simmered in coconut milk — cheap, fast, and deeply comforting from entirely pantry staples.",
+      "emoji": "🍛",
+      "cuisine": "Indian",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 20,
+      "servings": 4,
+      "calories": 380, "protein_g": 17, "carbs_g": 46, "fat_g": 14,
+      "tags": ["Vegan", "Gluten-free", "Low-cal", "Pantry", "One-pot"],
+      "ingredients": [
+        { "item": "Red lentils", "quantity": "1½ cups", "note": "rinsed" },
+        { "item": "Coconut milk", "quantity": "1 can (400 ml)" },
+        { "item": "Yellow onion", "quantity": "1", "note": "diced" },
+        { "item": "Garlic + ginger", "quantity": "3 cloves + 1 inch", "note": "grated" },
+        { "item": "Curry powder or garam masala", "quantity": "2 tbsp" },
+        { "item": "Diced tomatoes", "quantity": "1 can (400 g)" },
+        { "item": "Vegetable broth", "quantity": "2 cups" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Soften onion in oil over medium heat 4 minutes. Add garlic, ginger and curry powder; bloom 60 seconds." },
+        { "step": 2, "instruction": "Add lentils, tomatoes, coconut milk and broth. Bring to a boil." },
+        { "step": 3, "instruction": "Reduce heat and simmer 18 minutes, stirring occasionally, until the lentils break down and thicken.", "tip": "Stir more toward the end to prevent sticking as it thickens." },
+        { "step": 4, "instruction": "Season with salt and lime juice to taste. Serve with rice or naan." }
+      ],
+      "source_prompt": "easy coconut red lentil dal",
+      "net_upvotes": 318, "cook_count": 275, "comment_count": 3, "days_ago": 23,
+      "comments": [
+        { "author": "june.bakes", "body": "Made this on a whim with pantry stuff and it's now in the regular rotation." },
+        { "author": "saltandsage", "body": "Freezes beautifully — always keep a batch in the freezer for lazy nights." },
+        { "author": "mika.eats", "body": "Added spinach at the end for extra greens, worked perfectly." }
+      ]
+    },
+    {
+      "id": "crispy-tofu-peanut-noodles",
+      "author": "theo_cooks",
+      "title": "Crispy Tofu Peanut Noodles",
+      "description": "Pan-crisped tofu tossed with noodles in a glossy peanut-lime sauce — the vegan takeout dupe worth making on repeat.",
+      "emoji": "🥜",
+      "cuisine": "Thai-inspired",
+      "difficulty": "Easy",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 15,
+      "servings": 4,
+      "calories": 540, "protein_g": 24, "carbs_g": 58, "fat_g": 26,
+      "tags": ["Vegan", "Peanut", "Weeknight"],
+      "ingredients": [
+        { "item": "Extra-firm tofu", "quantity": "1 block (400 g)", "note": "pressed, cubed" },
+        { "item": "Rice noodles or spaghetti", "quantity": "300 g (10 oz)" },
+        { "item": "Peanut butter", "quantity": "⅓ cup" },
+        { "item": "Soy sauce", "quantity": "3 tbsp" },
+        { "item": "Lime", "quantity": "1", "note": "juiced" },
+        { "item": "Maple syrup", "quantity": "1 tbsp" },
+        { "item": "Garlic + ginger", "quantity": "2 cloves + 1 inch", "note": "grated" },
+        { "item": "Cornstarch", "quantity": "2 tbsp", "note": "for tofu" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Toss tofu cubes in cornstarch. Pan-fry in oil over medium-high heat 8 minutes, turning, until crisp on all sides." },
+        { "step": 2, "instruction": "Meanwhile, boil noodles according to package directions, about 8 minutes, then drain." },
+        { "step": 3, "instruction": "Whisk peanut butter, soy sauce, lime juice, maple syrup, garlic and ginger with 3-4 tbsp hot water into a smooth sauce.", "tip": "Hot water loosens the peanut butter so the sauce coats evenly instead of clumping." },
+        { "step": 4, "instruction": "Toss noodles with the sauce, then top with crispy tofu." }
+      ],
+      "source_prompt": "crispy tofu peanut noodles vegan",
+      "net_upvotes": 289, "cook_count": 198, "comment_count": 3, "days_ago": 5,
+      "comments": [
+        { "author": "elpatron.bbq", "body": "Pressed the tofu for a full 20 minutes and it made a huge difference in crispiness." },
+        { "author": "nori.kitchen", "body": "The hot-water trick for the peanut sauce is a game-changer, no more clumps." },
+        { "author": "rafa.fuego", "body": "Added crushed peanuts and cilantro on top for crunch. Excellent." }
+      ]
+    },
+    {
+      "id": "spicy-tuna-poke-bowl",
+      "author": "nori.kitchen",
+      "title": "Spicy Tuna Poke Bowl",
+      "description": "Sushi-grade tuna in a spicy mayo-sriracha marinade over rice — no cooking required, ready faster than delivery.",
+      "emoji": "🍚",
+      "cuisine": "Hawaiian",
+      "difficulty": "Easy",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 0,
+      "servings": 2,
+      "calories": 420, "protein_g": 33, "carbs_g": 44, "fat_g": 14,
+      "tags": ["Pescatarian", "High-protein", "Low-cal", "Gluten-free", "No-cook"],
+      "ingredients": [
+        { "item": "Sushi-grade tuna", "quantity": "300 g (10 oz)", "note": "cubed" },
+        { "item": "Soy sauce", "quantity": "2 tbsp" },
+        { "item": "Sesame oil", "quantity": "1 tsp" },
+        { "item": "Mayo", "quantity": "2 tbsp" },
+        { "item": "Sriracha", "quantity": "1 tbsp", "note": "to taste" },
+        { "item": "Cooked sushi rice", "quantity": "2 cups" },
+        { "item": "Cucumber + avocado", "quantity": "½ each", "note": "diced" },
+        { "item": "Green onions + sesame seeds", "quantity": "to finish" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Whisk mayo and sriracha into a spicy mayo sauce. Set aside a spoonful for drizzling." },
+        { "step": 2, "instruction": "Toss the tuna cubes with soy sauce, sesame oil and most of the spicy mayo. Let it marinate 10 minutes in the fridge.", "tip": "Buy tuna labeled 'sushi-grade' or 'sashimi-grade' from a trusted fishmonger for eating raw." },
+        { "step": 3, "instruction": "Build bowls with rice, marinated tuna, cucumber and avocado." },
+        { "step": 4, "instruction": "Drizzle with reserved spicy mayo and top with green onions and sesame seeds." }
+      ],
+      "source_prompt": "spicy tuna poke bowl at home",
+      "net_upvotes": 407, "cook_count": 226, "comment_count": 3, "days_ago": 2,
+      "comments": [
+        { "author": "theo_cooks", "body": "As good as any poke shop I've been to, and way cheaper making it at home." },
+        { "author": "june.bakes", "body": "Added a drizzle of eel sauce too, worked really well with the spicy mayo." },
+        { "author": "saltandsage", "body": "The 10-minute marinate time is exactly right — any longer and the acid starts to 'cook' the tuna." }
+      ]
+    },
+    {
+      "id": "baked-feta-pasta",
+      "author": "june.bakes",
+      "title": "Baked Feta Pasta",
+      "description": "The viral one — a block of feta and cherry tomatoes roast into a creamy sauce that needs nothing but a stir.",
+      "emoji": "🍝",
+      "cuisine": "Mediterranean",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 30,
+      "servings": 4,
+      "calories": 560, "protein_g": 20, "carbs_g": 62, "fat_g": 24,
+      "tags": ["Vegetarian", "Viral", "Comfort"],
+      "ingredients": [
+        { "item": "Cherry tomatoes", "quantity": "500 g (1 lb)" },
+        { "item": "Feta", "quantity": "1 block (200 g)" },
+        { "item": "Olive oil", "quantity": "⅓ cup" },
+        { "item": "Garlic", "quantity": "4 cloves", "note": "smashed" },
+        { "item": "Chili flakes", "quantity": "½ tsp" },
+        { "item": "Penne or fusilli", "quantity": "350 g (12 oz)" },
+        { "item": "Basil", "quantity": "a handful", "note": "torn" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Preheat oven to 400°F (200°C). Place tomatoes, garlic and feta in a baking dish, drizzle with oil, chili flakes and salt." },
+        { "step": 2, "instruction": "Bake 25 minutes until tomatoes burst and feta turns golden and soft.", "tip": "Broil the last 2 minutes for extra color on the feta if you like." },
+        { "step": 3, "instruction": "Meanwhile, boil pasta until al dente, about 10 minutes. Reserve ½ cup pasta water." },
+        { "step": 4, "instruction": "Mash the baked feta and tomatoes together right in the dish, loosen with pasta water, then toss with the pasta and basil." }
+      ],
+      "source_prompt": "viral baked feta pasta",
+      "net_upvotes": 601, "cook_count": 512, "comment_count": 3, "days_ago": 8,
+      "comments": [
+        { "author": "rafa.fuego", "body": "This lived up to the hype completely. Mashing right in the baking dish saves a bowl too." },
+        { "author": "elpatron.bbq", "body": "Added a can of white beans for protein, barely changed the flavor and made it a full meal." },
+        { "author": "mika.eats", "body": "Broiling the last 2 minutes like the tip says gives it a gorgeous golden top." }
+      ]
+    },
+    {
+      "id": "air-fryer-chicken-thighs",
+      "author": "saltandsage",
+      "title": "Air-Fryer Chicken Thighs",
+      "description": "Shatteringly crisp skin, juicy inside, zero oven preheat — the weeknight protein that never gets old.",
+      "emoji": "🍗",
+      "cuisine": "American",
+      "difficulty": "Easy",
+      "prep_time_minutes": 5,
+      "cook_time_minutes": 20,
+      "servings": 4,
+      "calories": 410, "protein_g": 37, "carbs_g": 2, "fat_g": 27,
+      "tags": ["High-protein", "Low-cal", "Keto", "Gluten-free", "Air-fryer"],
+      "ingredients": [
+        { "item": "Bone-in, skin-on chicken thighs", "quantity": "8" },
+        { "item": "Olive oil", "quantity": "1 tbsp" },
+        { "item": "Smoked paprika", "quantity": "1 tbsp" },
+        { "item": "Garlic powder", "quantity": "1 tsp" },
+        { "item": "Salt + black pepper", "quantity": "to taste" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Pat chicken thighs completely dry — this is the secret to crispy skin. Toss with oil, paprika, garlic powder, salt and pepper.", "tip": "Bone-dry skin is the whole trick to crispiness in an air fryer." },
+        { "step": 2, "instruction": "Arrange skin-side up in the air fryer basket in a single layer, not touching." },
+        { "step": 3, "instruction": "Air-fry at 380°F (195°C) for 20 minutes, until the skin is deeply golden and internal temp hits 165°F (74°C)." },
+        { "step": 4, "instruction": "Rest 5 minutes before serving so the juices redistribute." }
+      ],
+      "source_prompt": "crispy air fryer chicken thighs",
+      "net_upvotes": 372, "cook_count": 458, "comment_count": 3, "days_ago": 1,
+      "comments": [
+        { "author": "theo_cooks", "body": "Patting the skin dry really is the whole secret. Crispiest chicken thighs I've made." },
+        { "author": "june.bakes", "body": "No flip needed, no oven preheat, done in 20 minutes flat. My new go-to weeknight protein." },
+        { "author": "nori.kitchen", "body": "Made a big batch for meal prep, the skin stayed crispy even reheated the next day." }
+      ]
+    },
+    {
+      "id": "mushroom-fried-rice",
+      "author": "theo_cooks",
+      "title": "Mushroom Fried Rice",
+      "description": "Deeply savory mushrooms and day-old rice, wok-charred until every grain is separate and golden.",
+      "emoji": "🍄",
+      "cuisine": "Chinese-inspired",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 15,
+      "servings": 4,
+      "calories": 430, "protein_g": 12, "carbs_g": 56, "fat_g": 16,
+      "tags": ["Vegetarian", "Low-cal", "Pantry", "30-minute"],
+      "ingredients": [
+        { "item": "Day-old cooked rice", "quantity": "4 cups", "note": "cold, broken up" },
+        { "item": "Mixed mushrooms", "quantity": "300 g (10 oz)", "note": "sliced" },
+        { "item": "Eggs", "quantity": "2", "note": "beaten" },
+        { "item": "Green onions", "quantity": "4", "note": "sliced" },
+        { "item": "Garlic", "quantity": "3 cloves", "note": "minced" },
+        { "item": "Soy sauce", "quantity": "3 tbsp" },
+        { "item": "Sesame oil", "quantity": "1 tbsp" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Sear mushrooms dry in a hot wok, untouched, 4 minutes until deeply browned.", "tip": "A dry pan first maximizes browning — add oil only after they've released their water." },
+        { "step": 2, "instruction": "Push mushrooms aside, add beaten eggs, scramble 60 seconds until just set, then mix through." },
+        { "step": 3, "instruction": "Add rice and garlic, breaking up clumps, and fry 5 minutes until the rice starts to char slightly at the edges." },
+        { "step": 4, "instruction": "Stir in soy sauce and sesame oil, toss 1 minute, and finish with green onions." }
+      ],
+      "source_prompt": "savory mushroom fried rice",
+      "net_upvotes": 298, "cook_count": 231, "comment_count": 3, "days_ago": 29,
+      "comments": [
+        { "author": "mika.eats", "body": "Day-old rice really is non-negotiable here — fresh rice just turns to mush." },
+        { "author": "rafa.fuego", "body": "Dry-searing the mushrooms first gave so much more flavor than I expected." },
+        { "author": "saltandsage", "body": "Great way to use up rice from takeout night. Added peas and carrots too." }
+      ]
+    },
+    {
+      "id": "pb-banana-overnight-oats",
+      "author": "june.bakes",
+      "title": "Peanut Butter Banana Overnight Oats",
+      "description": "No stove, no morning effort — just five minutes tonight for a creamy, naturally sweet breakfast tomorrow.",
+      "emoji": "🥣",
+      "cuisine": "American",
+      "difficulty": "Easy",
+      "prep_time_minutes": 5,
+      "cook_time_minutes": 0,
+      "servings": 2,
+      "calories": 380, "protein_g": 18, "carbs_g": 48, "fat_g": 14,
+      "tags": ["Vegetarian", "Gluten-free", "Breakfast", "Meal-prep", "No-cook"],
+      "ingredients": [
+        { "item": "Rolled oats", "quantity": "1 cup", "note": "certified gluten-free if needed" },
+        { "item": "Milk of choice", "quantity": "1 cup" },
+        { "item": "Greek yogurt", "quantity": "½ cup" },
+        { "item": "Peanut butter", "quantity": "2 tbsp" },
+        { "item": "Banana", "quantity": "1", "note": "mashed, plus extra sliced for topping" },
+        { "item": "Honey or maple syrup", "quantity": "1 tbsp" },
+        { "item": "Chia seeds", "quantity": "1 tbsp" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Mash the banana in a jar or bowl, then whisk in peanut butter, yogurt, honey and milk until smooth." },
+        { "step": 2, "instruction": "Stir in oats and chia seeds until fully combined." },
+        { "step": 3, "instruction": "Cover and refrigerate at least 4 hours, or overnight, until thickened and creamy.", "tip": "Give it a stir the next morning — the chia seeds settle a bit overnight." },
+        { "step": 4, "instruction": "Top with sliced banana and a drizzle of peanut butter before eating." }
+      ],
+      "source_prompt": "meal prep peanut butter banana overnight oats",
+      "net_upvotes": 245, "cook_count": 302, "comment_count": 3, "days_ago": 31,
+      "comments": [
+        { "author": "elpatron.bbq", "body": "Made 5 jars on Sunday for the whole work week. Huge time saver on busy mornings." },
+        { "author": "nori.kitchen", "body": "The greek yogurt addition makes these so much creamier than a plain oats recipe." },
+        { "author": "theo_cooks", "body": "Added cocoa powder to one batch for a chocolate-PB version, also excellent." }
+      ]
+    },
+    {
+      "id": "white-bean-rosemary-skillet",
+      "author": "mika.eats",
+      "title": "White Bean & Rosemary Skillet",
+      "description": "Creamy white beans simmered with garlic, rosemary and lemon — a five-ingredient pantry dinner that tastes far fancier than it is.",
+      "emoji": "🫘",
+      "cuisine": "Italian",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 15,
+      "servings": 4,
+      "calories": 360, "protein_g": 16, "carbs_g": 42, "fat_g": 14,
+      "tags": ["Vegan", "Gluten-free", "Low-cal", "Pantry"],
+      "ingredients": [
+        { "item": "White beans (cannellini)", "quantity": "3 cans (1.2 kg)", "note": "drained, liquid reserved" },
+        { "item": "Garlic", "quantity": "5 cloves", "note": "sliced" },
+        { "item": "Rosemary", "quantity": "2 sprigs" },
+        { "item": "Lemon", "quantity": "1", "note": "zest + juice" },
+        { "item": "Vegetable broth", "quantity": "1 cup" },
+        { "item": "Olive oil", "quantity": "3 tbsp" },
+        { "item": "Crusty bread", "quantity": "for serving" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Warm olive oil in a skillet over medium heat. Add garlic and rosemary; cook 90 seconds until fragrant, being careful not to burn the garlic." },
+        { "step": 2, "instruction": "Add beans and broth, bring to a simmer. Cook 12 minutes, mashing about a third of the beans against the pan to thicken.", "tip": "Mashing some of the beans creates a creamy sauce without any dairy." },
+        { "step": 3, "instruction": "Stir in lemon zest and juice, season with salt and pepper." },
+        { "step": 4, "instruction": "Serve in bowls with a drizzle of good olive oil and crusty bread for dipping." }
+      ],
+      "source_prompt": "simple white bean rosemary skillet",
+      "net_upvotes": 226, "cook_count": 164, "comment_count": 3, "days_ago": 20,
+      "comments": [
+        { "author": "june.bakes", "body": "Five ingredients but tastes like it simmered all day. The rosemary really carries it." },
+        { "author": "saltandsage", "body": "Mashed more beans than called for to make it extra creamy, worked great." },
+        { "author": "rafa.fuego", "body": "Perfect rainy-day dinner with good bread. So cheap to make too." }
+      ]
+    },
+    {
+      "id": "lemon-herb-baked-cod",
+      "author": "nori.kitchen",
+      "title": "Lemon-Herb Baked Cod",
+      "description": "Flaky cod under a bright herb-butter crust, in and out of the oven before you've finished setting the table.",
+      "emoji": "🐠",
+      "cuisine": "Mediterranean",
+      "difficulty": "Easy",
+      "prep_time_minutes": 8,
+      "cook_time_minutes": 12,
+      "servings": 4,
+      "calories": 310, "protein_g": 34, "carbs_g": 4, "fat_g": 16,
+      "tags": ["Pescatarian", "High-protein", "Low-cal", "Gluten-free", "Low-carb"],
+      "ingredients": [
+        { "item": "Cod fillets", "quantity": "4 × 170 g (6 oz)" },
+        { "item": "Butter", "quantity": "3 tbsp", "note": "softened" },
+        { "item": "Lemon", "quantity": "1", "note": "zest + juice" },
+        { "item": "Garlic", "quantity": "2 cloves", "note": "grated" },
+        { "item": "Parsley + dill", "quantity": "2 tbsp each", "note": "chopped" },
+        { "item": "Panko", "quantity": "¼ cup", "note": "optional, for crunch" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Preheat oven to 400°F (200°C). Mash butter with lemon zest, garlic, parsley and dill into a compound butter." },
+        { "step": 2, "instruction": "Pat cod dry, season with salt, and place in a baking dish. Spread the herb butter over each fillet.", "tip": "Patting the fish dry helps the butter adhere instead of sliding off." },
+        { "step": 3, "instruction": "Top with panko if using for a light crunch. Bake 12 minutes until the fish flakes easily with a fork." },
+        { "step": 4, "instruction": "Squeeze fresh lemon juice over the top just before serving." }
+      ],
+      "source_prompt": "quick baked lemon herb cod",
+      "net_upvotes": 341, "cook_count": 267, "comment_count": 3, "days_ago": 14,
+      "comments": [
+        { "author": "theo_cooks", "body": "12 minutes exactly and the fish was perfectly flaky. Super light dinner." },
+        { "author": "elpatron.bbq", "body": "The panko topping adds a nice bit of texture without much extra effort." },
+        { "author": "mika.eats", "body": "Compound butter trick works on basically any white fish, using this again for halibut." }
+      ]
+    },
+    {
+      "id": "weeknight-bolognese",
+      "author": "elpatron.bbq",
+      "title": "Weeknight Bolognese",
+      "description": "A rich, slow-tasting meat sauce that actually comes together in 45 minutes — freezer-friendly and endlessly comforting.",
+      "emoji": "🍝",
+      "cuisine": "Italian",
+      "difficulty": "Medium",
+      "prep_time_minutes": 15,
+      "cook_time_minutes": 30,
+      "servings": 6,
+      "calories": 540, "protein_g": 29, "carbs_g": 52, "fat_g": 24,
+      "tags": ["Comfort", "Weeknight", "Italian"],
+      "ingredients": [
+        { "item": "Ground beef", "quantity": "500 g (1 lb)" },
+        { "item": "Pancetta", "quantity": "100 g (3.5 oz)", "note": "diced" },
+        { "item": "Carrot, celery, onion", "quantity": "1 each", "note": "finely diced (soffritto)" },
+        { "item": "Crushed tomatoes", "quantity": "1 can (800 g)" },
+        { "item": "Whole milk", "quantity": "½ cup" },
+        { "item": "Red wine", "quantity": "½ cup" },
+        { "item": "Tagliatelle or spaghetti", "quantity": "400 g (14 oz)" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Render pancetta in a large pot over medium heat, 4 minutes. Add the soffritto vegetables and soften 6 minutes." },
+        { "step": 2, "instruction": "Add ground beef, breaking it up, and brown 6 minutes. Pour in wine and simmer until mostly evaporated, about 3 minutes." },
+        { "step": 3, "instruction": "Add tomatoes and milk, bring to a gentle simmer, then cook 20 minutes, stirring occasionally.", "tip": "The milk mellows the tomatoes' acidity — a classic Bolognese trick." },
+        { "step": 4, "instruction": "Meanwhile, boil pasta until al dente, about 10 minutes. Toss with the sauce and a splash of pasta water before serving." }
+      ],
+      "source_prompt": "quick weeknight bolognese sauce",
+      "net_upvotes": 419, "cook_count": 305, "comment_count": 3, "days_ago": 18,
+      "comments": [
+        { "author": "saltandsage", "body": "The milk trick really does round out the acidity. Tastes like it simmered for hours." },
+        { "author": "june.bakes", "body": "Made a double batch and froze half in portions — future me was very grateful." },
+        { "author": "nori.kitchen", "body": "Pancetta adds so much depth versus just using beef alone. Worth the extra ingredient." }
+      ]
+    },
+    {
+      "id": "one-bowl-fudgy-brownies",
+      "author": "june.bakes",
+      "title": "One-Bowl Fudgy Brownies",
+      "description": "Deeply fudgy, shiny-topped brownies from one bowl and one whisk — no mixer, no fuss, gone within the hour.",
+      "emoji": "🍫",
+      "cuisine": "American",
+      "difficulty": "Easy",
+      "prep_time_minutes": 10,
+      "cook_time_minutes": 25,
+      "servings": 9,
+      "calories": 260, "protein_g": 4, "carbs_g": 34, "fat_g": 13,
+      "tags": ["Vegetarian", "Dessert", "Baking"],
+      "ingredients": [
+        { "item": "Butter", "quantity": "170 g (¾ cup)", "note": "melted" },
+        { "item": "Sugar", "quantity": "1½ cups" },
+        { "item": "Eggs", "quantity": "3" },
+        { "item": "Cocoa powder", "quantity": "¾ cup" },
+        { "item": "All-purpose flour", "quantity": "1 cup" },
+        { "item": "Chocolate chips", "quantity": "½ cup" },
+        { "item": "Vanilla extract", "quantity": "1 tsp" }
+      ],
+      "steps": [
+        { "step": 1, "instruction": "Preheat oven to 350°F (175°C) and line an 8x8-inch pan with parchment. Whisk melted butter and sugar vigorously for 60 seconds — this helps the shiny top form." },
+        { "step": 2, "instruction": "Whisk in eggs one at a time, then vanilla, beating well after each addition." },
+        { "step": 3, "instruction": "Fold in cocoa powder and flour just until no dry streaks remain — don't overmix. Fold in chocolate chips.", "tip": "Overmixing at this stage is the #1 cause of cakey instead of fudgy brownies." },
+        { "step": 4, "instruction": "Pour into the pan and bake 25 minutes until a toothpick comes out with a few moist crumbs. Cool completely before cutting." }
+      ],
+      "source_prompt": "fudgy one bowl brownies",
+      "net_upvotes": 478, "cook_count": 356, "comment_count": 3, "days_ago": 10,
+      "comments": [
+        { "author": "mika.eats", "body": "Got the shiny crackly top on the first try by whisking the sugar and butter longer like the recipe says." },
+        { "author": "rafa.fuego", "body": "Fudgiest brownies I've made from scratch. Didn't overmix and it paid off." },
+        { "author": "saltandsage", "body": "Added a pinch of flaky salt on top before baking. Chef's kiss." }
+      ]
+    }
+  ]
+}

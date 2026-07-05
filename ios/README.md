@@ -46,8 +46,9 @@ the first build. The likeliest spots, in order:
 enforces Row Level Security, so committing it is safe, same as the web
 app does). Leave it as-is to hit the live backend, or blank both values
 out to boot in **Demo Mode**: a fully interactive local experience seeded
-with the same recipes as `src/lib/demo.ts`, persisted to `UserDefaults`,
-explorable with zero setup.
+with the same 30 recipes as the web app (see `../shared/seed-recipes.json`
+— the single source of truth for both Demo Modes and the live-DB seed),
+persisted to `UserDefaults`, explorable with zero setup.
 
 ## Feature parity checklist
 

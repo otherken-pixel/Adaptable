@@ -42,19 +42,14 @@ final class DemoStore {
     private var state: State
     private var listeners: [(UUID, () -> Void)] = []
     private var genCount = 0
-    private let key = "adaptable.demo.v1"
+    private let key = "adaptable.demo.v2"
 
     private init() {
-        if let raw = UserDefaults.standard.data(forKey: "adaptable.demo.v1"),
+        if let raw = UserDefaults.standard.data(forKey: "adaptable.demo.v2"),
            let decoded = try? JSONDecoder().decode(State.self, from: raw) {
             state = decoded
         } else {
-            state = DemoStore.seedState(chefs: [
-                "mika": Chef(id: "chef-mika", username: "mika.eats"),
-                "theo": Chef(id: "chef-theo", username: "theo_cooks"),
-                "june": Chef(id: "chef-june", username: "june.bakes"),
-                "rafa": Chef(id: "chef-rafa", username: "rafa.fuego"),
-            ])
+            state = DemoStore.seedState()
         }
     }
 
@@ -358,207 +353,134 @@ final class DemoStore {
         ISO8601DateFormatter().string(from: Date(timeIntervalSinceNow: -n * 86_400))
     }
 
-    private static func seedState(chefs: [String: Chef]) -> State {
-        let recipes = seedRecipes(chefs: chefs)
+    // MARK: - JSON-driven seed content
+    //
+    // All 30 seed recipes (and their review comments) are authored once in
+    // shared/seed-recipes.json — the same file that generates the live
+    // Supabase seed migration (see scripts/generate-seed-sql.py) — bundled
+    // into the app via the Xcode project's "Shared" group. Demo Mode and
+    // the live backend always show identical content.
+
+    private struct SeedChefEntry: Decodable { let username: String; let existing: Bool }
+    private struct SeedCommentEntry: Decodable { let author: String; let body: String }
+    private struct SeedRecipeEntry: Decodable {
+        let id: String
+        let author: String
+        let title: String
+        let description: String
+        let emoji: String
+        let cuisine: String
+        let difficulty: Difficulty
+        let prep_time_minutes: Int
+        let cook_time_minutes: Int
+        let servings: Int
+        let calories: Int
+        let protein_g: Int
+        let carbs_g: Int
+        let fat_g: Int
+        let tags: [String]
+        let ingredients: [Ingredient]
+        let steps: [RecipeStep]
+        let source_prompt: String
+        let net_upvotes: Int
+        let cook_count: Int
+        let comment_count: Int
+        let days_ago: Double
+        let comments: [SeedCommentEntry]
+    }
+    private struct SeedDataFile: Decodable { let chefs: [SeedChefEntry]; let recipes: [SeedRecipeEntry] }
+
+    // Stable ids matching the ones this app has always used, so a
+    // returning Demo Mode user's persisted UserDefaults state stays valid.
+    private static let chefIdOverrides: [String: String] = [
+        "mika.eats": "chef-mika",
+        "theo_cooks": "chef-theo",
+        "june.bakes": "chef-june",
+        "rafa.fuego": "chef-rafa",
+    ]
+
+    private static func chefId(for username: String) -> String {
+        if let override = chefIdOverrides[username] { return override }
+        let slug = username.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
+        return "chef-\(slug)"
+    }
+
+    private static func loadSeedData() -> SeedDataFile {
+        guard let url = Bundle.main.url(forResource: "seed-recipes", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode(SeedDataFile.self, from: data) else {
+            assertionFailure("shared/seed-recipes.json failed to load or decode from the app bundle")
+            return SeedDataFile(chefs: [], recipes: [])
+        }
+        return decoded
+    }
+
+    private static func seedState() -> State {
+        let data = loadSeedData()
+        var chefsByUsername: [String: ProfileLite] = [:]
+        for c in data.chefs {
+            chefsByUsername[c.username] = ProfileLite(id: chefId(for: c.username), username: c.username, avatar_url: nil)
+        }
+
+        let recipes: [Recipe] = data.recipes.map { r in
+            let author = chefsByUsername[r.author]
+            return Recipe(
+                id: r.id,
+                author_id: author?.id ?? "",
+                title: r.title,
+                description: r.description,
+                emoji: r.emoji,
+                cuisine: r.cuisine,
+                difficulty: r.difficulty,
+                prep_time_minutes: r.prep_time_minutes,
+                cook_time_minutes: r.cook_time_minutes,
+                servings: r.servings,
+                calories: r.calories,
+                protein_g: r.protein_g,
+                carbs_g: r.carbs_g,
+                fat_g: r.fat_g,
+                tags: r.tags,
+                ingredients: r.ingredients,
+                steps: r.steps,
+                source_prompt: r.source_prompt,
+                source_url: nil,
+                net_upvotes: r.net_upvotes,
+                cook_count: r.cook_count,
+                comment_count: r.comment_count,
+                created_at: daysAgo(r.days_ago),
+                author: author
+            )
+        }
+
+        // Comments are staggered between the recipe's creation and now
+        // (25/50/75% of the way through), matching the fractions used by
+        // the live-DB seed.
+        let comments: [Comment] = data.recipes.flatMap { r -> [Comment] in
+            let n = r.comments.count
+            return r.comments.enumerated().map { i, c in
+                let author = chefsByUsername[c.author]
+                let frac = Double(i + 1) / Double(n + 1)
+                return Comment(
+                    id: "c-seed-\(r.id)-\(i)",
+                    recipe_id: r.id,
+                    user_id: author?.id ?? "",
+                    body: c.body,
+                    created_at: daysAgo(r.days_ago * (1 - frac)),
+                    author: author
+                )
+            }
+        }
+
         return State(
             recipes: recipes,
             votes: [:],
             saves: [],
-            comments: seedComments(chefs: chefs),
+            comments: comments,
             notifications: [],
             plans: [],
             preferences: .empty,
             follows: []
         )
-    }
-
-    private static func seedRecipes(chefs: [String: Chef]) -> [Recipe] {
-        let mika = chefs["mika"]!.id, theo = chefs["theo"]!.id, rafa = chefs["rafa"]!.id, june = chefs["june"]!.id
-        func lite(_ id: String) -> ProfileLite {
-            let username = chefs.values.first { $0.id == id }?.username ?? "chef"
-            return ProfileLite(id: id, username: username, avatar_url: nil)
-        }
-
-        return [
-            Recipe(
-                id: "seed-miso-salmon", author_id: mika,
-                title: "Caramelized Miso Salmon Bowl",
-                description: "Silky salmon lacquered in sweet-savory miso glaze over sushi rice with quick-pickled cucumber. Weeknight fancy in 25 minutes.",
-                emoji: "🍣", cuisine: "Japanese", difficulty: .easy,
-                prep_time_minutes: 10, cook_time_minutes: 15, servings: 2,
-                calories: 560, protein_g: 38, carbs_g: 52, fat_g: 21,
-                tags: ["High-protein", "Pescatarian", "Weeknight"],
-                ingredients: [
-                    Ingredient(item: "Salmon fillets", quantity: "2 × 150 g (5 oz)", note: "skin on"),
-                    Ingredient(item: "White miso paste", quantity: "2 tbsp", note: nil),
-                    Ingredient(item: "Maple syrup", quantity: "1 tbsp", note: nil),
-                    Ingredient(item: "Soy sauce", quantity: "1 tbsp", note: nil),
-                    Ingredient(item: "Rice vinegar", quantity: "2 tbsp", note: nil),
-                    Ingredient(item: "Sushi rice", quantity: "150 g (¾ cup)", note: "rinsed"),
-                    Ingredient(item: "Persian cucumber", quantity: "1", note: "ribboned"),
-                    Ingredient(item: "Scallions + sesame", quantity: "to finish", note: nil),
-                ],
-                steps: [
-                    RecipeStep(step: 1, instruction: "Cook the rice. While it steams, whisk miso, maple, soy and 1 tbsp water into a glossy glaze.", tip: nil),
-                    RecipeStep(step: 2, instruction: "Toss cucumber ribbons with rice vinegar and a pinch of salt. Set aside to pickle.", tip: "A pinch of sugar rounds out the pickle."),
-                    RecipeStep(step: 3, instruction: "Sear salmon skin-side down 4 minutes in a hot pan. Flip, brush thickly with glaze, cook 3 more minutes.", tip: nil),
-                    RecipeStep(step: 4, instruction: "Broil 90 seconds until the glaze bubbles and caramelizes at the edges.", tip: "Watch closely — miso goes from bronzed to burnt fast."),
-                    RecipeStep(step: 5, instruction: "Build bowls: rice, salmon, drained pickles. Shower with scallions and sesame.", tip: nil),
-                ],
-                source_prompt: "quick high-protein salmon dinner", source_url: nil,
-                net_upvotes: 482, cook_count: 214, comment_count: 3,
-                created_at: daysAgo(6), author: lite(mika)
-            ),
-            Recipe(
-                id: "seed-chickpea-curry", author_id: theo,
-                title: "20-Minute Coconut Chickpea Curry",
-                description: "Creamy, gently spiced and entirely from the pantry. The crispy chickpea topping is the move.",
-                emoji: "🍛", cuisine: "Indian-ish", difficulty: .easy,
-                prep_time_minutes: 5, cook_time_minutes: 15, servings: 4,
-                calories: 430, protein_g: 16, carbs_g: 48, fat_g: 22,
-                tags: ["Vegan", "Pantry", "One-pan", "Gluten-free"],
-                ingredients: [
-                    Ingredient(item: "Chickpeas", quantity: "2 cans (800 g)", note: "drained, ½ cup reserved"),
-                    Ingredient(item: "Coconut milk", quantity: "1 can (400 ml)", note: "full fat"),
-                    Ingredient(item: "Crushed tomatoes", quantity: "200 g (1 cup)", note: nil),
-                    Ingredient(item: "Yellow onion", quantity: "1", note: "diced"),
-                    Ingredient(item: "Garlic + ginger", quantity: "3 cloves + 1 inch", note: "grated"),
-                    Ingredient(item: "Curry powder", quantity: "2 tbsp", note: nil),
-                    Ingredient(item: "Baby spinach", quantity: "2 big handfuls", note: nil),
-                ],
-                steps: [
-                    RecipeStep(step: 1, instruction: "Crisp the reserved chickpeas in olive oil with a pinch of curry powder and salt. Set aside.", tip: nil),
-                    RecipeStep(step: 2, instruction: "In the same pan, soften onion 3 minutes. Add garlic, ginger and curry powder; bloom 60 seconds.", tip: "Toasting spices in oil unlocks their flavor."),
-                    RecipeStep(step: 3, instruction: "Add tomatoes, coconut milk and chickpeas. Simmer 8 minutes until it thickens slightly.", tip: nil),
-                    RecipeStep(step: 4, instruction: "Wilt in the spinach, season with salt and a squeeze of lime. Top with crispy chickpeas.", tip: nil),
-                ],
-                source_prompt: "vegan pantry curry in 20 minutes", source_url: nil,
-                net_upvotes: 391, cook_count: 178, comment_count: 2,
-                created_at: daysAgo(4), author: lite(theo)
-            ),
-            Recipe(
-                id: "seed-smash-tacos", author_id: rafa,
-                title: "Crispy Smash Burger Tacos",
-                description: "A smash patty seared directly onto a tortilla — burger flavor, taco format, ridiculous crust.",
-                emoji: "🌮", cuisine: "Tex-Mex", difficulty: .medium,
-                prep_time_minutes: 15, cook_time_minutes: 10, servings: 4,
-                calories: 610, protein_g: 33, carbs_g: 38, fat_g: 34,
-                tags: ["Crowd-pleaser", "30-minute", "Beef"],
-                ingredients: [
-                    Ingredient(item: "Ground beef (80/20)", quantity: "500 g (1 lb)", note: nil),
-                    Ingredient(item: "Small flour tortillas", quantity: "8", note: nil),
-                    Ingredient(item: "American cheese", quantity: "8 slices", note: nil),
-                    Ingredient(item: "White onion", quantity: "½", note: "shaved paper-thin"),
-                    Ingredient(item: "Shredded lettuce", quantity: "2 cups", note: nil),
-                    Ingredient(item: "Mayo + ketchup + pickle brine", quantity: "¼ cup + 2 tbsp + 1 tbsp", note: "burger sauce"),
-                ],
-                steps: [
-                    RecipeStep(step: 1, instruction: "Stir the burger sauce together. Divide beef into 8 loose 60 g balls — don't compact them.", tip: nil),
-                    RecipeStep(step: 2, instruction: "Press a beef ball thinly onto each tortilla so it reaches the edges.", tip: nil),
-                    RecipeStep(step: 3, instruction: "Sear beef-side down in a screaming hot pan, pressing firmly, 2–3 minutes until deeply crusted.", tip: "A second pan on top makes a great press."),
-                    RecipeStep(step: 4, instruction: "Flip, add cheese and onion, cook 1 minute until the tortilla crisps.", tip: nil),
-                    RecipeStep(step: 5, instruction: "Fold, stuff with lettuce and sauce, eat immediately over the sink.", tip: nil),
-                ],
-                source_prompt: "smash burger tacos for four", source_url: nil,
-                net_upvotes: 357, cook_count: 342, comment_count: 2,
-                created_at: daysAgo(2), author: lite(rafa)
-            ),
-            Recipe(
-                id: "seed-lemon-pasta", author_id: june,
-                title: "One-Pot Lemon Ricotta Rigatoni",
-                description: "Bright, creamy and done before the table is set. The pasta water does all the sauce work.",
-                emoji: "🍋", cuisine: "Italian", difficulty: .easy,
-                prep_time_minutes: 5, cook_time_minutes: 15, servings: 3,
-                calories: 520, protein_g: 21, carbs_g: 68, fat_g: 18,
-                tags: ["Vegetarian", "One-pot", "15-minute"],
-                ingredients: [
-                    Ingredient(item: "Rigatoni", quantity: "300 g (10 oz)", note: nil),
-                    Ingredient(item: "Whole-milk ricotta", quantity: "250 g (1 cup)", note: nil),
-                    Ingredient(item: "Lemon", quantity: "1", note: "zest + juice"),
-                    Ingredient(item: "Parmesan", quantity: "40 g (½ cup)", note: "finely grated"),
-                    Ingredient(item: "Black pepper", quantity: "lots", note: nil),
-                    Ingredient(item: "Basil", quantity: "a handful", note: nil),
-                ],
-                steps: [
-                    RecipeStep(step: 1, instruction: "Boil rigatoni in well-salted water until just shy of al dente. Reserve 1 cup of pasta water.", tip: nil),
-                    RecipeStep(step: 2, instruction: "Whisk ricotta, parmesan, lemon zest and juice with ½ cup pasta water into a silky sauce.", tip: nil),
-                    RecipeStep(step: 3, instruction: "Toss pasta with the sauce off-heat, loosening with more pasta water until it coats every tube.", tip: "Off-heat keeps the ricotta creamy instead of grainy."),
-                    RecipeStep(step: 4, instruction: "Finish with basil, black pepper and a drizzle of good olive oil.", tip: nil),
-                ],
-                source_prompt: "easy vegetarian pasta with lemon", source_url: nil,
-                net_upvotes: 289, cook_count: 96, comment_count: 1,
-                created_at: daysAgo(1), author: lite(june)
-            ),
-            Recipe(
-                id: "seed-breakfast-tacos", author_id: mika,
-                title: "5-Minute Protein Breakfast Wrap",
-                description: "Soft scramble, crispy cheese skirt, one pan, five minutes. 38 g of protein before your coffee cools.",
-                emoji: "🌯", cuisine: "American", difficulty: .easy,
-                prep_time_minutes: 2, cook_time_minutes: 3, servings: 1,
-                calories: 520, protein_g: 38, carbs_g: 28, fat_g: 24,
-                tags: ["High-protein", "Breakfast", "5-minute"],
-                ingredients: [
-                    Ingredient(item: "Eggs", quantity: "3", note: nil),
-                    Ingredient(item: "Cottage cheese", quantity: "2 tbsp", note: "trust the process"),
-                    Ingredient(item: "Large tortilla", quantity: "1", note: nil),
-                    Ingredient(item: "Cheddar", quantity: "30 g (⅓ cup)", note: "shredded"),
-                    Ingredient(item: "Hot sauce", quantity: "to taste", note: nil),
-                ],
-                steps: [
-                    RecipeStep(step: 1, instruction: "Whisk eggs with cottage cheese and a pinch of salt. Soft-scramble over medium-low, stopping while glossy.", tip: nil),
-                    RecipeStep(step: 2, instruction: "Push eggs aside, scatter cheddar in the pan, and lay the tortilla on top. 60 seconds makes a crispy cheese skirt.", tip: "The cheese glues the wrap shut."),
-                    RecipeStep(step: 3, instruction: "Flip the tortilla cheese-side up, pile on eggs and hot sauce, roll tightly and sear the seam.", tip: nil),
-                ],
-                source_prompt: "fast high protein breakfast", source_url: nil,
-                net_upvotes: 214, cook_count: 511, comment_count: 1,
-                created_at: daysAgo(0.5), author: lite(mika)
-            ),
-            Recipe(
-                id: "seed-mushroom-ramen", author_id: theo,
-                title: "Midnight Garlic Butter Mushroom Ramen",
-                description: "Instant noodles glow-up: umami-bomb broth, jammy egg, torched mushrooms. Better than the shop, cheaper than delivery.",
-                emoji: "🍜", cuisine: "Japanese-ish", difficulty: .medium,
-                prep_time_minutes: 10, cook_time_minutes: 40, servings: 2,
-                calories: 540, protein_g: 19, carbs_g: 58, fat_g: 26,
-                tags: ["Vegetarian", "Comfort", "Late-night"],
-                ingredients: [
-                    Ingredient(item: "Instant ramen", quantity: "2 packs", note: "noodles only"),
-                    Ingredient(item: "Mixed mushrooms", quantity: "300 g (10 oz)", note: "torn"),
-                    Ingredient(item: "Butter", quantity: "3 tbsp", note: nil),
-                    Ingredient(item: "Garlic", quantity: "4 cloves", note: "sliced"),
-                    Ingredient(item: "White miso", quantity: "1 tbsp", note: nil),
-                    Ingredient(item: "Soy sauce", quantity: "2 tbsp", note: nil),
-                    Ingredient(item: "Eggs", quantity: "2", note: "jammy-boiled 6:30"),
-                    Ingredient(item: "Chili crisp", quantity: "to finish", note: nil),
-                ],
-                steps: [
-                    RecipeStep(step: 1, instruction: "Boil eggs 6½ minutes, then ice bath. Peel when cool.", tip: nil),
-                    RecipeStep(step: 2, instruction: "Sear mushrooms dry in a hot pan until deeply browned, then add butter and garlic and baste 2 minutes.", tip: "Dry pan first = maximum browning, zero sog."),
-                    RecipeStep(step: 3, instruction: "Whisk miso and soy into 700 ml hot water. Simmer half the mushrooms in it 5 minutes.", tip: nil),
-                    RecipeStep(step: 4, instruction: "Cook noodles in the broth 2 minutes. Bowl up with remaining mushrooms, halved eggs and chili crisp.", tip: nil),
-                ],
-                source_prompt: "fancy instant ramen with mushrooms", source_url: nil,
-                net_upvotes: 176, cook_count: 88, comment_count: 1,
-                created_at: daysAgo(0.2), author: lite(theo)
-            ),
-        ]
-    }
-
-    private static func seedComments(chefs: [String: Chef]) -> [Comment] {
-        let mika = chefs["mika"]!, theo = chefs["theo"]!, rafa = chefs["rafa"]!, june = chefs["june"]!
-        func lite(_ c: Chef) -> ProfileLite { ProfileLite(id: c.id, username: c.username, avatar_url: nil) }
-        return [
-            Comment(id: "c-1", recipe_id: "seed-miso-salmon", user_id: theo.id, body: "Made this twice this week. The broil step is not optional — that caramelized edge is everything.", created_at: daysAgo(4), author: lite(theo)),
-            Comment(id: "c-2", recipe_id: "seed-miso-salmon", user_id: june.id, body: "Swapped maple for honey and it worked great. 10/10 weeknight dinner.", created_at: daysAgo(3), author: lite(june)),
-            Comment(id: "c-3", recipe_id: "seed-miso-salmon", user_id: rafa.id, body: "Remixed this with gochujang instead of miso 🔥 highly recommend.", created_at: daysAgo(1), author: lite(rafa)),
-            Comment(id: "c-4", recipe_id: "seed-chickpea-curry", user_id: mika.id, body: "The crispy chickpea topping is genius. Doubled it, no regrets.", created_at: daysAgo(2), author: lite(mika)),
-            Comment(id: "c-5", recipe_id: "seed-chickpea-curry", user_id: june.id, body: "Used frozen spinach and it was still fantastic. True pantry hero.", created_at: daysAgo(1), author: lite(june)),
-            Comment(id: "c-6", recipe_id: "seed-smash-tacos", user_id: mika.id, body: "\"Eat immediately over the sink\" — accurate. Family demolished these.", created_at: daysAgo(1), author: lite(mika)),
-            Comment(id: "c-7", recipe_id: "seed-smash-tacos", user_id: theo.id, body: "Cast iron + a bacon press = perfect crust every time.", created_at: daysAgo(0.5), author: lite(theo)),
-            Comment(id: "c-8", recipe_id: "seed-lemon-pasta", user_id: rafa.id, body: "Off-heat tip saved me — first attempt on heat went grainy, second was silk.", created_at: daysAgo(0.4), author: lite(rafa)),
-            Comment(id: "c-9", recipe_id: "seed-breakfast-tacos", user_id: june.id, body: "The cottage cheese thing sounded wrong. It is extremely right.", created_at: daysAgo(0.3), author: lite(june)),
-            Comment(id: "c-10", recipe_id: "seed-mushroom-ramen", user_id: mika.id, body: "Dry-pan mushroom sear is a game changer. Never crowding the pan again.", created_at: daysAgo(0.1), author: lite(mika)),
-        ]
     }
 
     /// Demo generation/import templates — a small rotation of complete
