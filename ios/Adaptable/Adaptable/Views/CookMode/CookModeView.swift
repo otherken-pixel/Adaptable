@@ -72,7 +72,7 @@ struct CookModeView: View {
         let step = (!isPrep && !isDone) ? recipe.steps[idx - 1] : nil
 
         VStack(spacing: 0) {
-            topBar(recipe: recipe, total: total, idx: idx, isDone: isDone)
+            topBar(recipe: recipe, total: total, currentStep: idx, isDone: isDone)
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -133,7 +133,7 @@ struct CookModeView: View {
 
     // MARK: - Top bar
 
-    private func topBar(recipe: Recipe, total: Int, idx: Int, isDone: Bool) -> some View {
+    private func topBar(recipe: Recipe, total: Int, currentStep: Int, isDone: Bool) -> some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
                 Button { dismiss() } label: {
@@ -143,7 +143,7 @@ struct CookModeView: View {
                     Text("\(recipe.emoji) \(recipe.title)").font(.system(size: 13, weight: .bold)).lineLimit(1)
                     HStack(spacing: 3) {
                         ForEach(0...total, id: \.self) { i in
-                            Capsule().fill(i <= idx - (isDone ? 1 : 0) && idx > 0 ? Theme.accent : Theme.line).frame(height: 4)
+                            Capsule().fill(i <= currentStep - (isDone ? 1 : 0) && currentStep > 0 ? Theme.accent : Theme.line).frame(height: 4)
                         }
                     }
                 }
@@ -161,7 +161,7 @@ struct CookModeView: View {
                 }
             }
 
-            let otherTimers = timers.filter { $0.step != idx }
+            let otherTimers = timers.filter { $0.step != currentStep }
             if !otherTimers.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
@@ -169,7 +169,7 @@ struct CookModeView: View {
                             let left = max(0, Int(t.endsAt.timeIntervalSince(now).rounded()))
                             let finished = left <= 0
                             Button {
-                                if finished { timers.removeAll { $0.step == t.step } } else { idx = t.step }
+                                if finished { timers.removeAll { $0.step == t.step } } else { self.idx = t.step }
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "timer")

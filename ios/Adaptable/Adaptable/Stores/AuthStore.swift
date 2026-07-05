@@ -57,9 +57,9 @@ final class AuthStore: ObservableObject {
 
     private func loadProfile(userId: String) async {
         do {
-            let row: Profile? = try await SupabaseManager.client
-                .from("profiles").select("*").eq("id", value: userId).maybeSingle().execute().value
-            self.profile = row
+            let rows: [Profile] = try await SupabaseManager.client
+                .from("profiles").select("*").eq("id", value: userId).limit(1).execute().value
+            self.profile = rows.first
         } catch {
             self.profile = nil
         }

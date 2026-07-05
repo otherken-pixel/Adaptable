@@ -39,10 +39,14 @@ final class NotificationsStore: ObservableObject {
                     InsertAction.self,
                     schema: "public",
                     table: "notifications",
-                    filter: "user_id=eq.\(profile.id)"
+                    filter: .eq("user_id", value: profile.id)
                 )
                 self.channel = ch
-                await ch.subscribe()
+                do {
+                    try await ch.subscribeWithError()
+                } catch {
+                    return
+                }
                 for await _ in changes {
                     await self.refresh(userId: profile.id)
                 }

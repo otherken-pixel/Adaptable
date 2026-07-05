@@ -32,7 +32,8 @@ enum API {
 
     static func fetchRecipe(id: String) async throws -> Recipe? {
         if SupabaseManager.isDemo { return await DemoStore.shared.getRecipe(id) }
-        return try await db.from("recipes").select(recipeSelect).eq("id", value: id).maybeSingle().execute().value
+        let rows: [Recipe] = try await db.from("recipes").select(recipeSelect).eq("id", value: id).limit(1).execute().value
+        return rows.first
     }
 
     // MARK: - Votes

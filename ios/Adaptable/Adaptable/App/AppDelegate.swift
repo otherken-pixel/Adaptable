@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 enum AppEnvironment {
     static let shared = Holder()
 
+    @MainActor
     final class Holder {
         let deepLinks = DeepLinkCenter()
     }
