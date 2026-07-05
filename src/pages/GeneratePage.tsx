@@ -15,7 +15,12 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { fetchRecipe, generateRecipe, importRecipe, type ImportSource } from "@/lib/api";
+import {
+  fetchRecipe,
+  generateRecipe,
+  importRecipe,
+  type ImportSource,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { Recipe } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
@@ -79,7 +84,9 @@ export default function GeneratePage() {
 
   // How many people the generated recipe should serve — defaults to the
   // household size from the taste profile.
-  const [serves, setServes] = useState(profile?.preferences?.household_size ?? 4);
+  const [serves, setServes] = useState(
+    profile?.preferences?.household_size ?? 4,
+  );
   const servesTouchedRef = useRef(false);
 
   // In live mode the profile (and its household_size) can arrive after
@@ -199,6 +206,12 @@ export default function GeneratePage() {
   const submit = async (text?: string) => {
     const p = (text ?? prompt).trim();
     if (!p || phase === "loading") return;
+    // Guard: require auth before calling the API
+    if (!profile) {
+      setErrorMsg("Sign in to generate recipes.");
+      setPhase("error");
+      return;
+    }
     lastImportRef.current = null;
     setPrompt(p);
     setPhase("loading");
@@ -219,7 +232,13 @@ export default function GeneratePage() {
       setRecipe(result);
       setPhase("done");
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Something went wrong.");
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      // Surface auth errors helpfully
+      if (msg.includes("sign in") || msg.includes("auth")) {
+        setErrorMsg("Please sign in and try again.");
+      } else {
+        setErrorMsg(msg);
+      }
       setPhase("error");
     }
   };
@@ -280,7 +299,9 @@ export default function GeneratePage() {
                     key={id}
                     onClick={() => setMode(id)}
                     className={`pressable flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                      mode === id ? "bg-raised text-content shadow-sm" : "text-muted"
+                      mode === id
+                        ? "bg-raised text-content shadow-sm"
+                        : "text-muted"
                     }`}
                   >
                     <Icon size={14} strokeWidth={2.4} />
@@ -315,7 +336,9 @@ export default function GeneratePage() {
           {/* Party size — passed to the AI and enforced on the result */}
           <div
             className="mt-4 mb-5 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5"
-            style={{ display: !remixSource && mode === "import" ? "none" : undefined }}
+            style={{
+              display: !remixSource && mode === "import" ? "none" : undefined,
+            }}
           >
             <span className="flex items-center gap-2 text-[14px] font-bold">
               <Users size={16} strokeWidth={2.4} className="text-accent" />
@@ -374,14 +397,21 @@ export default function GeneratePage() {
 
               {/* URL */}
               <div className="mt-5 flex items-center gap-2 rounded-2xl border border-line bg-raised p-1.5 pl-4">
-                <Link2 size={17} strokeWidth={2.2} className="shrink-0 text-faint" />
+                <Link2
+                  size={17}
+                  strokeWidth={2.2}
+                  className="shrink-0 text-faint"
+                />
                 <input
                   value={importUrl}
                   onChange={(e) => setImportUrl(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && importUrl.trim()) {
                       e.preventDefault();
-                      void runImport({ url: importUrl.trim() }, importUrl.trim());
+                      void runImport(
+                        { url: importUrl.trim() },
+                        importUrl.trim(),
+                      );
                     }
                   }}
                   inputMode="url"
@@ -390,7 +420,9 @@ export default function GeneratePage() {
                 />
                 <button
                   aria-label="Import from link"
-                  onClick={() => void runImport({ url: importUrl.trim() }, importUrl.trim())}
+                  onClick={() =>
+                    void runImport({ url: importUrl.trim() }, importUrl.trim())
+                  }
                   disabled={!importUrl.trim()}
                   className="pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md disabled:opacity-30"
                   style={{
@@ -431,7 +463,9 @@ export default function GeneratePage() {
                 className="w-full resize-none rounded-2xl border border-line bg-raised p-4 text-[15px] outline-none placeholder:text-faint focus:border-accent"
               />
               <button
-                onClick={() => void runImport({ text: importText.trim() }, "Pasted recipe")}
+                onClick={() =>
+                  void runImport({ text: importText.trim() }, "Pasted recipe")
+                }
                 disabled={importText.trim().length < 20}
                 className="pressable mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-content text-[14px] font-bold text-surface disabled:opacity-40"
               >
@@ -500,7 +534,8 @@ export default function GeneratePage() {
               </p>
               <div className="flex flex-wrap gap-2">
                 {PANTRY_STAPLES.filter(
-                  (s) => !pantry.some((p) => p.toLowerCase() === s.toLowerCase()),
+                  (s) =>
+                    !pantry.some((p) => p.toLowerCase() === s.toLowerCase()),
                 ).map((s) => (
                   <button
                     key={s}
@@ -546,10 +581,15 @@ export default function GeneratePage() {
               </div>
               <span className="absolute -inset-2 -z-10 animate-ping rounded-[28px] bg-accent/20" />
             </div>
-            <p key={lineIdx} className="animate-fade-up mt-6 text-[15px] font-bold">
+            <p
+              key={lineIdx}
+              className="animate-fade-up mt-6 text-[15px] font-bold"
+            >
               {LOADING_LINES[lineIdx]}
             </p>
-            <p className="mt-1 max-w-64 truncate text-xs text-faint">“{prompt}”</p>
+            <p className="mt-1 max-w-64 truncate text-xs text-faint">
+              “{prompt}”
+            </p>
           </div>
           <div className="overflow-hidden rounded-card border border-line bg-raised">
             <div className="skeleton h-48" />
@@ -570,8 +610,12 @@ export default function GeneratePage() {
       {phase === "error" && (
         <div className="animate-fade-up flex flex-col items-center pt-14 text-center">
           <span className="text-6xl">🫠</span>
-          <h2 className="mt-4 text-lg font-extrabold">The kitchen hit a snag</h2>
-          <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">{errorMsg}</p>
+          <h2 className="mt-4 text-lg font-extrabold">
+            The kitchen hit a snag
+          </h2>
+          <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">
+            {errorMsg}
+          </p>
           <button
             onClick={() => {
               const src = lastImportRef.current;
@@ -606,43 +650,43 @@ export default function GeneratePage() {
       {/* Composer — pinned above the bottom nav (pantry mode has its own CTA) */}
       {(phase === "idle" || phase === "error") &&
         (phase === "error" || mode === "describe" || remixSource !== null) && (
-        <div
-          className="fixed inset-x-0 z-30"
-          style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
-        >
-          <div className="mx-auto max-w-lg px-4 pb-3">
-            <div className="flex items-end gap-2 rounded-[26px] border border-line bg-raised p-2 shadow-[0_8px_32px_rgb(0_0_0/0.12)]">
-              <textarea
-                ref={inputRef}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    submit();
-                  }
-                }}
-                rows={1}
-                maxLength={500}
-                placeholder="Describe your perfect meal…"
-                className="max-h-28 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-faint"
-              />
-              <button
-                aria-label="Generate recipe"
-                onClick={() => submit()}
-                disabled={!prompt.trim()}
-                className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-opacity disabled:opacity-30"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
-                }}
-              >
-                <ArrowUp size={20} strokeWidth={2.6} />
-              </button>
+          <div
+            className="fixed inset-x-0 z-30"
+            style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
+          >
+            <div className="mx-auto max-w-lg px-4 pb-3">
+              <div className="flex items-end gap-2 rounded-[26px] border border-line bg-raised p-2 shadow-[0_8px_32px_rgb(0_0_0/0.12)]">
+                <textarea
+                  ref={inputRef}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      submit();
+                    }
+                  }}
+                  rows={1}
+                  maxLength={500}
+                  placeholder="Describe your perfect meal…"
+                  className="max-h-28 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-faint"
+                />
+                <button
+                  aria-label="Generate recipe"
+                  onClick={() => submit()}
+                  disabled={!prompt.trim()}
+                  className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-opacity disabled:opacity-30"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+                  }}
+                >
+                  <ArrowUp size={20} strokeWidth={2.6} />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 }

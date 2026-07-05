@@ -17,13 +17,30 @@ export default function RecipeDetailPage() {
   const { followedIds, toggleFollowChef } = useEngagement();
   const [recipe, setRecipe] = useState<Recipe | null | undefined>(undefined);
   const [photos, setPhotos] = useState<RecipePhoto[]>([]);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
     fetchRecipe(id)
-      .then((r) => !cancelled && setRecipe(r))
-      .catch(() => !cancelled && setRecipe(null));
+      .then((r) => {
+        if (!cancelled) {
+          if (r) {
+            setRecipe(r);
+          } else {
+            setRecipe(null);
+            setFetchError("Recipe not found — it may have been removed.");
+          }
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          // A network or auth error is NOT "not found"
+          const msg = e?.message ?? "Network error — check your connection.";
+          setFetchError(`Failed to load: ${msg}`);
+          setRecipe(null);
+        }
+      });
     fetchRecipePhotos(id)
       .then((p) => !cancelled && setPhotos(p))
       .catch(() => {
@@ -42,7 +59,9 @@ export default function RecipeDetailPage() {
       <div className="flex items-center pt-4 pb-3">
         <button
           aria-label="Back"
-          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/"))}
+          onClick={() =>
+            window.history.length > 1 ? navigate(-1) : navigate("/")
+          }
           className="pressable -ml-2 flex h-10 w-10 items-center justify-center rounded-full text-muted"
         >
           <ChevronLeft size={26} strokeWidth={2.4} />
@@ -86,8 +105,8 @@ export default function RecipeDetailPage() {
       {recipe === null && (
         <EmptyState
           emoji="🔍"
-          title="Recipe not found"
-          body="It may have been removed, or the link is off."
+          title={fetchError ? "Failed to load" : "Recipe not found"}
+          body={fetchError ?? "It may have been removed, or the link is off."}
           action={
             <Link
               to="/"

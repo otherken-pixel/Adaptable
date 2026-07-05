@@ -10,8 +10,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,17 +26,27 @@ const recipeSchema = {
       type: "STRING",
       description: "One or two enticing sentences about the dish",
     },
-    emoji: { type: "STRING", description: "Single emoji that best represents the dish" },
+    emoji: {
+      type: "STRING",
+      description: "Single emoji that best represents the dish",
+    },
     cuisine: { type: "STRING" },
     difficulty: { type: "STRING", enum: ["Easy", "Medium", "Hard"] },
     prep_time_minutes: { type: "INTEGER" },
     cook_time_minutes: { type: "INTEGER" },
     servings: { type: "INTEGER" },
-    calories: { type: "INTEGER", description: "Estimated calories per serving" },
+    calories: {
+      type: "INTEGER",
+      description: "Estimated calories per serving",
+    },
     protein_g: { type: "INTEGER", description: "Protein grams per serving" },
     carbs_g: { type: "INTEGER", description: "Carbohydrate grams per serving" },
     fat_g: { type: "INTEGER", description: "Fat grams per serving" },
-    tags: { type: "ARRAY", items: { type: "STRING" }, description: "3-5 short tags" },
+    tags: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "3-5 short tags",
+    },
     ingredients: {
       type: "ARRAY",
       items: {
@@ -57,7 +66,10 @@ const recipeSchema = {
         properties: {
           step: { type: "INTEGER" },
           instruction: { type: "STRING" },
-          tip: { type: "STRING", description: "Optional pro tip for this step" },
+          tip: {
+            type: "STRING",
+            description: "Optional pro tip for this step",
+          },
         },
         required: ["step", "instruction"],
       },
@@ -86,7 +98,10 @@ Deno.serve(async (req) => {
   try {
     const { prompt, servings } = await req.json();
     if (!prompt || typeof prompt !== "string" || prompt.length > 500) {
-      return json({ error: "A prompt of up to 500 characters is required." }, 400);
+      return json(
+        { error: "A prompt of up to 500 characters is required." },
+        400,
+      );
     }
     // Optional party size chosen in the app; enforced on the insert below.
     const requestedServings =
@@ -106,7 +121,10 @@ Deno.serve(async (req) => {
       },
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return json({ error: "You must be signed in to generate recipes." }, 401);
     }
@@ -161,7 +179,30 @@ Deno.serve(async (req) => {
     if (!geminiRes.ok) {
       const detail = await geminiRes.text();
       console.error("Gemini error", geminiRes.status, detail);
-      return json({ error: "The recipe engine is unavailable. Try again." }, 502);
+      // Provide user-friendly messages based on status code
+      switch (geminiRes.status) {
+        case 402:
+        case 429:
+          return json(
+            {
+              error: "Too many requests — please wait a moment and try again.",
+            },
+            502,
+          );
+        case 401:
+          return json(
+            { error: "Gemini API key is invalid. Contact the admin." },
+            500,
+          );
+        default:
+          return json(
+            {
+              error:
+                "The recipe engine is temporarily unavailable — please try again in a moment.",
+            },
+            502,
+          );
+      }
     }
 
     const geminiJson = await geminiRes.json();
@@ -200,13 +241,36 @@ Deno.serve(async (req) => {
 
     if (insertError) {
       console.error("Insert error", insertError);
-      return json({ error: "Could not save the generated recipe." }, 500);
+      // Distinguish between auth/RLS issues and DB errors
+      if (
+        insertError.message?.includes("auth") ||
+        insertError.code === "PGRPT13"
+      ) {
+        return json(
+          { error: "You must be signed in to generate recipes." },
+          401,
+        );
+      }
+      return json(
+        {
+          error:
+            "Could not save the recipe — please try again. If the problem persists, contact support.",
+        },
+        500,
+      );
     }
 
     return json({ recipe: row }, 200);
   } catch (err) {
     console.error("Unhandled error", err);
-    return json({ error: "Unexpected error generating recipe." }, 500);
+    // Show stack trace info in development for debugging
+    const detail = err instanceof Error ? err.message : String(err);
+    return json(
+      {
+        error: `Something went wrong while generating. (${detail.slice(0, 100)})`,
+      },
+      500,
+    );
   }
 });
 
@@ -231,13 +295,17 @@ function preferencesToPrompt(prefs: any): string {
     );
   }
   if (Array.isArray(prefs.dislikes) && prefs.dislikes.length > 0) {
-    parts.push(`Avoid these disliked ingredients: ${prefs.dislikes.join(", ")}.`);
+    parts.push(
+      `Avoid these disliked ingredients: ${prefs.dislikes.join(", ")}.`,
+    );
   }
   if (typeof prefs.spice === "string" && prefs.spice) {
     parts.push(`Preferred spice level: ${prefs.spice}.`);
   }
   if (typeof prefs.skill === "string" && prefs.skill) {
-    parts.push(`The cook's skill level is ${prefs.skill} — pitch technique accordingly.`);
+    parts.push(
+      `The cook's skill level is ${prefs.skill} — pitch technique accordingly.`,
+    );
   }
   return parts.length > 0 ? parts.join(" ") + " " : "";
 }

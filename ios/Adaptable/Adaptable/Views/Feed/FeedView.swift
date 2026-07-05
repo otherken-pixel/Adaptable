@@ -203,10 +203,11 @@ struct FeedView: View {
         errorMessage = nil
         do {
             recipes = try await API.fetchFeed(sort: sort)
-        } catch {
-            errorMessage = "Couldn't load the feed."
-        }
-    }
+         } catch {
+            print("[FeedView] Failed to load feed: \(error)")
+            errorMessage = error.localizedDescription
+         }
+     }
 
     // MARK: - Chips
 

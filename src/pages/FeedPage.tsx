@@ -30,6 +30,7 @@ export default function FeedPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeChipId, setActiveChipId] = useState("all");
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
   const { profile } = useAuth();
   const { unreadCount } = useNotifications();
   const { followedIds } = useEngagement();
@@ -47,7 +48,9 @@ export default function FeedPage() {
     setError(null);
     fetchFeed(sort)
       .then((r) => !cancelled && setRecipes(r))
-      .catch(() => !cancelled && setError("Couldn't load the feed."));
+      .catch(
+        (e) => !cancelled && setError(e?.message ?? "Couldn't load the feed."),
+      );
     return () => {
       cancelled = true;
     };
@@ -79,11 +82,18 @@ export default function FeedPage() {
     list.push(
       { id: "time20", kind: "time", label: "Under 20 min", maxMinutes: 20 },
       { id: "cal500", kind: "cal", label: "Low-cal", maxCalories: 500 },
-      { id: "protein30", kind: "protein", label: "High-protein", minProtein: 30 },
+      {
+        id: "protein30",
+        kind: "protein",
+        label: "High-protein",
+        minProtein: 30,
+      },
       { id: "time45", kind: "time", label: "Under 45 min", maxMinutes: 45 },
-      ...topTags.map(
-        (t): Chip => ({ id: tagChipId(t), kind: "tag", label: t }),
-      ),
+      ...topTags.map((t): Chip => ({
+        id: tagChipId(t),
+        kind: "tag",
+        label: t,
+      })),
     );
 
     // A deep-linked tag that isn't in the top tags still gets a chip.
@@ -151,7 +161,11 @@ export default function FeedPage() {
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
       {/* Header */}
-      <header className="flex items-end justify-between pt-6 pb-4">
+      {/* Double-tap header to toggle debug overlay */}
+      <header
+        className="flex items-end justify-between pt-6 pb-4"
+        onDoubleClick={() => setShowDebugInfo((v) => !v)}
+      >
         <div>
           <p className="text-xs font-bold tracking-[0.18em] text-accent uppercase">
             Adaptable
@@ -176,6 +190,17 @@ export default function FeedPage() {
           <SortToggle sort={sort} onChange={setSort} />
         </div>
       </header>
+
+      {/* Debug overlay: double-tap header to toggle — shows mode, recipe count */}
+      {showDebugInfo && (
+        <div className="mb-4 rounded-lg border border-dashed p-3 text-xs text-muted">
+          <div className="font-bold mb-1">Debug Info</div>
+          <div>Sort: {sort}</div>
+          <div>Profile: {profile?.username ?? "(not signed in)"}</div>
+          <div>Recipes loaded: {recipes?.length ?? "—"}</div>
+          <div>Error: {error ?? "(none)"}</div>
+        </div>
+      )}
 
       {/* Search + filter chips */}
       <div className="mb-4 space-y-3">
@@ -221,6 +246,7 @@ export default function FeedPage() {
         )}
       </div>
 
+      {/* Error state — shows actual error message from the API */}
       {error && (
         <EmptyState
           emoji="📡"
@@ -259,7 +285,9 @@ export default function FeedPage() {
         <EmptyState
           emoji={search || activeChip.kind !== "all" ? "🔍" : "🍳"}
           title={
-            search || activeChip.kind !== "all" ? "No matches" : "Nothing cooking yet"
+            search || activeChip.kind !== "all"
+              ? "No matches"
+              : "Nothing cooking yet"
           }
           body={
             search || activeChip.kind !== "all"

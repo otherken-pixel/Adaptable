@@ -469,6 +469,11 @@ struct GenerateView: View {
     private func submit(_ text: String? = nil) async {
         let p = (text ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !p.isEmpty, phase != .loading else { return }
+        guard let _ = authStore.profile else {
+            errorMessage = "You need to be logged in to generate recipes."
+            phase = .error
+            return
+        }
         lastImportSource = nil
         prompt = p
         phase = .loading
@@ -483,6 +488,7 @@ struct GenerateView: View {
             recipe = result
             phase = .done
         } catch {
+            print("[GenerateView] Failed to generate recipe: \(error)")
             errorMessage = error.localizedDescription
             phase = .error
         }

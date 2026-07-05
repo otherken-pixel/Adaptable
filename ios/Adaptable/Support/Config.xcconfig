@@ -9,5 +9,5 @@
 // Leave both values blank to boot the app in Demo Mode (seeded local
 // data, no network) — handy for UI work without a backend.
 
-SUPABASE_URL = https:/$()/ypziulvtfsyrwpotlevp.supabase.co
+SUPABASE_URL = https://ypziulvtfsyrwpotlevp.supabase.co
 SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlweml1bHZ0ZnN5cndwb3RsZXZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwNzY4MjYsImV4cCI6MjA5ODY1MjgyNn0.MQ_Cm60vcs46ErhyzBz5WPC69zQLewhS2WmExKjnk5Y

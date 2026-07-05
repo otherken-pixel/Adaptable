@@ -10,6 +10,7 @@ struct RecipeDetailView: View {
 
     @State private var recipe: Recipe??
     @State private var photos: [RecipePhoto] = []
+    @State private var errorMessage: String?
 
     var body: some View {
         ScrollView {
@@ -22,10 +23,19 @@ struct RecipeDetailView: View {
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
-        .task {
-            let r = try? await API.fetchRecipe(id: recipeId)
-            recipe = .some(r ?? nil)
-            photos = (try? await API.fetchRecipePhotos(recipeId: recipeId)) ?? []
+        .task { await load() }
+    }
+
+    private func load() async {
+        do {
+            let r = try await API.fetchRecipe(id: recipeId)
+            recipe = .some(r)
+            photos = try await API.fetchRecipePhotos(recipeId: recipeId)
+        } catch {
+            print("[RecipeDetailView] Failed to load recipe \(recipeId): \(error)")
+            // Non-404 errors (network, auth) show actual message
+            // A 404 is expected — leave recipe as nil so "not found" UI shows
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -62,28 +72,34 @@ struct RecipeDetailView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch recipe {
-        case .none:
+        if let errorMessage {
+            EmptyStateView(emoji: "📡", title: "Connection hiccup", message: errorMessage) {
+                PillButton(title: "Retry") { Task { await load() } }
+             }
+          } else if recipe == nil {
             VStack(alignment: .leading, spacing: 16) {
                 SkeletonBlock(height: 220, cornerRadius: Theme.cardRadius)
                 SkeletonBlock(height: 28, cornerRadius: 8).frame(maxWidth: 220)
                 SkeletonBlock(height: 16, cornerRadius: 8)
                 SkeletonBlock(height: 96, cornerRadius: Theme.cardRadius)
-            }
-        case .some(.none):
+             }
+          } else if recipe == .some(.none) {
             EmptyStateView(emoji: "🔍", title: "Recipe not found", message: "It may have been removed, or the link is off.") {
                 PillButton(title: "Back to Discover") { dismiss() }
-            }
-        case .some(.some(let r)):
+             }
+          } else {
+            // recipe == .some(.some(let r)) — show actual content
             VStack(alignment: .leading, spacing: 24) {
-                RecipeContentView(recipe: r)
-                if !photos.isEmpty {
-                    communityPhotos
-                }
-                CommentsSectionView(recipeId: r.id)
-            }
-        }
-    }
+                if let r = recipe.flatMap({ $0 }) {
+                    RecipeContentView(recipe: r)
+                    if !photos.isEmpty {
+                        communityPhotos
+                     }
+                    CommentsSectionView(recipeId: r.id)
+                 }
+              }
+          }
+      }
 
     private var communityPhotos: some View {
         VStack(alignment: .leading, spacing: 10) {
