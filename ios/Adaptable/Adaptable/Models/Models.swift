@@ -205,4 +205,17 @@ struct AppError: LocalizedError {
     var errorDescription: String? { message }
 
     init(_ message: String) { self.message = message }
+
+    /// Maps a caught error to text safe to show a user. `AppError` carries
+    /// copy we deliberately wrote (e.g. edge function messages), so it
+    /// passes through verbatim; anything else — raw Postgrest/network/
+    /// decoding errors — collapses to a generic message so backend
+    /// internals (SQL, constraint names, HTTP plumbing) never leak into
+    /// the UI. The original error is still printed to the console.
+    static func friendlyMessage(for error: Error) -> String {
+        if let appError = error as? AppError {
+            return appError.message
+        }
+        return "Something went wrong — please check your connection and try again."
+    }
 }

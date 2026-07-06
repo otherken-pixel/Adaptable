@@ -6,8 +6,8 @@ import Supabase
 /// the web app. Live calls hit the exact same Supabase project — same
 /// recipes, same community, same edge functions.
 enum API {
-    private static let recipeSelect = "*, author:profiles(id, username, avatar_url)"
-    private static let commentSelect = "*, author:profiles(id, username, avatar_url)"
+    private static let recipeSelect = "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)"
+    private static let commentSelect = "*, author:profiles!comments_user_id_fkey(id, username, avatar_url)"
 
     private static var db: SupabaseClient { SupabaseManager.client }
 

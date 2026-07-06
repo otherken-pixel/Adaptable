@@ -205,7 +205,7 @@ struct FeedView: View {
             recipes = try await API.fetchFeed(sort: sort)
          } catch {
             print("[FeedView] Failed to load feed: \(error)")
-            errorMessage = error.localizedDescription
+            errorMessage = AppError.friendlyMessage(for: error)
          }
      }
 
