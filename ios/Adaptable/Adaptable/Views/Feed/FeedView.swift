@@ -213,7 +213,7 @@ struct FeedView: View {
 
     private var chips: [Chip] {
         var counts: [String: Int] = [:]
-        for r in recipes ?? [] { for t in r.tags { counts[t, default: 0] += 1 } }
+        for r in recipes ?? [] { for t in r.tags ?? [] { counts[t, default: 0] += 1 } }
         let topTags = counts
             .filter { !builtinTagLabels.contains($0.key.lowercased()) }
             .sorted { $0.value > $1.value }
@@ -247,23 +247,23 @@ struct FeedView: View {
         let chip = activeChip
         return recipes.filter { r in
             if !q.isEmpty {
-                let haystack = ([r.title, r.description, r.cuisine] + r.tags).joined(separator: " ").lowercased()
+                let haystack = ([r.title ?? "", r.description ?? "", r.cuisine ?? ""] + (r.tags ?? [])).joined(separator: " ").lowercased()
                 if !haystack.contains(q) { return false }
             }
             switch chip.kind {
             case .time(let maxMinutes):
-                return r.prep_time_minutes + r.cook_time_minutes <= maxMinutes
+                return (r.prep_time_minutes ?? 0) + (r.cook_time_minutes ?? 0) <= maxMinutes
             case .calories(let max):
                 return r.calories != nil && r.calories! <= max
             case .protein(let min):
-                return (r.protein_g != nil && r.protein_g! >= min) || r.tags.contains { $0.lowercased() == "high-protein" }
+                return (r.protein_g != nil && r.protein_g! >= min) || (r.tags ?? []).contains { $0.lowercased() == "high-protein" }
             case .forYou:
                 let diets = (authStore.profile?.preferences?.diets ?? []).map { $0.lowercased() }
-                return r.tags.contains { diets.contains($0.lowercased()) }
+                return (r.tags ?? []).contains { diets.contains($0.lowercased()) }
             case .following:
-                return engagement.followedIds.contains(r.author_id)
+                return engagement.followedIds.contains(r.author_id ?? "")
             case .tag(let label):
-                return r.tags.contains { $0.lowercased() == label.lowercased() }
+                return (r.tags ?? []).contains { $0.lowercased() == label.lowercased() }
             case .all:
                 return true
             }

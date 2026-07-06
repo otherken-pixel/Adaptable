@@ -58,21 +58,17 @@ final class NotificationsStore: ObservableObject {
              // Use a cancellable task so we can detect cancellation cleanly.
             realtimeTask = Task { [weak self] in
                 guard let self else { return }
-                 do {
-                     try await ch.subscribeWithError()
-                   } catch {
-                      print("Realtime subscription failed: \(error)")
-                      return
-                   }
-                  for await _ in changes {
-                       // Safely handle cancellation — stop the loop if task is cancelled.
-                      guard !Task.isCancelled else { return }
-                      await self.refresh(userId: profile.id)
-                    }
-                 } catch {
-                    print("Realtime stream error: \(error)")
-                  }
-             }
+                do {
+                    try await ch.subscribeWithError()
+                } catch {
+                    print("Realtime subscription failed: \(error)")
+                    return
+                }
+                for await _ in changes {
+                    guard !Task.isCancelled else { return }
+                    await self.refresh(userId: profile.id)
+                }
+            }
            }
 
         isStarting = false

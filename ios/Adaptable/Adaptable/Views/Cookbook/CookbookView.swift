@@ -182,7 +182,7 @@ struct CookbookView: View {
         for (_, entries) in grouped {
             for entry in entries {
                 guard let recipe = entry.recipe else { continue }
-                shoppingStore.addRecipe(recipe, scaleFactor: Double(entry.servings) / Double(recipe.servings), userId: userId)
+                shoppingStore.addRecipe(recipe, scaleFactor: Double(entry.servings) / Double(recipe.servings ?? 1), userId: userId)
             }
         }
         weekAdded = true
@@ -212,7 +212,7 @@ private struct PlanRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.recipe?.title ?? "Recipe").font(.system(size: 14, weight: .bold)).lineLimit(1).foregroundStyle(Theme.content)
                     if let r = entry.recipe {
-                        Text("\(r.prep_time_minutes + r.cook_time_minutes) min").font(.system(size: 12)).foregroundStyle(Theme.faint)
+                        Text("\((r.prep_time_minutes ?? 0) + (r.cook_time_minutes ?? 0)) min").font(.system(size: 12)).foregroundStyle(Theme.faint)
                     }
                 }
             }

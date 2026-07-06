@@ -125,10 +125,10 @@ struct GenerateView: View {
         VStack(alignment: .leading, spacing: 20) {
             if let remixSource {
                 HStack(spacing: 12) {
-                    Text(remixSource.emoji).font(.system(size: 36))
+                    Text(remixSource.emoji ?? "").font(.system(size: 36))
                     VStack(alignment: .leading, spacing: 2) {
                         Label("Remixing", systemImage: "shuffle").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.accent)
-                        Text(remixSource.title).font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                        Text(remixSource.title ?? "").font(.system(size: 15, weight: .heavy)).lineLimit(1)
                     }
                     Spacer()
                     Button {
@@ -481,8 +481,8 @@ struct GenerateView: View {
         do {
             var apiPrompt = p
             if let remixSource {
-                let ingredientList = remixSource.ingredients.prefix(10).map(\.item).joined(separator: ", ")
-                apiPrompt = String(("Adapt the recipe \"\(remixSource.title)\" (key ingredients: \(ingredientList)). Requested change: \(p)").prefix(480))
+                let ingredientList = (remixSource.ingredients ?? []).prefix(10).map(\.item).joined(separator: ", ")
+                apiPrompt = String(("Adapt the recipe \"\(remixSource.title ?? "")\" (key ingredients: \(ingredientList)). Requested change: \(p)").prefix(480))
             }
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result

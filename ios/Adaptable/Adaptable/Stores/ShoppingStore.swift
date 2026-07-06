@@ -22,8 +22,8 @@ final class ShoppingStore: ObservableObject {
     }
 
     func addRecipe(_ recipe: Recipe, scaleFactor: Double, userId: String) {
-        let rows = recipe.ingredients.map { ing in
-            (recipeId: Optional(recipe.id), recipeTitle: recipe.title, item: ing.item, quantity: Quantity.scale(ing.quantity, factor: scaleFactor))
+        let rows = (recipe.ingredients ?? []).map { ing in
+            (recipeId: Optional(recipe.id), recipeTitle: recipe.title ?? "", item: ing.item, quantity: Quantity.scale(ing.quantity, factor: scaleFactor))
         }
         let now = ISO8601DateFormatter().string(from: Date())
         let temp = rows.enumerated().map { i, r in

@@ -89,7 +89,7 @@ final class DemoStore {
         if value == nil { state.votes.removeValue(forKey: recipeId) } else { state.votes[recipeId] = value }
         state.recipes = state.recipes.map {
             var r = $0
-            if r.id == recipeId { r.net_upvotes = r.net_upvotes - prev + next }
+            if r.id == recipeId { r.net_upvotes = (r.net_upvotes ?? 0) - prev + next }
             return r
         }
         persist()
@@ -116,7 +116,7 @@ final class DemoStore {
     func listComments(_ recipeId: String) -> [Comment] {
         state.comments
             .filter { $0.recipe_id == recipeId }
-            .sorted { $0.created_at > $1.created_at }
+            .sorted { ($0.created_at ?? "") > ($1.created_at ?? "") }
     }
 
     func addComment(_ recipeId: String, body: String) -> Comment {
@@ -131,7 +131,7 @@ final class DemoStore {
         state.comments.insert(comment, at: 0)
         state.recipes = state.recipes.map {
             var r = $0
-            if r.id == recipeId { r.comment_count += 1 }
+            if r.id == recipeId { r.comment_count = (r.comment_count ?? 0) + 1 }
             return r
         }
         persist()
@@ -143,7 +143,7 @@ final class DemoStore {
         state.comments.removeAll { $0.id == commentId }
         state.recipes = state.recipes.map {
             var r = $0
-            if r.id == target.recipe_id { r.comment_count = max(0, r.comment_count - 1) }
+            if r.id == target.recipe_id { r.comment_count = max(0, (r.comment_count ?? 0) - 1) }
             return r
         }
         persist()
@@ -154,7 +154,7 @@ final class DemoStore {
     func recordCook(_ recipeId: String) {
         state.recipes = state.recipes.map {
             var r = $0
-            if r.id == recipeId { r.cook_count += 1 }
+            if r.id == recipeId { r.cook_count = (r.cook_count ?? 0) + 1 }
             return r
         }
         persist()
@@ -248,7 +248,7 @@ final class DemoStore {
             read: false,
             created_at: ISO8601DateFormatter().string(from: Date()),
             actor: ProfileLite(id: actor.id, username: actor.username, avatar_url: nil),
-            recipe: RecipeLite(id: recipe.id, title: recipe.title, emoji: recipe.emoji)
+            recipe: RecipeLite(id: recipe.id, title: recipe.title ?? "", emoji: recipe.emoji ?? "")
         )
         state.notifications.insert(notification, at: 0)
 
@@ -256,13 +256,13 @@ final class DemoStore {
         case .vote:
             state.recipes = state.recipes.map {
                 var r = $0
-                if r.id == recipe.id { r.net_upvotes += 1 }
+                if r.id == recipe.id { r.net_upvotes = (r.net_upvotes ?? 0) + 1 }
                 return r
             }
         case .cook:
             state.recipes = state.recipes.map {
                 var r = $0
-                if r.id == recipe.id { r.cook_count += 1 }
+                if r.id == recipe.id { r.cook_count = (r.cook_count ?? 0) + 1 }
                 return r
             }
         case .comment:
@@ -277,7 +277,7 @@ final class DemoStore {
             state.comments.insert(comment, at: 0)
             state.recipes = state.recipes.map {
                 var r = $0
-                if r.id == recipe.id { r.comment_count += 1 }
+                if r.id == recipe.id { r.comment_count = (r.comment_count ?? 0) + 1 }
                 return r
             }
         }
@@ -305,12 +305,12 @@ final class DemoStore {
         try? await Task.sleep(nanoseconds: UInt64((2.6 + Double.random(in: 0...1.2)) * 1_000_000_000))
         let template = DemoStore.templates[genCount % DemoStore.templates.count]
         genCount += 1
-        let targetServings = (servings.map { $0 >= 1 && $0 <= 12 } ?? false) ? servings! : template.servings
-        let factor = Double(targetServings) / Double(template.servings)
+        let targetServings = (servings.map { $0 >= 1 && $0 <= 12 } ?? false) ? servings! : (template.servings ?? 1)
+        let factor = Double(targetServings) / Double(template.servings ?? 1)
         var recipe = template
         recipe.servings = targetServings
         if abs(factor - 1) > 1e-9 {
-            recipe.ingredients = template.ingredients.map {
+            recipe.ingredients = template.ingredients?.map {
                 var i = $0
                 i.quantity = Quantity.scale(i.quantity, factor: factor)
                 return i

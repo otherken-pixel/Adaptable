@@ -17,8 +17,8 @@ enum API {
         if SupabaseManager.isDemo {
             let list = await DemoStore.shared.listRecipes()
             switch sort {
-            case .top: return list.sorted { $0.net_upvotes > $1.net_upvotes }
-            case .new: return list.sorted { $0.created_at > $1.created_at }
+            case .top: return list.sorted { ($0.net_upvotes ?? 0) > ($1.net_upvotes ?? 0) }
+            case .new: return list.sorted { ($0.created_at ?? "") > ($1.created_at ?? "") }
             case .hot: return Trending.sorted(list)
             }
         }

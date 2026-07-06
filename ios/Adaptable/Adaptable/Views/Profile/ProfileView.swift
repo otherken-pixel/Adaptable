@@ -60,7 +60,7 @@ struct ProfileView: View {
     private func identityCard(_ profile: Profile) -> some View {
         HStack(spacing: 16) {
             ZStack(alignment: .bottomTrailing) {
-                AuthorAvatar(username: profile.username, size: 64, url: profile.avatar_url)
+                AuthorAvatar(username: profile.username ?? "anonymous", size: 64, url: profile.avatar_url)
                 if !authStore.isDemo {
                     PhotosPicker(selection: $avatarPickerItem, matching: .images) {
                         Image(systemName: avatarBusy ? "ellipsis" : "camera.fill")
@@ -94,7 +94,7 @@ struct ProfileView: View {
                     HStack(spacing: 8) {
                         Text("@\(profile.username)").font(.system(size: 18, weight: .heavy)).lineLimit(1)
                         Button {
-                            draftUsername = profile.username
+                            draftUsername = profile.username ?? ""
                             editing = true
                         } label: {
                             Image(systemName: "pencil").font(.system(size: 11)).frame(width: 28, height: 28).background(Theme.sunken, in: Circle()).foregroundStyle(Theme.muted)
@@ -115,7 +115,7 @@ struct ProfileView: View {
     }
 
     private var statsRow: some View {
-        let totalUpvotes = mine.reduce(0) { $0 + max(0, $1.net_upvotes) }
+        let totalUpvotes = mine.reduce(0) { $0 + max(0, $1.net_upvotes ?? 0) }
         return HStack(spacing: 12) {
             StatCard(icon: "fork.knife", iconColor: Theme.accent, value: "\(mine.count)", label: "Recipes created")
             StatCard(icon: "arrowshape.up.fill", iconColor: Theme.up, value: Format.compactCount(totalUpvotes), label: "Upvotes earned")

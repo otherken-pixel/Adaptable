@@ -94,9 +94,9 @@ private struct CommentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                AuthorAvatar(username: comment.author?.username ?? comment.user_id, size: 26)
+                AuthorAvatar(username: comment.author?.username ?? comment.user_id ?? "anonymous", size: 26)
                 Text(comment.author?.username ?? "anonymous").font(.system(size: 13, weight: .bold))
-                Text(Format.timeAgo(comment.created_at)).font(.system(size: 12)).foregroundStyle(Theme.faint)
+                Text(Format.timeAgo(comment.created_at ?? "")).font(.system(size: 12)).foregroundStyle(Theme.faint)
                 Spacer()
                 if isOwn {
                     Button(action: onDelete) {
@@ -104,7 +104,7 @@ private struct CommentRow: View {
                     }
                 }
             }
-            Text(comment.body).font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+            Text(comment.body ?? "").font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
         }
         .padding(14)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

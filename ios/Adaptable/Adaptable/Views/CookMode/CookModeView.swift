@@ -39,8 +39,8 @@ struct CookModeView: View {
     @State private var voiceOn = false
 
     private var factor: Double {
-        guard let recipe, let servings, recipe.servings > 0 else { return 1 }
-        return Double(servings) / Double(recipe.servings)
+        guard let recipe, let servings, (recipe.servings ?? 1) > 0 else { return 1 }
+        return Double(servings) / Double(recipe.servings ?? 1)
     }
 
     var body: some View {
@@ -66,10 +66,10 @@ struct CookModeView: View {
 
     @ViewBuilder
     private func content(_ recipe: Recipe) -> some View {
-        let total = recipe.steps.count
+        let total = (recipe.steps ?? []).count
         let isPrep = idx == 0
         let isDone = idx == total + 1
-        let step = (!isPrep && !isDone) ? recipe.steps[idx - 1] : nil
+        let step = (!isPrep && !isDone) ? (recipe.steps ?? [])[idx - 1] : nil
 
         VStack(spacing: 0) {
             topBar(recipe: recipe, total: total, currentStep: idx, isDone: isDone)
@@ -103,7 +103,7 @@ struct CookModeView: View {
         .sheet(isPresented: $sheetOpen) { ingredientsSheet(recipe: recipe) }
         .task(id: timers.count) { await tickTimers() }
         .onChange(of: idx) { _, newValue in
-            if recipe.steps.isEmpty == false, newValue == total + 1 { recordCookIfNeeded(recipe: recipe) }
+            if recipe.steps?.isEmpty == false, newValue == total + 1 { recordCookIfNeeded(recipe: recipe) }
         }
         .onAppear {
             voice.onNext = { idx = min(idx + 1, total + 1) }
@@ -140,7 +140,7 @@ struct CookModeView: View {
                     Image(systemName: "xmark").frame(width: 40, height: 40).background(Theme.sunken, in: Circle()).foregroundStyle(Theme.muted)
                 }
                 VStack(spacing: 6) {
-                    Text("\(recipe.emoji) \(recipe.title)").font(.system(size: 13, weight: .bold)).lineLimit(1)
+                    Text("\(recipe.emoji ?? "") \(recipe.title ?? "")").font(.system(size: 13, weight: .bold)).lineLimit(1)
                     HStack(spacing: 3) {
                         ForEach(0...total, id: \.self) { i in
                             Capsule().fill(i <= currentStep - (isDone ? 1 : 0) && currentStep > 0 ? Theme.accent : Theme.line).frame(height: 4)
@@ -196,11 +196,11 @@ struct CookModeView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("MISE EN PLACE").font(.system(size: 12, weight: .heavy)).tracking(1.2).foregroundStyle(Theme.accent)
             Text("Gather everything first").font(.system(size: 26, weight: .heavy))
-            Text((servings != nil && servings != recipe.servings) ? "Scaled for \(servings!) servings. Tap items as you set them out." : "For \(recipe.servings) servings. Tap items as you set them out.")
+            Text((servings != nil && servings != recipe.servings) ? "Scaled for \(servings!) servings. Tap items as you set them out." : "For \(recipe.servings ?? 1) servings. Tap items as you set them out.")
                 .font(.system(size: 15)).foregroundStyle(Theme.muted)
 
             VStack(spacing: 0) {
-                ForEach(Array(recipe.ingredients.enumerated()), id: \.offset) { i, ing in
+                ForEach(Array((recipe.ingredients ?? []).enumerated()), id: \.offset) { i, ing in
                     if i > 0 { Divider().overlay(Theme.line) }
                     Button {
                         if gathered.contains(i) { gathered.remove(i) } else { gathered.insert(i) }
@@ -284,7 +284,7 @@ struct CookModeView: View {
     private func startTimer(step: Int, total: Int, recipe: Recipe) {
         guard step >= 1, step <= total else { return }
         guard !timers.contains(where: { $0.step == step }) else { return }
-        guard let seconds = DurationParser.extractTimerSeconds(recipe.steps[step - 1].instruction) else { return }
+        guard let steps = recipe.steps, let seconds = DurationParser.extractTimerSeconds(steps[step - 1].instruction) else { return }
         timers.append(RunningTimer(step: step, endsAt: Date().addingTimeInterval(Double(seconds)), totalSeconds: seconds, rang: false))
         now = Date()
     }
@@ -311,12 +311,12 @@ struct CookModeView: View {
             Text("Chef's kiss! 🤌").font(.system(size: 26, weight: .heavy))
             Text("You just cooked **\(recipe.title)**. How did it turn out? Your vote shapes the community feed.")
                 .font(.system(size: 15)).foregroundStyle(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 280)
-            Text("🍳 You're cook #\(Format.compactCount(recipe.cook_count + 1)) — this fuels the Trending feed")
+            Text("🍳 You're cook #\(Format.compactCount((recipe.cook_count ?? 0) + 1)) — this fuels the Trending feed")
                 .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accent)
                 .padding(.horizontal, 16).padding(.vertical, 8).background(Theme.accentSoft, in: Capsule())
 
             HStack(spacing: 12) {
-                VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes, size: .lg)
+                VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
                 SaveButtonView(recipeId: recipe.id, variant: .bar)
             }
             .frame(maxWidth: 320)
@@ -410,7 +410,7 @@ struct CookModeView: View {
             Text("Ingredients").font(.system(size: 18, weight: .heavy))
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(recipe.ingredients.enumerated()), id: \.offset) { i, ing in
+                    ForEach(Array((recipe.ingredients ?? []).enumerated()), id: \.offset) { i, ing in
                         if i > 0 { Divider().overlay(Theme.line) }
                         HStack {
                             Text(ing.item).font(.system(size: 15, weight: .semibold))

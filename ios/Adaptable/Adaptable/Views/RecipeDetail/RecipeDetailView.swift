@@ -46,14 +46,14 @@ struct RecipeDetailView: View {
             }
             if case .some(.some(let r)) = recipe, let author = r.author {
                 Text("by ").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.muted)
-                    + Text(author.username).font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.content)
+                    + Text(author.username ?? "anonymous").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.content)
             }
             Spacer()
             if case .some(.some(let r)) = recipe, r.author_id != authStore.profile?.id {
-                let following = engagement.followedIds.contains(r.author_id)
+                let following = engagement.followedIds.contains(r.author_id ?? "")
                 Button {
                     guard let userId = authStore.profile?.id else { return }
-                    engagement.toggleFollowChef(chefId: r.author_id, userId: userId)
+                    engagement.toggleFollowChef(chefId: r.author_id ?? "", userId: userId)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: following ? "checkmark" : "plus")
@@ -114,7 +114,7 @@ struct RecipeDetailView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line))
                             }
-                            Text(Format.timeAgo(photo.created_at)).font(.system(size: 11)).foregroundStyle(Theme.faint)
+                            Text(Format.timeAgo(photo.created_at ?? "")).font(.system(size: 11)).foregroundStyle(Theme.faint)
                         }
                     }
                 }

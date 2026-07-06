@@ -14,7 +14,7 @@ final class OfflineQueue: ObservableObject {
     }
 
     /// A pending mutation that couldn't be executed immediately.
-    enum Action {
+    enum Action: Equatable {
         case vote(recipeId: String, value: VoteValue?)
         case save(recipeId: String)
         case follow(chefId: String, isFollow: Bool)
@@ -24,7 +24,6 @@ final class OfflineQueue: ObservableObject {
 
     /// A basic reachability monitor to detect when internet returns.
     private let pathMonitor = NWPathMonitor()
-    private var monitorCancel: CancelHandle?
 
     /// Captures a mutable action into the queue if no internet is available.
     func capture(action: Action) {
@@ -44,20 +43,20 @@ final class OfflineQueue: ObservableObject {
             switch action {
             case .vote(let rid, let val):
                 do {
-                    try? await API.setVote(
-                        userId: SupabaseManager.client.auth.session.user?.id.uuidString ?? "",
+                    try await API.setVote(
+                        userId: SupabaseManager.client.auth.session.user.id.uuidString,
                         recipeId: rid, value: val)
                 } catch { print("[OfflineQueue] Vote replay failed: \(error)") }
             case .save(let rid):
                 do {
-                    try? await API.toggleSave(
-                        userId: SupabaseManager.client.auth.session.user?.id.uuidString ?? "",
+                    try await API.toggleSave(
+                        userId: SupabaseManager.client.auth.session.user.id.uuidString,
                         recipeId: rid, currentlySaved: true)
                 } catch { print("[OfflineQueue] Save replay failed: \(error)") }
             case .follow(let chefId, let isFollow):
                 do {
-                    try? await API.setFollow(
-                        userId: SupabaseManager.client.auth.session.user?.id.uuidString ?? "",
+                    try await API.setFollow(
+                        userId: SupabaseManager.client.auth.session.user.id.uuidString,
                         chefId: chefId, follow: isFollow)
                 } catch { print("[OfflineQueue] Follow replay failed: \(error)") }
             }
@@ -79,7 +78,7 @@ final class OfflineQueue: ObservableObject {
     private func startMonitoring() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             guard path.status == .satisfied else { return }
-            self?.replay()
+            Task { @MainActor in await self?.replay() }
         }
         pathMonitor.start(queue: .global(qos: .utility))
     }

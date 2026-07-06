@@ -12,12 +12,12 @@ struct RecipeCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     Gradients.cover(for: recipe.id)
                         .frame(height: 176)
-                    Text(recipe.emoji)
+                    Text(recipe.emoji ?? "")
                         .font(.system(size: 64))
                         .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .floating
-                    Text(recipe.cuisine)
+                    Text(recipe.cuisine ?? "")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 5)
@@ -33,26 +33,26 @@ struct RecipeCardView: View {
                 // Body
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(recipe.title)
+                        Text(recipe.title ?? "")
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(Theme.content)
-                        Text(recipe.description)
+                        Text(recipe.description ?? "")
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.muted)
                             .lineLimit(2)
                     }
 
                     HStack(spacing: 8) {
-                        MetaPill(icon: "clock", label: Format.totalMinutes(prep: recipe.prep_time_minutes, cook: recipe.cook_time_minutes))
-                        MetaPill(icon: "gauge.medium", label: recipe.difficulty.rawValue)
+                        MetaPill(icon: "clock", label: Format.totalMinutes(prep: recipe.prep_time_minutes ?? 0, cook: recipe.cook_time_minutes ?? 0))
+                        MetaPill(icon: "gauge.medium", label: recipe.difficulty?.rawValue ?? "")
                         if let cal = recipe.calories {
                             MetaPill(icon: "flame", label: "\(cal) cal")
                         }
-                        if recipe.cook_count > 0 {
-                            MetaPill(icon: "flame.fill", label: "\(Format.compactCount(recipe.cook_count)) cooked", accent: true)
+                        if (recipe.cook_count ?? 0) > 0 {
+                            MetaPill(icon: "flame.fill", label: "\(Format.compactCount(recipe.cook_count ?? 0)) cooked", accent: true)
                         }
-                        if recipe.comment_count > 0 {
-                            MetaPill(icon: "bubble.left", label: Format.compactCount(recipe.comment_count))
+                        if (recipe.comment_count ?? 0) > 0 {
+                            MetaPill(icon: "bubble.left", label: Format.compactCount(recipe.comment_count ?? 0))
                         }
                     }
                     .lineLimit(1)
@@ -61,17 +61,17 @@ struct RecipeCardView: View {
 
                     HStack {
                         HStack(spacing: 8) {
-                            AuthorAvatar(username: recipe.author?.username ?? recipe.author_id, size: 28)
+                            AuthorAvatar(username: recipe.author?.username ?? recipe.author_id ?? "anonymous", size: 28)
                             VStack(alignment: .leading, spacing: 0) {
                                 Text(recipe.author?.username ?? "anonymous")
                                     .font(.system(size: 12, weight: .semibold))
-                                Text(Format.timeAgo(recipe.created_at))
+                                Text(Format.timeAgo(recipe.created_at ?? ""))
                                     .font(.system(size: 11))
                                     .foregroundStyle(Theme.faint)
                             }
                         }
                         Spacer()
-                        VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes)
+                        VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0)
                     }
                 }
                 .padding(16)

@@ -19,10 +19,10 @@ struct RecipeContentView: View {
 
     init(recipe: Recipe) {
         self.recipe = recipe
-        _servings = State(initialValue: recipe.servings)
+        _servings = State(initialValue: recipe.servings ?? 1)
     }
 
-    private var factor: Double { Double(servings) / Double(max(1, recipe.servings)) }
+    private var factor: Double { Double(servings) / Double(max(1, recipe.servings ?? 1)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -53,8 +53,8 @@ struct RecipeContentView: View {
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
             Gradients.cover(for: recipe.id).frame(height: 224)
-            Text(recipe.emoji).font(.system(size: 96)).frame(maxWidth: .infinity).floating
-            Text(recipe.cuisine)
+            Text(recipe.emoji ?? "").font(.system(size: 96)).frame(maxWidth: .infinity).floating
+            Text(recipe.cuisine ?? "")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -69,11 +69,11 @@ struct RecipeContentView: View {
 
     private var titleBlock: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(recipe.title).font(.system(size: 26, weight: .heavy))
-            Text(recipe.description).font(.system(size: 15)).foregroundStyle(Theme.muted)
-            if !recipe.tags.isEmpty {
+            Text(recipe.title ?? "").font(.system(size: 26, weight: .heavy))
+            Text(recipe.description ?? "").font(.system(size: 15)).foregroundStyle(Theme.muted)
+            if !(recipe.tags ?? []).isEmpty {
                 FlowLayout(spacing: 8) {
-                    ForEach(recipe.tags, id: \.self) { tag in
+                    ForEach(recipe.tags ?? [], id: \.self) { tag in
                         Button {
                             deepLinks.openFeed(tag: tag)
                         } label: {
@@ -87,8 +87,8 @@ struct RecipeContentView: View {
                     }
                 }
             }
-            if recipe.cook_count > 0 {
-                Text("🍳 Cooked \(recipe.cook_count) \(recipe.cook_count == 1 ? "time" : "times") by the community")
+            if (recipe.cook_count ?? 0) > 0 {
+                Text("🍳 Cooked \(recipe.cook_count ?? 0) \((recipe.cook_count ?? 0) == 1 ? "time" : "times") by the community")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.muted)
             }
@@ -111,13 +111,13 @@ struct RecipeContentView: View {
 
     private var statBand: some View {
         HStack {
-            StatColumn(icon: "clock", value: "\(recipe.prep_time_minutes + recipe.cook_time_minutes)m", label: "Total")
+            StatColumn(icon: "clock", value: "\((recipe.prep_time_minutes ?? 0) + (recipe.cook_time_minutes ?? 0))m", label: "Total")
             Spacer()
-            StatColumn(icon: "flame", value: "\(recipe.cook_time_minutes)m", label: "Cook")
+            StatColumn(icon: "flame", value: "\(recipe.cook_time_minutes ?? 0)m", label: "Cook")
             Spacer()
             StatColumn(icon: "person.2", value: "\(servings)", label: "Serves")
             Spacer()
-            StatColumn(icon: "gauge.medium", value: recipe.difficulty.rawValue, label: "Level")
+            StatColumn(icon: "gauge.medium", value: recipe.difficulty?.rawValue ?? "", label: "Level")
         }
         .padding(14)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
@@ -173,7 +173,7 @@ struct RecipeContentView: View {
     private var dayPickerSheet: some View {
         VStack(alignment: .leading, spacing: 16) {
             Capsule().fill(Theme.line).frame(width: 40, height: 5).frame(maxWidth: .infinity)
-            Text("Plan \u{201C}\(recipe.title)\u{201D}").font(.system(size: 18, weight: .heavy))
+            Text("Plan \u{201C}\(recipe.title ?? "")\u{201D}").font(.system(size: 18, weight: .heavy))
             Text("\(servings) \(servings == 1 ? "serving" : "servings") — pick a day.")
                 .font(.system(size: 14)).foregroundStyle(Theme.muted)
 
@@ -239,7 +239,7 @@ struct RecipeContentView: View {
             }
 
             VStack(spacing: 0) {
-                ForEach(Array(recipe.ingredients.enumerated()), id: \.offset) { i, ing in
+                ForEach(Array((recipe.ingredients ?? []).enumerated()), id: \.offset) { i, ing in
                     if i > 0 { Divider().overlay(Theme.line) }
                     Button {
                         toggle(i)
@@ -279,7 +279,7 @@ struct RecipeContentView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: addedToList ? "checkmark" : "basket")
-                    Text(addedToList ? "\(recipe.ingredients.count) items added to Groceries" : "Add all to Groceries")
+                    Text(addedToList ? "\((recipe.ingredients ?? []).count) items added to Groceries" : "Add all to Groceries")
                         .font(.system(size: 14, weight: .bold))
                 }
                 .frame(maxWidth: .infinity)
@@ -312,7 +312,7 @@ struct RecipeContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Method").font(.system(size: 18, weight: .heavy))
             VStack(spacing: 12) {
-                ForEach(recipe.steps) { step in
+                ForEach(recipe.steps ?? []) { step in
                     VStack(alignment: .leading, spacing: 10) {
                         HStack(alignment: .top, spacing: 12) {
                             Text("\(step.step)")
@@ -342,10 +342,10 @@ struct RecipeContentView: View {
 
     private var voteShareBar: some View {
         HStack(spacing: 12) {
-            VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes, size: .lg)
+            VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
             SaveButtonView(recipeId: recipe.id, variant: .bar)
             Button {
-                shareItem = ShareItem(text: "\(recipe.emoji) \(recipe.title) — made with Adaptable")
+                shareItem = ShareItem(text: "\(recipe.emoji ?? "") \(recipe.title ?? "") — made with Adaptable")
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .frame(width: 48, height: 48)

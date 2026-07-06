@@ -5,9 +5,12 @@ import Foundation
 /// Mirrors `src/lib/trending.ts`.
 enum Trending {
     static func score(_ recipe: Recipe, now: Date = Date()) -> Double {
-        let created = ISODate.parse(recipe.created_at) ?? now
+        let created = ISODate.parse(recipe.created_at ?? "") ?? now
         let hours = max(0, now.timeIntervalSince(created) / 3600)
-        let heat = Double(recipe.net_upvotes + 3 * recipe.cook_count + 2 * recipe.comment_count + 1)
+        let upvotes = recipe.net_upvotes ?? 0
+        let cooks = recipe.cook_count ?? 0
+        let comments = recipe.comment_count ?? 0
+        let heat = Double(upvotes + 3 * cooks + 2 * comments + 1)
         return heat / pow(hours + 2, 1.4)
     }
 
