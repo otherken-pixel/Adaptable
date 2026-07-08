@@ -143,37 +143,33 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const prefsText = preferencesToPrompt(profileRow?.preferences);
 
-    const geminiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text:
-                  `Create one complete, realistic, delicious recipe for this request: "${prompt}". ` +
-                  (requestedServings
-                    ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
-                    : "") +
-                  prefsText +
-                  "Respect every dietary constraint, time limit and equipment restriction in the request. " +
-                  "Quantities must use both metric and imperial where sensible. " +
-                  "Steps must be specific enough for a beginner to follow. " +
-                  "Estimate calories, protein, carbs and fat per serving. " +
-                  'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +
-                  'if it has 30 g protein per serving or more, include a "High-protein" tag.',
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: recipeSchema,
-          temperature: 0.9,
+    const geminiRes = await callGeminiWithRetry(geminiKey, {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text:
+                `Create one complete, realistic, delicious recipe for this request: "${prompt}". ` +
+                (requestedServings
+                  ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
+                  : "") +
+                prefsText +
+                "Respect every dietary constraint, time limit and equipment restriction in the request. " +
+                "Quantities must use both metric and imperial where sensible. " +
+                "Steps must be specific enough for a beginner to follow. " +
+                "Estimate calories, protein, carbs and fat per serving. " +
+                'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +
+                'if it has 30 g protein per serving or more, include a "High-protein" tag.',
+            },
+          ],
         },
-      }),
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: recipeSchema,
+        temperature: 0.9,
+      },
     });
 
     if (!geminiRes.ok) {
@@ -193,6 +189,16 @@ Deno.serve(async (req) => {
           return json(
             { error: "Gemini API key is invalid. Contact the admin." },
             500,
+          );
+        case 400:
+        case 404:
+          // Malformed request or an unavailable model — retrying won't help
+          // until the request itself or the configured model id changes.
+          return json(
+            {
+              error: "Couldn't generate that recipe — try rephrasing your request.",
+            },
+            502,
           );
         default:
           return json(
@@ -236,7 +242,7 @@ Deno.serve(async (req) => {
         steps: recipe.steps ?? [],
         source_prompt: prompt,
       })
-      .select("*, author:profiles(id, username, avatar_url)")
+      .select("*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)")
       .single();
 
     if (insertError) {
@@ -279,6 +285,28 @@ function json(body: unknown, status: number): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+/**
+ * Calls Gemini, retrying once after a short backoff on a 5xx response —
+ * those are transient on Google's end, unlike 4xx (bad request/model)
+ * which will just fail the same way again.
+ */
+async function callGeminiWithRetry(
+  geminiKey: string,
+  payload: unknown,
+): Promise<Response> {
+  const call = () =>
+    fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  const first = await call();
+  if (first.ok || first.status < 500) return first;
+  console.error("Gemini 5xx, retrying once", first.status);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return call();
 }
 
 /** Turns the profile's taste preferences into prompt constraints. */

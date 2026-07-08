@@ -13,8 +13,8 @@ import type {
   VoteValue,
 } from "./types";
 
-const RECIPE_SELECT = "*, author:profiles(id, username, avatar_url)";
-const COMMENT_SELECT = "*, author:profiles(id, username, avatar_url)";
+const RECIPE_SELECT = "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)";
+const COMMENT_SELECT = "*, author:profiles!comments_user_id_fkey(id, username, avatar_url)";
 
 export async function fetchFeed(sort: FeedSort): Promise<Recipe[]> {
   if (isDemo) {

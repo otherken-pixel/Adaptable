@@ -172,21 +172,30 @@ Deno.serve(async (req) => {
       });
     }
 
-    const geminiRes = await fetch(`${GEMINI_URL}?key=${geminiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: recipeSchema,
-          temperature: 0.2, // faithful extraction, not creativity
-        },
-      }),
+    const geminiRes = await callGeminiWithRetry(geminiKey, {
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: recipeSchema,
+        temperature: 0.2, // faithful extraction, not creativity
+      },
     });
 
     if (!geminiRes.ok) {
-      console.error("Gemini error", geminiRes.status, await geminiRes.text());
+      const detail = await geminiRes.text();
+      console.error("Gemini error", geminiRes.status, detail);
+      if (geminiRes.status === 400 || geminiRes.status === 404) {
+        return json(
+          { error: "Couldn't read that source — try pasting the text instead." },
+          502,
+        );
+      }
+      if (geminiRes.status === 429 || geminiRes.status === 402) {
+        return json(
+          { error: "Too many requests — please wait a moment and try again." },
+          502,
+        );
+      }
       return json({ error: "The import engine is unavailable. Try again." }, 502);
     }
 
@@ -223,7 +232,7 @@ Deno.serve(async (req) => {
         source_prompt: "",
         source_url: sourceUrl,
       })
-      .select("*, author:profiles(id, username, avatar_url)")
+      .select("*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)")
       .single();
 
     if (insertError) {
@@ -237,6 +246,28 @@ Deno.serve(async (req) => {
     return json({ error: "Unexpected error importing recipe." }, 500);
   }
 });
+
+/**
+ * Calls Gemini, retrying once after a short backoff on a 5xx response —
+ * those are transient on Google's end, unlike 4xx (bad request/model)
+ * which will just fail the same way again.
+ */
+async function callGeminiWithRetry(
+  geminiKey: string,
+  payload: unknown,
+): Promise<Response> {
+  const call = () =>
+    fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  const first = await call();
+  if (first.ok || first.status < 500) return first;
+  console.error("Gemini 5xx, retrying once", first.status);
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return call();
+}
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {

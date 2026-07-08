@@ -489,7 +489,7 @@ struct GenerateView: View {
             phase = .done
         } catch {
             print("[GenerateView] Failed to generate recipe: \(error)")
-            errorMessage = error.localizedDescription
+            errorMessage = AppError.friendlyMessage(for: error)
             phase = .error
         }
     }
@@ -506,7 +506,8 @@ struct GenerateView: View {
             phase = .done
             importUrl = ""; importText = ""
         } catch {
-            errorMessage = error.localizedDescription
+            print("[GenerateView] Failed to import recipe: \(error)")
+            errorMessage = AppError.friendlyMessage(for: error)
             phase = .error
         }
     }
