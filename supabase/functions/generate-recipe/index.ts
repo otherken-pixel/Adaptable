@@ -9,8 +9,13 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+/** Preferred model first; fall back if Google returns 404 (retired model id).
+ *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-latest",
+];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,29 +101,32 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt, servings } = await req.json();
-    if (!prompt || typeof prompt !== "string" || prompt.length > 500) {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return json({ error: "Invalid request body." }, 400);
+    }
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    const servings = body.servings;
+    if (!prompt || prompt.length > 500) {
       return json(
         { error: "A prompt of up to 500 characters is required." },
         400,
       );
     }
-    // Optional party size chosen in the app; enforced on the insert below.
     const requestedServings =
       Number.isInteger(servings) && servings >= 1 && servings <= 12
         ? (servings as number)
         : null;
 
-    // Client scoped to the caller's JWT — every DB write below runs
-    // under their identity and is subject to RLS.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return json({ error: "You must be signed in to generate recipes." }, 401);
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      {
-        global: {
-          headers: { Authorization: req.headers.get("Authorization")! },
-        },
-      },
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const {
@@ -131,11 +139,13 @@ Deno.serve(async (req) => {
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) {
-      return json({ error: "GEMINI_API_KEY is not configured." }, 500);
+      console.error("GEMINI_API_KEY is not configured");
+      return json(
+        { error: "The recipe engine is not configured. Contact support." },
+        500,
+      );
     }
 
-    // Taste profile — injected into every generation. Allergies are a
-    // hard safety rule, everything else shapes tone and ingredients.
     const { data: profileRow } = await supabase
       .from("profiles")
       .select("preferences")
@@ -143,7 +153,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const prefsText = preferencesToPrompt(profileRow?.preferences);
 
-    const geminiRes = await callGeminiWithRetry(geminiKey, {
+    const payload = {
       contents: [
         {
           role: "user",
@@ -158,6 +168,7 @@ Deno.serve(async (req) => {
                 "Respect every dietary constraint, time limit and equipment restriction in the request. " +
                 "Quantities must use both metric and imperial where sensible. " +
                 "Steps must be specific enough for a beginner to follow. " +
+                "Include at least 4 ingredients and at least 3 steps. " +
                 "Estimate calories, protein, carbs and fat per serving. " +
                 'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +
                 'if it has 30 g protein per serving or more, include a "High-protein" tag.',
@@ -170,84 +181,77 @@ Deno.serve(async (req) => {
         responseSchema: recipeSchema,
         temperature: 0.9,
       },
-    });
+    };
 
-    if (!geminiRes.ok) {
-      const detail = await geminiRes.text();
-      console.error("Gemini error", geminiRes.status, detail);
-      // Provide user-friendly messages based on status code
-      switch (geminiRes.status) {
-        case 402:
-        case 429:
-          return json(
-            {
-              error: "Too many requests — please wait a moment and try again.",
-            },
-            502,
-          );
-        case 401:
-          return json(
-            { error: "Gemini API key is invalid. Contact the admin." },
-            500,
-          );
-        case 400:
-        case 404:
-          // Malformed request or an unavailable model — retrying won't help
-          // until the request itself or the configured model id changes.
-          return json(
-            {
-              error: "Couldn't generate that recipe — try rephrasing your request.",
-            },
-            502,
-          );
-        default:
-          return json(
-            {
-              error:
-                "The recipe engine is temporarily unavailable — please try again in a moment.",
-            },
-            502,
-          );
-      }
+    const gemini = await callGeminiWithModelFallback(geminiKey, payload);
+    if (!gemini.ok) {
+      console.error(
+        "Gemini call failed",
+        gemini.status,
+        (gemini.detail || "").slice(0, 800),
+        "key_prefix",
+        geminiKey.slice(0, 6),
+        "key_len",
+        geminiKey.length,
+      );
+      return geminiErrorResponse(gemini.status, gemini.detail);
     }
 
-    const geminiJson = await geminiRes.json();
-    const text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) {
-      return json({ error: "Gemini returned an empty response." }, 502);
+    const recipe = parseRecipeJson(gemini.text);
+    if (!recipe) {
+      console.error("Failed to parse Gemini recipe JSON", gemini.text?.slice(0, 400));
+      return json(
+        {
+          error:
+            "The recipe engine returned an incomplete response — please try again.",
+        },
+        502,
+      );
     }
 
-    const recipe = JSON.parse(text);
+    if (!isValidRecipe(recipe)) {
+      console.error("Gemini recipe failed validation", recipe);
+      return json(
+        {
+          error:
+            "Couldn't build a complete recipe from that prompt — try adding more detail.",
+        },
+        502,
+      );
+    }
 
     const { data: row, error: insertError } = await supabase
       .from("recipes")
       .insert({
         author_id: user.id,
-        title: recipe.title,
+        title: String(recipe.title).slice(0, 140),
         description: recipe.description ?? "",
         emoji: recipe.emoji ?? "🍽️",
         cuisine: recipe.cuisine ?? "Fusion",
         difficulty: ["Easy", "Medium", "Hard"].includes(recipe.difficulty)
           ? recipe.difficulty
           : "Easy",
-        prep_time_minutes: recipe.prep_time_minutes ?? 0,
-        cook_time_minutes: recipe.cook_time_minutes ?? 0,
-        servings: requestedServings ?? recipe.servings ?? 2,
-        calories: recipe.calories ?? null,
-        protein_g: recipe.protein_g ?? null,
-        carbs_g: recipe.carbs_g ?? null,
-        fat_g: recipe.fat_g ?? null,
-        tags: Array.isArray(recipe.tags) ? recipe.tags.slice(0, 6) : [],
+        prep_time_minutes: clampInt(recipe.prep_time_minutes, 0, 24 * 60, 0),
+        cook_time_minutes: clampInt(recipe.cook_time_minutes, 0, 24 * 60, 0),
+        servings: requestedServings ?? clampInt(recipe.servings, 1, 24, 2),
+        calories: nullableInt(recipe.calories),
+        protein_g: nullableInt(recipe.protein_g),
+        carbs_g: nullableInt(recipe.carbs_g),
+        fat_g: nullableInt(recipe.fat_g),
+        tags: Array.isArray(recipe.tags)
+          ? recipe.tags.map(String).slice(0, 6)
+          : [],
         ingredients: recipe.ingredients ?? [],
         steps: recipe.steps ?? [],
         source_prompt: prompt,
       })
-      .select("*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)")
+      .select(
+        "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)",
+      )
       .single();
 
     if (insertError) {
       console.error("Insert error", insertError);
-      // Distinguish between auth/RLS issues and DB errors
       if (
         insertError.message?.includes("auth") ||
         insertError.code === "PGRPT13"
@@ -269,11 +273,10 @@ Deno.serve(async (req) => {
     return json({ recipe: row }, 200);
   } catch (err) {
     console.error("Unhandled error", err);
-    // Show stack trace info in development for debugging
-    const detail = err instanceof Error ? err.message : String(err);
     return json(
       {
-        error: `Something went wrong while generating. (${detail.slice(0, 100)})`,
+        error:
+          "Something went wrong while generating — please try again in a moment.",
       },
       500,
     );
@@ -287,26 +290,194 @@ function json(body: unknown, status: number): Response {
   });
 }
 
+function geminiErrorResponse(status: number, detail: string): Response {
+  console.error("Gemini error", status, detail.slice(0, 500));
+  const lower = detail.toLowerCase();
+  // Google often returns HTTP 400 (not 401) for a bad/revoked API key.
+  if (
+    status === 401 ||
+    status === 403 ||
+    lower.includes("api key not valid") ||
+    lower.includes("api_key_invalid") ||
+    lower.includes("permission_denied")
+  ) {
+    return json(
+      {
+        error:
+          "Recipe engine authentication failed — GEMINI_API_KEY needs to be updated.",
+      },
+      500,
+    );
+  }
+  if (status === 402 || status === 429) {
+    return json(
+      { error: "Too many requests — please wait a moment and try again." },
+      502,
+    );
+  }
+  if (status === 400 || status === 404) {
+    return json(
+      {
+        error:
+          "Couldn't generate that recipe — try rephrasing your request.",
+      },
+      502,
+    );
+  }
+  return json(
+    {
+      error:
+        "The recipe engine is temporarily unavailable — please try again in a moment.",
+    },
+    502,
+  );
+}
+
 /**
- * Calls Gemini, retrying once after a short backoff on a 5xx response —
- * those are transient on Google's end, unlike 4xx (bad request/model)
- * which will just fail the same way again.
+ * Calls Gemini with one automatic retry on 5xx, and falls back across
+ * model ids when a model returns 404 (retired/renamed).
  */
-async function callGeminiWithRetry(
+async function callGeminiWithModelFallback(
   geminiKey: string,
   payload: unknown,
-): Promise<Response> {
+): Promise<{ ok: true; text: string } | { ok: false; status: number; detail: string }> {
+  let lastStatus = 502;
+  let lastDetail = "";
+
+  for (const model of GEMINI_MODELS) {
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+    const result = await callGeminiWithRetry(url, payload);
+    if (result.ok) return result;
+    lastStatus = result.status;
+    lastDetail = result.detail;
+    // Only fall through to the next model on "model not found".
+    if (result.status !== 404) break;
+    console.error(`Gemini model unavailable, trying next: ${model}`);
+  }
+
+  return { ok: false, status: lastStatus, detail: lastDetail };
+}
+
+async function callGeminiWithRetry(
+  url: string,
+  payload: unknown,
+): Promise<{ ok: true; text: string } | { ok: false; status: number; detail: string }> {
   const call = () =>
-    fetch(`${GEMINI_URL}?key=${geminiKey}`, {
+    fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-  const first = await call();
-  if (first.ok || first.status < 500) return first;
-  console.error("Gemini 5xx, retrying once", first.status);
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  return call();
+
+  let res = await call();
+  if (!res.ok && res.status >= 500) {
+    console.error("Gemini 5xx, retrying once", res.status);
+    await sleep(600);
+    res = await call();
+  }
+  // One more retry for rate limits with slightly longer backoff.
+  if (!res.ok && res.status === 429) {
+    console.error("Gemini 429, retrying once after backoff");
+    await sleep(1200);
+    res = await call();
+  }
+
+  if (!res.ok) {
+    return { ok: false, status: res.status, detail: await res.text() };
+  }
+
+  const geminiJson = await res.json();
+  const finishReason = geminiJson?.candidates?.[0]?.finishReason;
+  if (finishReason === "SAFETY" || finishReason === "BLOCKED") {
+    return {
+      ok: false,
+      status: 400,
+      detail: `blocked: ${finishReason}`,
+    };
+  }
+
+  const text = extractCandidateText(geminiJson);
+  if (!text) {
+    return {
+      ok: false,
+      status: 502,
+      detail: JSON.stringify(geminiJson).slice(0, 400),
+    };
+  }
+  return { ok: true, text };
+}
+
+function extractCandidateText(geminiJson: unknown): string | null {
+  // deno-lint-ignore no-explicit-any
+  const j = geminiJson as any;
+  const part = j?.candidates?.[0]?.content?.parts?.[0];
+  if (typeof part?.text === "string" && part.text.trim()) return part.text;
+  // Some responses put structured JSON in a different shape.
+  if (part && typeof part === "object" && !part.text) {
+    try {
+      return JSON.stringify(part);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/** Strip markdown fences and parse Gemini JSON output. */
+// deno-lint-ignore no-explicit-any
+function parseRecipeJson(raw: string): any | null {
+  let text = raw.trim();
+  // ```json ... ``` or ``` ... ```
+  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+  if (fence) text = fence[1].trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Last resort: first {...} block
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+// deno-lint-ignore no-explicit-any
+function isValidRecipe(recipe: any): boolean {
+  if (!recipe || typeof recipe !== "object") return false;
+  if (!recipe.title || typeof recipe.title !== "string") return false;
+  if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length < 2) {
+    return false;
+  }
+  if (!Array.isArray(recipe.steps) || recipe.steps.length < 2) return false;
+  return true;
+}
+
+function clampInt(
+  value: unknown,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function nullableInt(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Turns the profile's taste preferences into prompt constraints. */

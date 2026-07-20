@@ -9,6 +9,7 @@ struct AdaptableApp: App {
     @StateObject private var shoppingStore = ShoppingStore()
     @StateObject private var notificationsStore = NotificationsStore()
     @StateObject private var deepLinks = AppEnvironment.shared.deepLinks
+    @StateObject private var network = NetworkMonitor.shared
 
     @State private var showResetPassword = false
 
@@ -20,12 +21,18 @@ struct AdaptableApp: App {
                 .environmentObject(shoppingStore)
                 .environmentObject(notificationsStore)
                 .environmentObject(deepLinks)
+                .environmentObject(network)
                 .task {
                     authStore.start()
                     await PushManager.shared.refreshAuthorizationStatus()
                 }
                 .onOpenURL { url in
                     handle(url: url)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+                    Task {
+                        await notificationsStore.resubscribeIfNeeded()
+                    }
                 }
         }
     }

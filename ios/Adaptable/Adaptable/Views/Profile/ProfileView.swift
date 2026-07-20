@@ -45,6 +45,7 @@ struct ProfileView: View {
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
+        .refreshable { await loadMine() }
         .task { await loadMine() }
         .task { await push.refreshAuthorizationStatus() }
     }
@@ -92,7 +93,7 @@ struct ProfileView: View {
                     }
                 } else {
                     HStack(spacing: 8) {
-                        Text("@\(profile.username)").font(.system(size: 18, weight: .heavy)).lineLimit(1)
+                        Text("@\(profile.username ?? "anonymous")").font(.system(size: 18, weight: .heavy)).lineLimit(1)
                         Button {
                             draftUsername = profile.username ?? ""
                             editing = true
@@ -256,8 +257,7 @@ struct ProfileView: View {
 
     private func loadMine() async {
         guard let profile = authStore.profile else { return }
-        let all = (try? await API.fetchFeed(sort: .new)) ?? []
-        mine = all.filter { $0.author_id == profile.id }
+        mine = (try? await API.fetchRecipesByAuthor(userId: profile.id)) ?? []
     }
 
     private func saveUsername() async {
@@ -277,7 +277,8 @@ struct ProfileView: View {
         guard !authStore.isDemo, !avatarBusy, let profile = authStore.profile else { return }
         avatarBusy = true
         defer { avatarBusy = false }
-        if let data = try? await item.loadTransferable(type: Data.self),
+        if let raw = try? await item.loadTransferable(type: Data.self),
+           let data = ImageCompressor.jpegData(from: raw, maxDimension: 800, quality: 0.8),
            let url = try? await API.uploadAvatar(userId: profile.id, imageData: data) {
             authStore.setAvatarUrl(url)
         }

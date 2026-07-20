@@ -24,18 +24,18 @@ struct RecipeDetailView: View {
         .background(Theme.surface)
         .navigationBarHidden(true)
         .task { await load() }
+        .refreshable { await load() }
     }
 
     private func load() async {
+        errorMessage = nil
         do {
             let r = try await API.fetchRecipe(id: recipeId)
             recipe = .some(r)
-            photos = try await API.fetchRecipePhotos(recipeId: recipeId)
+            photos = (try? await API.fetchRecipePhotos(recipeId: recipeId)) ?? []
         } catch {
             print("[RecipeDetailView] Failed to load recipe \(recipeId): \(error)")
-            // Non-404 errors (network, auth) show actual message
-            // A 404 is expected — leave recipe as nil so "not found" UI shows
-            errorMessage = error.localizedDescription
+            errorMessage = AppError.friendlyMessage(for: error)
         }
     }
 
@@ -75,31 +75,28 @@ struct RecipeDetailView: View {
         if let errorMessage {
             EmptyStateView(emoji: "📡", title: "Connection hiccup", message: errorMessage) {
                 PillButton(title: "Retry") { Task { await load() } }
-             }
-          } else if recipe == nil {
+            }
+        } else if recipe == nil {
             VStack(alignment: .leading, spacing: 16) {
                 SkeletonBlock(height: 220, cornerRadius: Theme.cardRadius)
                 SkeletonBlock(height: 28, cornerRadius: 8).frame(maxWidth: 220)
                 SkeletonBlock(height: 16, cornerRadius: 8)
                 SkeletonBlock(height: 96, cornerRadius: Theme.cardRadius)
-             }
-          } else if recipe == .some(.none) {
+            }
+        } else if recipe == .some(.none) {
             EmptyStateView(emoji: "🔍", title: "Recipe not found", message: "It may have been removed, or the link is off.") {
                 PillButton(title: "Back to Discover") { dismiss() }
-             }
-          } else {
-            // recipe == .some(.some(let r)) — show actual content
+            }
+        } else if let r = recipe.flatMap({ $0 }) {
             VStack(alignment: .leading, spacing: 24) {
-                if let r = recipe.flatMap({ $0 }) {
-                    RecipeContentView(recipe: r)
-                    if !photos.isEmpty {
-                        communityPhotos
-                     }
-                    CommentsSectionView(recipeId: r.id)
-                 }
-              }
-          }
-      }
+                RecipeContentView(recipe: r)
+                if !photos.isEmpty {
+                    communityPhotos
+                }
+                CommentsSectionView(recipeId: r.id)
+            }
+        }
+    }
 
     private var communityPhotos: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -114,7 +111,7 @@ struct RecipeDetailView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                                     .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.line))
                             }
-                            Text(Format.timeAgo(photo.created_at ?? "")).font(.system(size: 11)).foregroundStyle(Theme.faint)
+                            Text(Format.timeAgo(photo.created_at)).font(.system(size: 11)).foregroundStyle(Theme.faint)
                         }
                     }
                 }

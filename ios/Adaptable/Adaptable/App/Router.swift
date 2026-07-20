@@ -13,14 +13,16 @@ enum AppTab: Hashable {
     case discover, cookbook, create, groceries, profile
 }
 
-/// Cross-cutting navigation events: push-notification taps, and remix
-/// deep links from the Recipe view into the Create tab.
+/// Cross-cutting navigation events: push taps, remix deep links, and
+/// feed refresh signals after create/import success.
 @MainActor
 final class DeepLinkCenter: ObservableObject {
     @Published var activeTab: AppTab = .discover
     @Published var pendingRecipeId: String?
     @Published var remixRecipeId: String?
     @Published var feedTagFilter: String?
+    /// Bump to force Discover (and similar lists) to reload.
+    @Published private(set) var feedRefreshToken = UUID()
 
     func openRecipe(_ id: String) {
         activeTab = .discover
@@ -35,5 +37,9 @@ final class DeepLinkCenter: ObservableObject {
     func openFeed(tag: String) {
         activeTab = .discover
         feedTagFilter = tag
+    }
+
+    func requestFeedRefresh() {
+        feedRefreshToken = UUID()
     }
 }

@@ -40,25 +40,27 @@ struct CommentsSectionView: View {
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line))
 
-            if comments == nil {
-                SkeletonBlock(height: 64, cornerRadius: 16)
-                SkeletonBlock(height: 64, cornerRadius: 16)
-            } else if comments!.isEmpty {
-                Text("No comments yet — cooked it? Tell everyone how it went. 👩‍🍳")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, 24)
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(dash: [4])))
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(comments!) { comment in
-                        CommentRow(comment: comment, isOwn: authStore.profile?.id == comment.user_id) {
-                            remove(comment.id)
+            if let comments {
+                if comments.isEmpty {
+                    Text("No comments yet — cooked it? Tell everyone how it went. 👩‍🍳")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 24)
+                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(dash: [4])))
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(comments) { comment in
+                            CommentRow(comment: comment, isOwn: authStore.profile?.id == comment.user_id) {
+                                remove(comment.id)
+                            }
                         }
                     }
                 }
+            } else {
+                SkeletonBlock(height: 64, cornerRadius: 16)
+                SkeletonBlock(height: 64, cornerRadius: 16)
             }
         }
         .task { await load() }

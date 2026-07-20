@@ -7,9 +7,14 @@ import Supabase
 final class AuthStore: ObservableObject {
     @Published private(set) var profile: Profile?
     @Published private(set) var loading: Bool
+    /// Non-nil when we have a session but profile fetch failed (soft fail).
+    @Published private(set) var profileLoadError: String?
+    /// True when signed in at the auth layer even if profile is temporarily missing.
+    @Published private(set) var hasSession = false
 
     let isDemo = SupabaseManager.isDemo
     private var authTask: Task<Void, Never>?
+    private var lastUserId: String?
 
     init() {
         if isDemo {
@@ -20,6 +25,7 @@ final class AuthStore: ObservableObject {
                 preferences: nil,
                 created_at: DemoStore.demoUser.created_at
             )
+            hasSession = true
             loading = false
         } else {
             loading = true
@@ -31,15 +37,23 @@ final class AuthStore: ObservableObject {
         authTask = Task { [weak self] in
             guard let self else { return }
             if let session = try? await SupabaseManager.client.auth.session {
+                self.hasSession = true
+                self.lastUserId = session.user.id.uuidString
                 await self.loadProfile(userId: session.user.id.uuidString)
             } else {
+                self.hasSession = false
                 self.loading = false
             }
             for await (_, session) in SupabaseManager.client.auth.authStateChanges {
                 if let session {
+                    self.hasSession = true
+                    self.lastUserId = session.user.id.uuidString
                     await self.loadProfile(userId: session.user.id.uuidString)
                 } else {
+                    self.hasSession = false
+                    self.lastUserId = nil
                     self.profile = nil
+                    self.profileLoadError = nil
                     self.loading = false
                 }
             }
@@ -50,18 +64,41 @@ final class AuthStore: ObservableObject {
     func refreshDemoPreferences() {
         guard isDemo else { return }
         Task {
-            let prefs = await DemoStore.shared.getPreferences()
+            let prefs = DemoStore.shared.getPreferences()
             self.profile?.preferences = prefs
         }
+    }
+
+    /// Retry profile load after a soft failure (network blip).
+    func retryProfileLoad() async {
+        guard let userId = lastUserId else { return }
+        loading = true
+        await loadProfile(userId: userId)
     }
 
     private func loadProfile(userId: String) async {
         do {
             let rows: [Profile] = try await SupabaseManager.client
                 .from("profiles").select("*").eq("id", value: userId).limit(1).execute().value
-            self.profile = rows.first
+            if let row = rows.first {
+                self.profile = row
+                self.profileLoadError = nil
+            } else {
+                // Session valid but profile row missing — keep session, show retry.
+                if self.profile?.id != userId {
+                    self.profile = nil
+                }
+                self.profileLoadError = "Couldn't load your profile. Check your connection and try again."
+            }
         } catch {
-            self.profile = nil
+            print("[AuthStore] profile load failed: \(error)")
+            // Soft fail: keep existing profile if we already had one for this user.
+            if self.profile?.id == userId {
+                self.profileLoadError = "Couldn't refresh your profile — using cached data."
+            } else {
+                self.profile = nil
+                self.profileLoadError = AppError.friendlyMessage(for: error)
+            }
         }
         self.loading = false
     }
@@ -89,6 +126,8 @@ final class AuthStore: ObservableObject {
 
     func signOut() async {
         guard !isDemo else { return }
+        // Unregister push before clearing session so the API still has a user.
+        PushManager.shared.setCurrentUser(nil)
         try? await SupabaseManager.client.auth.signOut()
     }
 
@@ -126,7 +165,7 @@ final class AuthStore: ObservableObject {
 
     func updatePreferences(_ prefs: Preferences) async throws {
         if isDemo {
-            await DemoStore.shared.setPreferences(prefs)
+            DemoStore.shared.setPreferences(prefs)
             profile?.preferences = prefs
             return
         }
@@ -144,6 +183,7 @@ final class AuthStore: ObservableObject {
     func deleteAccount() async throws {
         guard !isDemo else { return }
         try await API.deleteAccount()
+        PushManager.shared.setCurrentUser(nil)
         try? await SupabaseManager.client.auth.signOut()
     }
 }

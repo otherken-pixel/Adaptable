@@ -36,6 +36,21 @@ enum API {
         return rows.first
     }
 
+    /// Recipes authored by a specific user (Profile "Your creations").
+    static func fetchRecipesByAuthor(userId: String, limit: Int = 100) async throws -> [Recipe] {
+        if SupabaseManager.isDemo {
+            let list = await DemoStore.shared.listRecipes()
+            return list.filter { $0.author_id == userId }
+        }
+        return try await db.from("recipes")
+            .select(recipeSelect)
+            .eq("author_id", value: userId)
+            .order("created_at", ascending: false)
+            .limit(limit)
+            .execute()
+            .value
+    }
+
     // MARK: - Votes
 
     static func fetchMyVotes(userId: String) async throws -> [String: VoteValue] {
@@ -138,6 +153,15 @@ enum API {
         if SupabaseManager.isDemo { return }
         struct Payload: Encodable { let token: String; let user_id: String; let platform: String }
         try await db.from("device_tokens").upsert(Payload(token: token, user_id: userId, platform: platform)).execute()
+    }
+
+    static func unregisterDeviceToken(userId: String, token: String) async throws {
+        if SupabaseManager.isDemo { return }
+        try await db.from("device_tokens")
+            .delete()
+            .eq("user_id", value: userId)
+            .eq("token", value: token)
+            .execute()
     }
 
     // MARK: - Shopping list
@@ -294,7 +318,19 @@ enum API {
     static func generateRecipe(prompt: String, servings: Int?) async throws -> Recipe {
         if SupabaseManager.isDemo { return await DemoStore.shared.generate(prompt: prompt, servings: servings) }
         struct Body: Encodable { let prompt: String; let servings: Int? }
-        return try await invoke("generate-recipe", body: Body(prompt: prompt, servings: servings))
+        let body = Body(prompt: prompt, servings: servings)
+        // One client-side retry for transient edge/Gemini failures.
+        do {
+            return try await invoke("generate-recipe", body: body)
+        } catch {
+            let message = (error as? AppError)?.message ?? error.localizedDescription
+            let retryable = message.localizedCaseInsensitiveContains("temporarily unavailable")
+                || message.localizedCaseInsensitiveContains("try again")
+                || message.localizedCaseInsensitiveContains("Too many requests")
+            guard retryable else { throw error }
+            try await Task.sleep(nanoseconds: 800_000_000)
+            return try await invoke("generate-recipe", body: body)
+        }
     }
 
     // MARK: - Account deletion

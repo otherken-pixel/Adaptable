@@ -389,7 +389,7 @@ private struct MacroColumn: View {
     let value: Int?; let unit: String; let label: String
     var body: some View {
         VStack(spacing: 3) {
-            Text(value != nil ? "\(value!)\(unit)" : "—").font(.system(size: 15, weight: .heavy)).monospacedDigit()
+            Text(value.map { "\($0)\(unit)" } ?? "—").font(.system(size: 15, weight: .heavy)).monospacedDigit()
             Text(label.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.faint)
         }
     }

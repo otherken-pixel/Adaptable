@@ -56,8 +56,12 @@ struct FeedView: View {
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
+        .refreshable { await load(showSkeleton: false) }
         .task { if recipes == nil { await load() } }
         .onChange(of: sort) { _, _ in Task { await load() } }
+        .onChange(of: deepLinks.feedRefreshToken) { _, _ in
+            Task { await load(showSkeleton: false) }
+        }
         .onChange(of: deepLinks.feedTagFilter) { _, tag in
             guard let tag else { return }
             activeChipId = tagChipId(tag)
@@ -198,16 +202,17 @@ struct FeedView: View {
         }
     }
 
-    private func load() async {
-        recipes = nil
+    private func load(showSkeleton: Bool = true) async {
+        if showSkeleton { recipes = nil }
         errorMessage = nil
         do {
             recipes = try await API.fetchFeed(sort: sort)
-         } catch {
+        } catch {
             print("[FeedView] Failed to load feed: \(error)")
             errorMessage = AppError.friendlyMessage(for: error)
-         }
-     }
+            if recipes == nil { recipes = [] }
+        }
+    }
 
     // MARK: - Chips
 
