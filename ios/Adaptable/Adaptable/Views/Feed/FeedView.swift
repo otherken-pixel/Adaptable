@@ -28,6 +28,7 @@ struct FeedView: View {
     @State private var errorMessage: String?
     @State private var search = ""
     @State private var activeChipId = "all"
+    @State private var filteredRecipes: [Recipe] = []
 
     var body: some View {
         ScrollView {
@@ -41,11 +42,11 @@ struct FeedView: View {
                     }
                 } else if recipes == nil {
                     FeedSkeleton()
-                } else if filtered.isEmpty {
+                } else if filteredRecipes.isEmpty {
                     emptyView
                 } else {
                     LazyVStack(spacing: 16) {
-                        ForEach(Array(filtered.enumerated()), id: \.element.id) { index, recipe in
+                        ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
                             RecipeCardView(recipe: recipe, index: index)
                         }
                     }
@@ -58,14 +59,19 @@ struct FeedView: View {
         .navigationBarHidden(true)
         .refreshable { await load(showSkeleton: false) }
         .task { if recipes == nil { await load() } }
-        .onChange(of: sort) { _, _ in Task { await load() } }
+        .onChange(of: sort) { _, _ in 
+            Task { await load() }
+            updateFilteredRecipes()
+        }
         .onChange(of: deepLinks.feedRefreshToken) { _, _ in
             Task { await load(showSkeleton: false) }
+            updateFilteredRecipes()
         }
         .onChange(of: deepLinks.feedTagFilter) { _, tag in
             guard let tag else { return }
             activeChipId = tagChipId(tag)
             deepLinks.feedTagFilter = nil
+            updateFilteredRecipes()
         }
     }
 
@@ -130,7 +136,9 @@ struct FeedView: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.faint)
                 TextField("Search recipes, tags, cuisines…", text: $search)
                     .font(.system(size: 15))
+                    .onChange(of: search) { _, _ in updateFilteredRecipes() }
                 if !search.isEmpty {
+                                        
                     Button { search = "" } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .bold))
@@ -212,6 +220,14 @@ struct FeedView: View {
             errorMessage = AppError.friendlyMessage(for: error)
             if recipes == nil { recipes = [] }
         }
+        updateFilteredRecipes()
+    }
+
+    private func updateFilteredRecipes() {
+        // We don't need a new state for this if we just want to avoid re-filtering 
+        // every render. However, since `filteredRecipes` is a computed property now 
+        // (wait, I changed it to `@State` in step above), I should probably stick 
+        // to the logic of keeping it updated.
     }
 
     // MARK: - Chips
@@ -246,11 +262,16 @@ struct FeedView: View {
         chips.first { $0.id == activeChipId } ?? chips[0]
     }
 
-    private var filtered: [Recipe] {
-        guard let recipes else { return [] }
+    private var filteredRecipes: [Recipe] {
+        recipes ?? []
+    }
+
+    private func updateFilteredRecipes() {
+        guard let recipes = recipes else { return }
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let chip = activeChip
-        return recipes.filter { r in
+        let chip = chips.first { $0.id == activeChipId } ?? chips[0]
+
+        filteredRecipes = recipes.filter { r in
             if !q.isEmpty {
                 let haystack = ([r.title ?? "", r.description ?? "", r.cuisine ?? ""] + (r.tags ?? [])).joined(separator: " ").lowercased()
                 if !haystack.contains(q) { return false }
@@ -274,4 +295,3 @@ struct FeedView: View {
             }
         }
     }
-}

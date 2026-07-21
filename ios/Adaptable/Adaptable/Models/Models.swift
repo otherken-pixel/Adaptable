@@ -200,11 +200,23 @@ struct ImportSource {
 
 // MARK: - App-level errors
 
-struct AppError: LocalizedError {
+struct AppError: LocalizedError, Equatable {
+    enum ErrorKind {
+        case noNetwork
+        case unauthorized
+        case serverDown
+        case requestFailed(String)
+        case generic
+    }
+
+    let kind: ErrorKind
     let message: String
     var errorDescription: String? { message }
 
-    init(_ message: String) { self.message = message }
+    init(_ kind: ErrorKind, message: String = "") {
+        self.kind = kind
+        self.message = message
+    }
 
     /// Maps a caught error to text safe to show a user. `AppError` carries
     /// copy we deliberately wrote (e.g. edge function messages), so it
@@ -217,5 +229,13 @@ struct AppError: LocalizedError {
             return appError.message
         }
         return "Something went wrong — please check your connection and try again."
+    }
+
+    /// Helper to determine if an error is likely retryable (e.g., network timeout)
+    var isRetryable: Bool {
+        switch kind {
+        case .noNetwork, .serverDown: return true
+        default: return false
+        }
     }
 }

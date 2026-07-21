@@ -47,8 +47,11 @@ final class AuthStore: ObservableObject {
             for await (_, session) in SupabaseManager.client.auth.authStateChanges {
                 if let session {
                     self.hasSession = true
-                    self.lastUserId = session.user.id.uuidString
-                    await self.loadProfile(userId: session.user.id.uuidString)
+                    let userId = session.user.id.uuidString
+                    if self.lastUserId != userId {
+                        self.lastUserId = userId
+                        await self.loadProfile(userId: userId)
+                    }
                 } else {
                     self.hasSession = false
                     self.lastUserId = nil

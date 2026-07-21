@@ -75,13 +75,15 @@ final class ShoppingStore: ObservableObject {
     }
 
     func clearChecked(userId: String) {
-        let previous = items
-        items.removeAll { $0.checked }
         Task {
             do {
                 try await API.clearCheckedShoppingItems(userId: userId)
             } catch {
-                items = previous
+                // If it fails, we don't need to roll back unless we want 
+                // to visually indicate the failure. Since clearChecked is
+                // usually a batch operation, rolling back every change since
+                // the start of the request (previous version) is risky.
+                print("Failed to clear checked items: \(error)")
             }
         }
     }
