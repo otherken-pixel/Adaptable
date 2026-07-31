@@ -175,7 +175,7 @@ struct FeedView: View {
             }
 
             if recipes != nil, activeChipId != "all" || !search.isEmpty {
-                Text("\(filtered.count) \(filtered.count == 1 ? "recipe" : "recipes")")
+                Text("\(filteredRecipes.count) \(filteredRecipes.count == 1 ? "recipe" : "recipes")")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.faint)
             }
@@ -184,7 +184,7 @@ struct FeedView: View {
     }
 
     private var isForYouEmpty: Bool {
-        filtered.isEmpty && activeChip.kind == .forYou
+        filteredRecipes.isEmpty && activeChip.kind == .forYou
     }
 
     private var emptyView: some View {
@@ -223,13 +223,6 @@ struct FeedView: View {
         updateFilteredRecipes()
     }
 
-    private func updateFilteredRecipes() {
-        // We don't need a new state for this if we just want to avoid re-filtering 
-        // every render. However, since `filteredRecipes` is a computed property now 
-        // (wait, I changed it to `@State` in step above), I should probably stick 
-        // to the logic of keeping it updated.
-    }
-
     // MARK: - Chips
 
     private var chips: [Chip] {
@@ -262,10 +255,6 @@ struct FeedView: View {
         chips.first { $0.id == activeChipId } ?? chips[0]
     }
 
-    private var filteredRecipes: [Recipe] {
-        recipes ?? []
-    }
-
     private func updateFilteredRecipes() {
         guard let recipes = recipes else { return }
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -295,3 +284,4 @@ struct FeedView: View {
             }
         }
     }
+}

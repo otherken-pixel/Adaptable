@@ -45,7 +45,9 @@ struct RecipeContentView: View {
             remixButton
         }
         .sheet(isPresented: $planOpen) { dayPickerSheet }
-        .sheet(item: $shareItem) { item in ShareSheet(items: [item.text]) }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: item.activityItems)
+        }
     }
 
     // MARK: - Hero
@@ -345,7 +347,13 @@ struct RecipeContentView: View {
             VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
             SaveButtonView(recipeId: recipe.id, variant: .bar)
             Button {
-                shareItem = ShareItem(text: "\(recipe.emoji ?? "") \(recipe.title ?? "") — made with Adaptable")
+                let payload = RecipeShare.build(recipe: recipe, servings: servings)
+                let card = RecipeShare.cardImage(recipe: recipe)
+                shareItem = ShareItem(
+                    text: payload.text,
+                    url: payload.url,
+                    image: card
+                )
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .frame(width: 48, height: 48)
@@ -354,6 +362,7 @@ struct RecipeContentView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
             }
             .buttonStyle(.pressable)
+            .accessibilityLabel("Share recipe")
         }
     }
 
@@ -395,12 +404,41 @@ private struct MacroColumn: View {
     }
 }
 
-struct ShareItem: Identifiable { let id = UUID(); let text: String }
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let text: String
+    let url: URL?
+    let image: UIImage?
+
+    init(text: String, url: URL? = nil, image: UIImage? = nil) {
+        self.text = text
+        self.url = url
+        self.image = image
+    }
+
+    /// Prefer image + text for iMessage; URL is already embedded in the body
+    /// for rich previews and Universal Links when the link unfurls.
+    var activityItems: [Any] {
+        var items: [Any] = []
+        if let image { items.append(image) }
+        items.append(text)
+        // Avoid duplicating the URL as a separate item when it's already in the
+        // body — Messages then shows a clean bubble with image + full recipe.
+        // Still pass URL alone when text is empty (defensive).
+        if text.isEmpty, let url { items.append(url) }
+        return items
+    }
+}
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        vc.excludedActivityTypes = [
+            .addToReadingList,
+            .assignToContact,
+        ]
+        return vc
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

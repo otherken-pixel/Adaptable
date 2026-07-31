@@ -201,7 +201,7 @@ struct ImportSource {
 // MARK: - App-level errors
 
 struct AppError: LocalizedError, Equatable {
-    enum ErrorKind {
+    enum ErrorKind: Equatable {
         case noNetwork
         case unauthorized
         case serverDown
@@ -215,6 +215,22 @@ struct AppError: LocalizedError, Equatable {
 
     init(_ kind: ErrorKind, message: String = "") {
         self.kind = kind
+        if !message.isEmpty {
+            self.message = message
+        } else {
+            switch kind {
+            case .noNetwork: self.message = "You're offline — check your connection."
+            case .unauthorized: self.message = "Please sign in again."
+            case .serverDown: self.message = "Server is unavailable — try again shortly."
+            case .requestFailed(let detail): self.message = detail
+            case .generic: self.message = "Something went wrong."
+            }
+        }
+    }
+
+    /// Convenience for call sites that only have user-facing copy.
+    init(_ message: String) {
+        self.kind = .generic
         self.message = message
     }
 

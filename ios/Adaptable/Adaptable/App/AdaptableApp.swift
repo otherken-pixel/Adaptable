@@ -29,6 +29,11 @@ struct AdaptableApp: App {
                 .onOpenURL { url in
                     handle(url: url)
                 }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL {
+                        handle(url: url)
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
                     Task {
                         await notificationsStore.resubscribeIfNeeded()
@@ -38,6 +43,12 @@ struct AdaptableApp: App {
     }
 
     private func handle(url: URL) {
+        // Universal Links / custom-scheme recipe deep links
+        if let recipeId = SiteConfig.recipeId(from: url) {
+            deepLinks.openRecipe(recipeId)
+            return
+        }
+
         guard url.scheme == "com.adaptable.app" else { return }
         if url.host == "reset-password" {
             Task {

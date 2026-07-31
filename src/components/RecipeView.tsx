@@ -21,6 +21,7 @@ import { coverGradient } from "@/lib/gradients";
 import { scaleQuantity } from "@/lib/quantity";
 import { localISODate } from "@/lib/format";
 import { addMealPlan } from "@/lib/api";
+import { buildRecipeShare } from "@/lib/shareRecipe";
 import { useShopping } from "@/context/ShoppingContext";
 import { useAuth } from "@/context/AuthContext";
 import VotePill from "./VotePill";
@@ -68,10 +69,19 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
     });
 
   const share = async () => {
-    const text = `${recipe.emoji} ${recipe.title} — made with Adaptable`;
+    const payload = buildRecipeShare(recipe, servings);
     try {
-      if (navigator.share) await navigator.share({ title: recipe.title, text });
-      else await navigator.clipboard.writeText(text);
+      if (navigator.share) {
+        // text without URL + separate url → iMessage unfurls the link and
+        // keeps the full recipe in the bubble without duplicating the link.
+        await navigator.share({
+          title: payload.title,
+          text: payload.text,
+          url: payload.url,
+        });
+      } else {
+        await navigator.clipboard.writeText(payload.textWithUrl);
+      }
     } catch {
       /* user dismissed the share sheet */
     }

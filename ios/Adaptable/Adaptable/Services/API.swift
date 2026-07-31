@@ -30,7 +30,7 @@ enum API {
             let rows: [Recipe] = try await query.execute().value
             return sort == .hot ? Trending.sorted(rows) : rows
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -40,7 +40,7 @@ enum API {
             let rows: [Recipe] = try await db.from("recipes").select(recipeSelect).eq("id", value: id).limit(1).execute().value
             return rows.first
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -51,14 +51,16 @@ enum API {
             return list.filter { $0.author_id == userId }
         }
         do {
-            return try await db.from("recipes")
+            let rows: [Recipe] = try await db.from("recipes")
                 .select(recipeSelect)
                 .eq("author_id", value: userId)
                 .order("created_at", ascending: false)
                 .limit(limit)
                 .execute()
+                .value
+            return rows
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -71,7 +73,7 @@ enum API {
             let rows: [Row] = try await db.from("user_votes").select("recipe_id, value").eq("user_id", value: userId).execute().value
             return Dictionary(uniqueKeysWithValues: rows.map { ($0.recipe_id, $0.value) })
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -85,7 +87,7 @@ enum API {
                 try await db.from("user_votes").delete().eq("user_id", value: userId).eq("recipe_id", value: recipeId).execute()
             }
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -98,7 +100,7 @@ enum API {
             let rows: [Row] = try await db.from("saves").select("recipe_id").eq("user_id", value: userId).order("created_at", ascending: false).execute().value
             return rows.map(\.recipe_id)
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -114,7 +116,7 @@ enum API {
             let rows: [Row] = try await db.from("saves").select("recipe:recipes(\(recipeSelect))").eq("user_id", value: userId).order("created_at", ascending: false).execute().value
             return rows.compactMap(\.recipe)
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -130,7 +132,7 @@ enum API {
             try await db.from("saves").upsert(Payload(user_id: userId, recipe_id: recipeId)).execute()
             return true
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -142,7 +144,7 @@ enum API {
             return try await db.from("comments").select(commentSelect).eq("recipe_id", value: recipeId)
                 .order("created_at", ascending: false).limit(100).execute().value
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -154,7 +156,7 @@ enum API {
                 .insert(Payload(user_id: userId, recipe_id: recipeId, body: body))
                 .select(commentSelect).single().execute().value
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -163,7 +165,7 @@ enum API {
         do {
             try await db.from("comments").delete().eq("user_id", value: userId).eq("id", value: commentId).execute()
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -175,7 +177,7 @@ enum API {
             struct Payload: Encodable { let user_id: String; let recipe_id: String }
             try await db.from("cooks").insert(Payload(user_id: userId, recipe_id: recipeId)).execute()
         } catch {
-            throw AppError(.requestFailed, message: error.localizedDescription)
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
