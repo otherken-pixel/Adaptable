@@ -18,7 +18,7 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   process.env.VITE_SUPABASE_ANON_KEY ??
   process.env.SUPABASE_ANON_KEY ??
-  "";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlweml1bHZ0ZnN5cndwb3RsZXZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwNzY4MjYsImV4cCI6MjA5ODY1MjgyNn0.MQ_Cm60vcs46ErhyzBz5WPC69zQLewhS2WmExKjnk5Y";
 
 interface RecipeMeta {
   title: string | null;
@@ -46,9 +46,15 @@ export default async function handler(req: any, res: any) {
   const description =
     recipe?.description ?? "AI recipes that adapt to you. Generate, cook, vote.";
   const image = recipe?.image_url || `https://${host}/apple-touch-icon.png`;
+  // Hero images are attached asynchronously after recipe create. Cache
+  // aggressively only once image_url is present; otherwise keep TTL short
+  // so crawlers pick up the dish photo soon after it lands.
+  const cacheControl = recipe?.image_url
+    ? "public, max-age=300, s-maxage=3600"
+    : "public, max-age=0, s-maxage=60, must-revalidate";
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "public, max-age=300, s-maxage=3600");
+  res.setHeader("Cache-Control", cacheControl);
   res.status(200).send(renderHtml({ title, description, image, pageUrl }));
 }
 
