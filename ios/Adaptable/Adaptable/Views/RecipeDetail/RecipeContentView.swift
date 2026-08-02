@@ -16,6 +16,7 @@ struct RecipeContentView: View {
     @State private var planOpen = false
     @State private var planned: String?
     @State private var shareItem: ShareItem?
+    @State private var shareBusy = false
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -350,23 +351,39 @@ struct RecipeContentView: View {
             VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
             SaveButtonView(recipeId: recipe.id, variant: .bar)
             Button {
-                let payload = RecipeShare.build(recipe: recipe, servings: servings)
-                let card = RecipeShare.cardImage(recipe: recipe)
-                shareItem = ShareItem(
-                    text: payload.text,
-                    url: payload.url,
-                    image: card
-                )
+                Task { await presentShare() }
             } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .frame(width: 48, height: 48)
-                    .foregroundStyle(Theme.muted)
-                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+                Group {
+                    if shareBusy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .foregroundStyle(Theme.muted)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
             }
             .buttonStyle(.pressable)
+            .disabled(shareBusy)
             .accessibilityLabel("Share recipe")
         }
+    }
+
+    private func presentShare() async {
+        guard !shareBusy else { return }
+        shareBusy = true
+        defer { shareBusy = false }
+        let payload = RecipeShare.build(recipe: recipe, servings: servings)
+        // Prefer AI dish photo on the share card; falls back to emoji gradient.
+        let card = await RecipeShare.cardImage(recipe: recipe, servings: servings)
+        Haptics.light()
+        shareItem = ShareItem(
+            text: payload.text,
+            url: payload.url,
+            image: card
+        )
     }
 
     private var remixButton: some View {

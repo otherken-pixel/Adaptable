@@ -388,9 +388,13 @@ struct CookModeView: View {
     }
 
     private func shareCooked(_ recipe: Recipe) {
-        Haptics.success()
-        let payload = RecipeShare.build(recipe: recipe, servings: servings ?? recipe.servings ?? 2)
-        shareItem = ShareItem(text: payload.text, url: payload.url, image: RecipeShare.cardImage(recipe: recipe))
+        Task {
+            Haptics.success()
+            let serves = servings ?? recipe.servings ?? 2
+            let payload = RecipeShare.build(recipe: recipe, servings: serves)
+            let card = await RecipeShare.cardImage(recipe: recipe, servings: serves)
+            shareItem = ShareItem(text: payload.text, url: payload.url, image: card)
+        }
     }
 
     private func recordCookIfNeeded(recipe: Recipe) {

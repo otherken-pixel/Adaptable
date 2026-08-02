@@ -20,7 +20,7 @@ import type { Recipe } from "@/lib/types";
 import { scaleQuantity } from "@/lib/quantity";
 import { localISODate } from "@/lib/format";
 import { addMealPlan } from "@/lib/api";
-import { buildRecipeShare } from "@/lib/shareRecipe";
+import { shareRecipe } from "@/lib/shareRecipe";
 import { recipeMayContainAllergens } from "@/lib/allergy";
 import { useShopping } from "@/context/ShoppingContext";
 import { useAuth } from "@/context/AuthContext";
@@ -84,19 +84,9 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
     });
 
   const share = async () => {
-    const payload = buildRecipeShare(recipe, servings);
     try {
-      if (navigator.share) {
-        // text without URL + separate url → iMessage unfurls the link and
-        // keeps the full recipe in the bubble without duplicating the link.
-        await navigator.share({
-          title: payload.title,
-          text: payload.text,
-          url: payload.url,
-        });
-      } else {
-        await navigator.clipboard.writeText(payload.textWithUrl);
-      }
+      // Includes dish photo as a file when the browser supports it (iOS Messages).
+      await shareRecipe(recipe, servings);
     } catch {
       /* user dismissed the share sheet */
     }
