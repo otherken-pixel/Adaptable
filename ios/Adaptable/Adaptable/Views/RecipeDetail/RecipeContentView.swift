@@ -45,7 +45,9 @@ struct RecipeContentView: View {
             remixButton
         }
         .sheet(isPresented: $planOpen) { dayPickerSheet }
-        .sheet(item: $shareItem) { item in ShareSheet(items: [item.text]) }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: item.url.map { [item.text, $0] } ?? [item.text])
+        }
     }
 
     // MARK: - Hero
@@ -53,7 +55,15 @@ struct RecipeContentView: View {
     private var hero: some View {
         ZStack(alignment: .bottomLeading) {
             Gradients.cover(for: recipe.id).frame(height: 224)
-            Text(recipe.emoji ?? "").font(.system(size: 96)).frame(maxWidth: .infinity).floating
+            if let image = recipe.image_url, let url = URL(string: image) {
+                AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: {
+                    Text(recipe.emoji ?? "").font(.system(size: 96)).floating
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+            } else {
+                Text(recipe.emoji ?? "").font(.system(size: 96)).frame(maxWidth: .infinity).floating
+            }
             Text(recipe.cuisine ?? "")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.white)
@@ -345,7 +355,12 @@ struct RecipeContentView: View {
             VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
             SaveButtonView(recipeId: recipe.id, variant: .bar)
             Button {
-                shareItem = ShareItem(text: "\(recipe.emoji ?? "") \(recipe.title ?? "") — made with Adaptable")
+                // Include the recipe URL when a web domain is configured so the
+                // link preview shows the dish photo (via the page's OG tags).
+                shareItem = ShareItem(
+                    text: "\(recipe.emoji ?? "") \(recipe.title ?? "") — made with Adaptable",
+                    url: SupabaseManager.recipeShareURL(id: recipe.id)
+                )
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .frame(width: 48, height: 48)
@@ -395,7 +410,11 @@ private struct MacroColumn: View {
     }
 }
 
-struct ShareItem: Identifiable { let id = UUID(); let text: String }
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let text: String
+    var url: URL? = nil
+}
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]

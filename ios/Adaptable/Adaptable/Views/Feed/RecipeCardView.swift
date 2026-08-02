@@ -12,11 +12,22 @@ struct RecipeCardView: View {
                 ZStack(alignment: .bottomLeading) {
                     Gradients.cover(for: recipe.id)
                         .frame(height: 176)
-                    Text(recipe.emoji ?? "")
-                        .font(.system(size: 64))
-                        .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .floating
+                    if let image = recipe.image_url, let url = URL(string: image) {
+                        AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: {
+                            Text(recipe.emoji ?? "")
+                                .font(.system(size: 64))
+                                .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
+                                .floating
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: 176)
+                        .clipped()
+                    } else {
+                        Text(recipe.emoji ?? "")
+                            .font(.system(size: 64))
+                            .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .floating
+                    }
                     Text(recipe.cuisine ?? "")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)

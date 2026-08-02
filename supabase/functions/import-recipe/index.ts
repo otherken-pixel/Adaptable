@@ -10,6 +10,7 @@
 // (RLS enforced), and returned. Import is free and unlimited by design.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { attachHeroImage } from "../_shared/heroImage.ts";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_URL =
@@ -240,12 +241,30 @@ Deno.serve(async (req) => {
       return json({ error: "Could not save the imported recipe." }, 500);
     }
 
+    // Generate the dish photo in the background — best-effort, never blocks
+    // the response. The emoji hero shows until the image lands.
+    runInBackground(attachHeroImage(supabase, geminiKey, row));
+
     return json({ recipe: row }, 200);
   } catch (err) {
     console.error("Unhandled error", err);
     return json({ error: "Unexpected error importing recipe." }, 500);
   }
 });
+
+/**
+ * Keeps a fire-and-forget task alive past the response when the runtime
+ * supports it (Supabase Edge), otherwise lets it run detached. Any
+ * rejection is swallowed — background work must never surface to the user.
+ */
+function runInBackground(task: Promise<unknown>): void {
+  const p = Promise.resolve(task).catch((err) =>
+    console.error("Background task failed", err)
+  );
+  // deno-lint-ignore no-explicit-any
+  const edge = (globalThis as any).EdgeRuntime;
+  if (edge?.waitUntil) edge.waitUntil(p);
+}
 
 /**
  * Calls Gemini, retrying once after a short backoff on a 5xx response —

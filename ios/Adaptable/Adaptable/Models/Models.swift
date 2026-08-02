@@ -87,6 +87,8 @@ struct Recipe: Codable, Equatable, Identifiable {
     var title: String?
     var description: String?
     var emoji: String?
+    /// AI-generated dish photo (16:9). Nil until generated; UI falls back to the emoji hero.
+    var image_url: String?
     var cuisine: String?
     var difficulty: Difficulty?
     var prep_time_minutes: Int?
