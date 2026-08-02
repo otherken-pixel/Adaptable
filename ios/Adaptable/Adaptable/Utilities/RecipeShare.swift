@@ -127,15 +127,9 @@ enum RecipeShare {
                 try? await Task.sleep(nanoseconds: photoLoadTimeoutNs)
                 return nil
             }
-            // First non-nil image wins; timeout returns nil and cancels the other.
-            var result: UIImage?
-            for await value in group {
-                if let value {
-                    result = value
-                    group.cancelAll()
-                    break
-                }
-            }
+            // First finished task wins (image, failed fetch, or timeout); cancel the rest.
+            let result = await group.next() ?? nil
+            group.cancelAll()
             return result
         }
     }
