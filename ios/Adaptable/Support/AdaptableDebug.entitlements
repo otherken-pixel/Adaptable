@@ -7,6 +7,8 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:adaptable-pi.vercel.app?mode=developer</string>
+		<string>applinks:adaptable.cooking?mode=developer</string>
+		<string>applinks:www.adaptable.cooking?mode=developer</string>
 	</array>
 </dict>
 </plist>

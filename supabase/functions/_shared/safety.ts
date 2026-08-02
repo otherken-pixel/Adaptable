@@ -112,6 +112,29 @@ function escapeReg(s: string): string {
 }
 
 /** Soft daily cap: count recipes authored today (UTC). */
+/** Optional ops hook when a content report is filed (set REPORT_WEBHOOK_URL). */
+export async function notifyReport(payload: {
+  targetType: string;
+  targetId: string;
+  reason: string;
+  reporterId: string;
+}): Promise<void> {
+  const url = Deno.env.get("REPORT_WEBHOOK_URL");
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: `Adaptable report: ${payload.targetType} ${payload.targetId} — ${payload.reason} (by ${payload.reporterId})`,
+        ...payload,
+      }),
+    });
+  } catch (e) {
+    console.error("report webhook failed", e);
+  }
+}
+
 export async function assertDailyRecipeLimit(
   // deno-lint-ignore no-explicit-any
   supabase: any,

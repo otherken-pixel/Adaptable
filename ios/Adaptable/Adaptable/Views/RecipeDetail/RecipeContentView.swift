@@ -53,17 +53,14 @@ struct RecipeContentView: View {
     // MARK: - Hero
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            Gradients.cover(for: recipe.id).frame(height: 224)
-            Text(recipe.emoji ?? "").font(.system(size: 96)).frame(maxWidth: .infinity).floating
-            Text(recipe.cuisine ?? "")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(.black.opacity(0.35), in: Capsule())
-                .padding(16)
-        }
-        .frame(height: 224)
+        RecipeCoverView(
+            recipeId: recipe.id,
+            emoji: recipe.emoji,
+            imageUrl: recipe.image_url,
+            cuisine: recipe.cuisine,
+            height: 224,
+            emojiSize: 96
+        )
         .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
     }
 
@@ -127,18 +124,24 @@ struct RecipeContentView: View {
     }
 
     private var macroBand: some View {
-        HStack {
-            MacroColumn(value: recipe.calories, unit: "", label: "Calories")
-            Spacer()
-            MacroColumn(value: recipe.protein_g, unit: "g", label: "Protein")
-            Spacer()
-            MacroColumn(value: recipe.carbs_g, unit: "g", label: "Carbs")
-            Spacer()
-            MacroColumn(value: recipe.fat_g, unit: "g", label: "Fat")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                MacroColumn(value: recipe.calories, unit: "", label: "Calories")
+                Spacer()
+                MacroColumn(value: recipe.protein_g, unit: "g", label: "Protein")
+                Spacer()
+                MacroColumn(value: recipe.carbs_g, unit: "g", label: "Carbs")
+                Spacer()
+                MacroColumn(value: recipe.fat_g, unit: "g", label: "Fat")
+            }
+            .padding(14)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
+            Text("Estimated per serving — not a lab analysis.")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.faint)
+                .padding(.horizontal, 4)
         }
-        .padding(14)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
     }
 
     // MARK: - Start cooking + plan

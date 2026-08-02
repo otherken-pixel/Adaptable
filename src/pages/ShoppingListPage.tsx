@@ -4,20 +4,22 @@ import { Check, Share2, Trash2, X } from "lucide-react";
 import { useShopping } from "@/context/ShoppingContext";
 import EmptyState from "@/components/EmptyState";
 import type { ShoppingItem } from "@/lib/types";
+import { groceryAisle, sortAisles } from "@/lib/aisle";
+import { useOnline } from "@/hooks/useOnline";
 
 function formatGroceryList(items: ShoppingItem[]): string {
   const unchecked = items.filter((i) => !i.checked);
-  const byRecipe = new Map<string, ShoppingItem[]>();
+  const byAisle = new Map<string, ShoppingItem[]>();
   for (const item of unchecked) {
-    const key = item.recipe_title || "Other items";
-    const list = byRecipe.get(key) ?? [];
+    const key = groceryAisle(item.item);
+    const list = byAisle.get(key) ?? [];
     list.push(item);
-    byRecipe.set(key, list);
+    byAisle.set(key, list);
   }
   const lines: string[] = ["🛒 Grocery list — Adaptable", ""];
-  for (const [title, group] of byRecipe) {
-    lines.push(title);
-    for (const item of group) {
+  for (const aisle of sortAisles([...byAisle.keys()])) {
+    lines.push(aisle.toUpperCase());
+    for (const item of byAisle.get(aisle) ?? []) {
       const qty = item.quantity?.trim() ? ` — ${item.quantity}` : "";
       lines.push(`• ${item.item}${qty}`);
     }
@@ -28,18 +30,22 @@ function formatGroceryList(items: ShoppingItem[]): string {
 }
 
 export default function ShoppingListPage() {
-  const { items, uncheckedCount, toggle, remove, clearChecked } = useShopping();
+  const { items, uncheckedCount, pendingSync, toggle, remove, clearChecked } =
+    useShopping();
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const online = useOnline();
 
-  const groups = useMemo(() => {
-    const byRecipe = new Map<string, ShoppingItem[]>();
+  const aisleGroups = useMemo(() => {
+    const byAisle = new Map<string, ShoppingItem[]>();
     for (const item of items) {
-      const key = item.recipe_title || "Other items";
-      const list = byRecipe.get(key) ?? [];
+      const key = groceryAisle(item.item);
+      const list = byAisle.get(key) ?? [];
       list.push(item);
-      byRecipe.set(key, list);
+      byAisle.set(key, list);
     }
-    return [...byRecipe.entries()];
+    return sortAisles([...byAisle.keys()]).map(
+      (a) => [a, byAisle.get(a) ?? []] as const,
+    );
   }, [items]);
 
   const checkedCount = items.length - uncheckedCount;
@@ -94,6 +100,14 @@ export default function ShoppingListPage() {
           )}
         </div>
       </header>
+
+      {(!online || pendingSync > 0) && (
+        <p className="mb-3 text-[13px] font-bold text-muted" role="status">
+          {!online
+            ? "Offline — checks are saved and will sync when you’re back online."
+            : `${pendingSync} change${pendingSync === 1 ? "" : "s"} syncing…`}
+        </p>
+      )}
       {shareNote && (
         <p className="mb-3 text-[13px] font-bold text-accent" role="status">
           {shareNote}
@@ -117,16 +131,18 @@ export default function ShoppingListPage() {
       )}
 
       <div className="space-y-5">
-        {groups.map(([title, groupItems], gi) => {
+        {aisleGroups.map(([aisle, groupItems], gi) => {
           const done = groupItems.filter((i) => i.checked).length;
           return (
             <section
-              key={title}
+              key={aisle}
               className="animate-fade-up"
               style={{ animationDelay: `${gi * 60}ms` }}
             >
               <div className="mb-2 flex items-baseline justify-between px-1">
-                <h2 className="text-[15px] font-extrabold tracking-tight">{title}</h2>
+                <h2 className="text-[15px] font-extrabold tracking-tight">
+                  {aisle}
+                </h2>
                 <span className="text-xs font-semibold text-faint">
                   {done}/{groupItems.length}
                 </span>
@@ -163,6 +179,11 @@ export default function ShoppingListPage() {
                       >
                         {item.item}
                       </span>
+                      {item.recipe_title ? (
+                        <span className="block truncate text-[11px] text-faint">
+                          {item.recipe_title}
+                        </span>
+                      ) : null}
                     </button>
                     <span className="shrink-0 text-sm font-bold text-muted tabular-nums">
                       {item.quantity}

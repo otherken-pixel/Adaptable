@@ -44,12 +44,34 @@ function Splash() {
   );
 }
 
-function needsOnboarding(): boolean {
+function needsOnboarding(profile: {
+  preferences?: {
+    diets?: string[];
+    allergies?: string[];
+    household_size?: number;
+  };
+} | null): boolean {
   try {
-    return !localStorage.getItem("adaptable.onboarding.v1.done");
+    if (localStorage.getItem("adaptable.onboarding.v1.done")) return false;
   } catch {
+    /* ignore */
+  }
+  if (!profile) return false;
+  // Returning users who already set taste prefs skip the wizard.
+  const p = profile.preferences;
+  if (
+    (p?.diets?.length ?? 0) > 0 ||
+    (p?.allergies?.length ?? 0) > 0 ||
+    (p?.household_size ?? 0) > 0
+  ) {
+    try {
+      localStorage.setItem("adaptable.onboarding.v1.done", "1");
+    } catch {
+      /* ignore */
+    }
     return false;
   }
+  return true;
 }
 
 /** Full signed-in app chrome. */
@@ -57,13 +79,15 @@ function AuthenticatedShell() {
   const { profile } = useAuth();
   const location = useLocation();
 
-  // First session: full multi-step onboarding before a cold feed.
+  // First session with empty prefs: multi-step onboarding before a cold feed.
   const showOnboarding =
     !!profile &&
-    needsOnboarding() &&
+    needsOnboarding(profile) &&
     !location.pathname.startsWith("/privacy") &&
     !location.pathname.startsWith("/support") &&
-    !location.pathname.startsWith("/reset-password");
+    !location.pathname.startsWith("/reset-password") &&
+    !location.pathname.startsWith("/recipe/") &&
+    !location.pathname.startsWith("/cook/");
 
   if (showOnboarding && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
@@ -120,11 +144,12 @@ function Shell() {
 
   if (loading) return <Splash />;
 
-  // Always available — share links and App Store requirements.
+  // Always available — share links, public cook, and App Store requirements.
   const publicExact = ["/privacy", "/support", "/reset-password", "/auth"];
   const isPublicRecipe = location.pathname.startsWith("/recipe/");
+  const isPublicCook = location.pathname.startsWith("/cook/");
   const isPublic =
-    isPublicRecipe || publicExact.includes(location.pathname);
+    isPublicRecipe || isPublicCook || publicExact.includes(location.pathname);
 
   if (!profile) {
     if (isPublic) {
@@ -133,6 +158,7 @@ function Shell() {
           <ScrollToTop />
           <Routes>
             <Route path="/recipe/:id" element={<RecipeDetailPage />} />
+            <Route path="/cook/:id" element={<CookModePage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/support" element={<SupportPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />

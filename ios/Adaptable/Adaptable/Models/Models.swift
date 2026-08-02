@@ -101,6 +101,9 @@ struct Recipe: Codable, Equatable, Identifiable {
     var steps: [RecipeStep]?
     var source_prompt: String?
     var source_url: String?
+    /// AI-generated dish photo URL; nil falls back to emoji gradient.
+    var image_url: String?
+    var featured: Bool?
     var net_upvotes: Int?
     var cook_count: Int?
     var comment_count: Int?

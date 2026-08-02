@@ -6,6 +6,7 @@ import { coverGradient } from "@/lib/gradients";
 import { timeAgo, totalMinutes } from "@/lib/format";
 import VotePill from "./VotePill";
 import SaveButton from "./SaveButton";
+import RecipeCover from "./RecipeCover";
 
 export default function RecipeCard({
   recipe,
@@ -20,21 +21,16 @@ export default function RecipeCard({
       className="animate-fade-up block overflow-hidden rounded-card border border-line bg-raised shadow-[0_2px_16px_rgb(0_0_0/0.05)]"
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
-      {/* Cover */}
-      <div
-        className="relative flex h-44 items-center justify-center"
-        style={{ background: coverGradient(recipe.id) }}
+      <RecipeCover
+        recipeId={recipe.id}
+        emoji={recipe.emoji}
+        imageUrl={recipe.image_url}
+        cuisine={recipe.cuisine}
       >
-        <span className="animate-float text-7xl drop-shadow-[0_8px_16px_rgb(0_0_0/0.25)]">
-          {recipe.emoji}
-        </span>
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 z-10">
           <SaveButton recipeId={recipe.id} />
         </div>
-        <span className="absolute bottom-3 left-3 rounded-full bg-black/35 px-3 py-1 text-xs font-bold tracking-wide text-white backdrop-blur-sm">
-          {recipe.cuisine}
-        </span>
-      </div>
+      </RecipeCover>
 
       {/* Body */}
       <div className="space-y-3 p-4">

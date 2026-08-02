@@ -303,6 +303,8 @@ struct CookModeView: View {
         guard let steps = recipe.steps, step - 1 < steps.count,
               let seconds = DurationParser.extractTimerSeconds(steps[step - 1].instruction) else { return }
         timers.append(RunningTimer(step: step, endsAt: Date().addingTimeInterval(Double(seconds)), totalSeconds: seconds, rang: false))
+        Alarm.scheduleTimerNotification(seconds: seconds, step: step)
+        Haptics.light()
         now = Date()
     }
 

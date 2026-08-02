@@ -36,6 +36,7 @@ interface RecipeRow {
   prep_time_minutes: number | null;
   cook_time_minutes: number | null;
   servings: number | null;
+  image_url: string | null;
 }
 
 function escapeHtml(s: string): string {
@@ -73,7 +74,7 @@ function buildDescription(r: RecipeRow): string {
 }
 
 async function fetchRecipe(id: string): Promise<RecipeRow | null> {
-  const url = `${SUPABASE_URL}/rest/v1/recipes?id=eq.${encodeURIComponent(id)}&select=id,title,description,emoji,cuisine,difficulty,prep_time_minutes,cook_time_minutes,servings&limit=1`;
+  const url = `${SUPABASE_URL}/rest/v1/recipes?id=eq.${encodeURIComponent(id)}&select=id,title,description,emoji,cuisine,difficulty,prep_time_minutes,cook_time_minutes,servings,image_url&limit=1`;
   const res = await fetch(url, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -153,7 +154,7 @@ export default async function handler(request: Request): Promise<Response> {
   }
 
   const recipeUrl = `${SITE_URL}/recipe/${id}`;
-  const image = `${SITE_URL}/apple-touch-icon.png`;
+  const fallbackImage = `${SITE_URL}/apple-touch-icon.png`;
 
   try {
     const recipe = await fetchRecipe(id);
@@ -162,7 +163,7 @@ export default async function handler(request: Request): Promise<Response> {
         title: "Recipe · Adaptable",
         description: "This recipe may have been removed. Browse more on Adaptable.",
         url: recipeUrl,
-        image,
+        image: fallbackImage,
       });
       return new Response(html, {
         status: 404,
@@ -177,6 +178,7 @@ export default async function handler(request: Request): Promise<Response> {
     const name = recipe.title?.trim() || "Recipe";
     const title = `${emoji} ${name}`;
     const description = buildDescription(recipe);
+    const image = recipe.image_url?.trim() || fallbackImage;
 
     const html = ogHtml({
       title,
@@ -199,7 +201,7 @@ export default async function handler(request: Request): Promise<Response> {
       title: "Adaptable",
       description: "AI recipes that adapt to you.",
       url: recipeUrl,
-      image,
+      image: fallbackImage,
     });
     return new Response(html, {
       status: 200,

@@ -1,12 +1,21 @@
 import Foundation
 
 /// Grocery list state shared across Recipe view, Cookbook planner and the
-/// Groceries tab. Mirrors `src/context/ShoppingContext.tsx`.
+/// Groceries tab. Mirrors `src/context/ShoppingContext.tsx` (merge + offline queue).
 @MainActor
 final class ShoppingStore: ObservableObject {
     @Published private(set) var items: [ShoppingItem] = []
+    @Published private(set) var pendingSync = 0
 
     private var loadedForProfileId: String?
+    private var offlineQueue: [OfflineOp] = []
+    private let queueKey = "adaptable.shopping.offlineQueue.v1"
+
+    private enum OfflineOp: Codable {
+        case toggle(id: String, checked: Bool)
+        case remove(id: String)
+        case clearChecked
+    }
 
     var uncheckedCount: Int { items.filter { !$0.checked }.count }
 
@@ -16,20 +25,61 @@ final class ShoppingStore: ObservableObject {
             loadedForProfileId = nil
             return
         }
-        guard loadedForProfileId != profile.id else { return }
+        loadQueue()
+        guard loadedForProfileId != profile.id else {
+            await flushQueue(userId: profile.id)
+            return
+        }
         loadedForProfileId = profile.id
         items = (try? await API.fetchShoppingItems(userId: profile.id)) ?? []
+        await flushQueue(userId: profile.id)
     }
 
     func addRecipe(_ recipe: Recipe, scaleFactor: Double, userId: String) {
-        let rows = (recipe.ingredients ?? []).map { ing in
-            (recipeId: Optional(recipe.id), recipeTitle: recipe.title ?? "", item: ing.item, quantity: Quantity.scale(ing.quantity, factor: scaleFactor))
+        var existing = Dictionary(
+            uniqueKeysWithValues: items
+                .filter { !$0.checked }
+                .map { (GroceryMerge.normalizeKey($0.item), $0) }
+        )
+
+        var rows: [(recipeId: String?, recipeTitle: String, item: String, quantity: String)] = []
+        for ing in recipe.ingredients ?? [] {
+            let key = GroceryMerge.normalizeKey(ing.item)
+            let qty = Quantity.scale(ing.quantity, factor: scaleFactor)
+            if let hit = existing[key] {
+                items = items.map {
+                    guard $0.id == hit.id else { return $0 }
+                    var copy = $0
+                    copy.quantity = GroceryMerge.mergeQuantities(existing: $0.quantity, incoming: qty)
+                    return copy
+                }
+                // refresh map entry after merge
+                if let updated = items.first(where: { $0.id == hit.id }) {
+                    existing[key] = updated
+                }
+            } else {
+                rows.append((recipe.id, recipe.title ?? "", ing.item, qty))
+            }
         }
+        guard !rows.isEmpty else {
+            Haptics.success()
+            return
+        }
+
         let now = ISO8601DateFormatter().string(from: Date())
         let temp = rows.enumerated().map { i, r in
-            ShoppingItem(id: "tmp-\(Int(Date().timeIntervalSince1970 * 1000))-\(i)", recipe_id: r.recipeId, recipe_title: r.recipeTitle, item: r.item, quantity: r.quantity, checked: false, created_at: now)
+            ShoppingItem(
+                id: "tmp-\(Int(Date().timeIntervalSince1970 * 1000))-\(i)",
+                recipe_id: r.recipeId,
+                recipe_title: r.recipeTitle,
+                item: r.item,
+                quantity: r.quantity,
+                checked: false,
+                created_at: now
+            )
         }
         items = temp + items
+        Haptics.success()
 
         Task {
             do {
@@ -50,8 +100,10 @@ final class ShoppingStore: ObservableObject {
             return i
         }
         Haptics.selection()
-        // Offline: keep optimistic state; sync when back online via next load.
-        guard NetworkMonitor.shared.isOnline else { return }
+        if !NetworkMonitor.shared.isOnline {
+            enqueue(.toggle(id: id, checked: next))
+            return
+        }
         Task {
             do {
                 try await API.setShoppingItemChecked(userId: userId, id: id, checked: next)
@@ -68,6 +120,10 @@ final class ShoppingStore: ObservableObject {
     func remove(_ id: String, userId: String) {
         let removed = items.first { $0.id == id }
         items.removeAll { $0.id == id }
+        if !NetworkMonitor.shared.isOnline {
+            enqueue(.remove(id: id))
+            return
+        }
         Task {
             do {
                 try await API.removeShoppingItem(userId: userId, id: id)
@@ -80,16 +136,68 @@ final class ShoppingStore: ObservableObject {
     func clearChecked(userId: String) {
         let removed = items.filter(\.checked)
         guard !removed.isEmpty else { return }
-        // Optimistic local clear so the list updates immediately.
         items = items.filter { !$0.checked }
+        if !NetworkMonitor.shared.isOnline {
+            enqueue(.clearChecked)
+            return
+        }
         Task {
             do {
                 try await API.clearCheckedShoppingItems(userId: userId)
             } catch {
-                // Restore on failure.
                 items = removed + items
-                print("Failed to clear checked items: \(error)")
             }
+        }
+    }
+
+    // MARK: - Offline queue
+
+    private func enqueue(_ op: OfflineOp) {
+        offlineQueue.append(op)
+        pendingSync = offlineQueue.count
+        persistQueue()
+    }
+
+    private func loadQueue() {
+        guard let data = UserDefaults.standard.data(forKey: queueKey),
+              let ops = try? JSONDecoder().decode([OfflineOp].self, from: data)
+        else {
+            offlineQueue = []
+            pendingSync = 0
+            return
+        }
+        offlineQueue = ops
+        pendingSync = ops.count
+    }
+
+    private func persistQueue() {
+        if let data = try? JSONEncoder().encode(offlineQueue) {
+            UserDefaults.standard.set(data, forKey: queueKey)
+        }
+        pendingSync = offlineQueue.count
+    }
+
+    private func flushQueue(userId: String) async {
+        guard NetworkMonitor.shared.isOnline, !offlineQueue.isEmpty else { return }
+        var remaining: [OfflineOp] = []
+        for op in offlineQueue {
+            do {
+                switch op {
+                case .toggle(let id, let checked):
+                    try await API.setShoppingItemChecked(userId: userId, id: id, checked: checked)
+                case .remove(let id):
+                    try await API.removeShoppingItem(userId: userId, id: id)
+                case .clearChecked:
+                    try await API.clearCheckedShoppingItems(userId: userId)
+                }
+            } catch {
+                remaining.append(op)
+            }
+        }
+        offlineQueue = remaining
+        persistQueue()
+        if remaining.count < pendingSync || remaining.isEmpty {
+            items = (try? await API.fetchShoppingItems(userId: userId)) ?? items
         }
     }
 }

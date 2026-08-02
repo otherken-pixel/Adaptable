@@ -11,14 +11,12 @@ struct ShoppingListView: View {
     @State private var showRemindersDenied = false
 
     private var groups: [(String, [ShoppingItem])] {
-        var byRecipe: [String: [ShoppingItem]] = [:]
-        var order: [String] = []
+        var byAisle: [String: [ShoppingItem]] = [:]
         for item in shoppingStore.items {
-            let key = item.recipe_title.isEmpty ? "Other items" : item.recipe_title
-            if byRecipe[key] == nil { order.append(key) }
-            byRecipe[key, default: []].append(item)
+            let key = GroceryAisle.aisle(for: item.item)
+            byAisle[key, default: []].append(item)
         }
-        return order.map { ($0, byRecipe[$0] ?? []) }
+        return GroceryAisle.sortAisles(Array(byAisle.keys)).map { ($0, byAisle[$0] ?? []) }
     }
 
     var body: some View {
@@ -32,6 +30,15 @@ struct ShoppingListView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 20) {
                         remindersButton
+                        if shoppingStore.pendingSync > 0 || !NetworkMonitor.shared.isOnline {
+                            Text(
+                                NetworkMonitor.shared.isOnline
+                                    ? "\(shoppingStore.pendingSync) change\(shoppingStore.pendingSync == 1 ? "" : "s") syncing…"
+                                    : "Offline — checks will sync when you’re back online."
+                            )
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.muted)
+                        }
                         if let remindersMessage {
                             Text(remindersMessage)
                                 .font(.system(size: 13, weight: .bold))

@@ -15,6 +15,7 @@ import {
   extractAllergies,
   findAllergyViolations,
 } from "../_shared/safety.ts";
+import { generateAndUploadCover } from "../_shared/coverImage.ts";
 
 /** Soft daily cap on imports per user (UTC day). Free but not infinite. */
 const DAILY_IMPORT_LIMIT = 40;
@@ -277,6 +278,32 @@ Deno.serve(async (req) => {
     if (insertError) {
       console.error("Insert error", insertError);
       return json({ error: "Could not save the imported recipe." }, 500);
+    }
+
+    if (row?.id) {
+      try {
+        const imageUrl = await generateAndUploadCover({
+          supabase,
+          geminiKey,
+          userId: user.id,
+          recipeId: row.id,
+          title: row.title ?? recipe.title,
+          description: row.description ?? recipe.description,
+          cuisine: row.cuisine ?? recipe.cuisine,
+          emoji: row.emoji ?? recipe.emoji,
+        });
+        if (imageUrl) {
+          const { data: updated } = await supabase
+            .from("recipes")
+            .update({ image_url: imageUrl })
+            .eq("id", row.id)
+            .select("*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)")
+            .single();
+          if (updated) return json({ recipe: updated }, 200);
+        }
+      } catch (e) {
+        console.error("cover generation skipped", e);
+      }
     }
 
     return json({ recipe: row }, 200);

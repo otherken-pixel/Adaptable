@@ -17,7 +17,6 @@ import {
   Users,
 } from "lucide-react";
 import type { Recipe } from "@/lib/types";
-import { coverGradient } from "@/lib/gradients";
 import { scaleQuantity } from "@/lib/quantity";
 import { localISODate } from "@/lib/format";
 import { addMealPlan } from "@/lib/api";
@@ -27,6 +26,7 @@ import { useShopping } from "@/context/ShoppingContext";
 import { useAuth } from "@/context/AuthContext";
 import VotePill from "./VotePill";
 import SaveButton from "./SaveButton";
+import RecipeCover from "./RecipeCover";
 import { formatList } from "@/lib/locale";
 
 function nextDays(count: number): Array<{ iso: string; label: string }> {
@@ -115,17 +115,15 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
 
   return (
     <div className="animate-fade-up">
-      {/* Hero */}
-      <div
-        className="relative flex h-56 flex-col items-center justify-center rounded-card"
-        style={{ background: coverGradient(recipe.id) }}
-      >
-        <span className="animate-float text-8xl drop-shadow-[0_10px_20px_rgb(0_0_0/0.3)]">
-          {recipe.emoji}
-        </span>
-        <span className="absolute bottom-4 left-4 rounded-full bg-black/35 px-3 py-1 text-xs font-bold tracking-wide text-white backdrop-blur-sm">
-          {recipe.cuisine}
-        </span>
+      <div className="overflow-hidden rounded-card">
+        <RecipeCover
+          recipeId={recipe.id}
+          emoji={recipe.emoji}
+          imageUrl={recipe.image_url}
+          cuisine={recipe.cuisine}
+          heightClass="h-56"
+          emojiClass="text-8xl"
+        />
       </div>
 
       {/* Title block */}
@@ -178,11 +176,16 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
 
       {/* Nutrition per serving */}
       {(recipe.protein_g ?? recipe.carbs_g ?? recipe.fat_g) !== null && (
-        <div className="mt-3 grid grid-cols-4 gap-2 rounded-card border border-line bg-raised p-3">
-          <Macro value={recipe.calories} unit="" label="Calories" />
-          <Macro value={recipe.protein_g} unit="g" label="Protein" />
-          <Macro value={recipe.carbs_g} unit="g" label="Carbs" />
-          <Macro value={recipe.fat_g} unit="g" label="Fat" />
+        <div className="mt-3">
+          <div className="grid grid-cols-4 gap-2 rounded-card border border-line bg-raised p-3">
+            <Macro value={recipe.calories} unit="" label="Calories" />
+            <Macro value={recipe.protein_g} unit="g" label="Protein" />
+            <Macro value={recipe.carbs_g} unit="g" label="Carbs" />
+            <Macro value={recipe.fat_g} unit="g" label="Fat" />
+          </div>
+          <p className="mt-1.5 px-1 text-[11px] font-semibold text-faint">
+            Estimated per serving — not a lab analysis.
+          </p>
         </div>
       )}
 
@@ -198,7 +201,9 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
 
       {!signedIn && (
         <div className="mt-4 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 text-[13px] font-semibold text-accent">
-          You’re viewing a shared recipe.{" "}
+          You’re viewing a shared recipe —{" "}
+          <strong className="font-extrabold">Start Cooking</strong> works without
+          an account.{" "}
           <button
             type="button"
             onClick={() => requireSignIn()}
@@ -206,17 +211,15 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
           >
             Sign in
           </button>{" "}
-          to cook in the app, save, plan meals, and add groceries.
+          to save, plan meals, vote, and add groceries.
         </div>
       )}
 
-      {/* Start cooking + plan */}
+      {/* Start cooking + plan — guests can cook; account needed for social/write. */}
       <div className="mt-4 flex gap-3">
         <button
           onClick={() =>
-            signedIn
-              ? navigate(`/cook/${recipe.id}?servings=${servings}`)
-              : requireSignIn(`/cook/${recipe.id}?servings=${servings}`)
+            navigate(`/cook/${recipe.id}?servings=${servings}`)
           }
           className="pressable flex h-14 flex-1 items-center justify-center gap-2.5 rounded-2xl text-[16px] font-extrabold text-white shadow-lg shadow-accent/25"
           style={{

@@ -228,7 +228,13 @@ struct MainTabView: View {
 
     private func maybeShowOnboarding() {
         guard authStore.profile != nil else { return }
-        guard !UserDefaults.standard.bool(forKey: onboardingKey) else { return }
+        if UserDefaults.standard.bool(forKey: onboardingKey) { return }
+        // Skip wizard when the account already has a taste profile (other device).
+        let prefs = authStore.profile?.preferences
+        if !(prefs?.diets ?? []).isEmpty || !(prefs?.allergies ?? []).isEmpty || (prefs?.household_size ?? 0) > 0 {
+            UserDefaults.standard.set(true, forKey: onboardingKey)
+            return
+        }
         Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             await MainActor.run {

@@ -13,6 +13,7 @@ import {
   extractAllergies,
   findAllergyViolations,
 } from "../_shared/safety.ts";
+import { generateAndUploadCover } from "../_shared/coverImage.ts";
 
 /** Soft daily cap on AI generations per user (UTC day). */
 const DAILY_GENERATE_LIMIT = 25;
@@ -294,6 +295,37 @@ Deno.serve(async (req) => {
         "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)",
       )
       .single();
+
+    if (!insertError && row?.id) {
+      // Best-effort AI dish photo — never block recipe creation.
+      try {
+        const imageUrl = await generateAndUploadCover({
+          supabase,
+          geminiKey,
+          userId: user.id,
+          recipeId: row.id,
+          title: row.title ?? recipe.title,
+          description: row.description ?? recipe.description,
+          cuisine: row.cuisine ?? recipe.cuisine,
+          emoji: row.emoji ?? recipe.emoji,
+        });
+        if (imageUrl) {
+          const { data: updated } = await supabase
+            .from("recipes")
+            .update({ image_url: imageUrl })
+            .eq("id", row.id)
+            .select(
+              "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)",
+            )
+            .single();
+          if (updated) {
+            return json({ recipe: updated }, 200);
+          }
+        }
+      } catch (e) {
+        console.error("cover generation skipped", e);
+      }
+    }
 
     if (insertError) {
       console.error("Insert error", insertError);

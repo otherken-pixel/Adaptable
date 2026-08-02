@@ -209,6 +209,21 @@ export async function reportComment(
     { onConflict: "reporter_id,target_type,target_id" },
   );
   if (error) throw error;
+  // Optional ops webhook (Slack/email) via edge-compatible endpoint if configured.
+  try {
+    await fetch("/api/report-notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "comment",
+        targetId: commentId,
+        reason: clean,
+        reporterId: userId,
+      }),
+    });
+  } catch {
+    /* non-blocking */
+  }
 }
 
 /** Flag a recipe for review. */

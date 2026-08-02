@@ -323,20 +323,36 @@ export default function FeedPage() {
         filteredEmpty &&
         !isForYouEmpty &&
         activeChip.kind === "following" && (
-          <EmptyState
-            emoji="👥"
-            title="No recipes from chefs you follow"
-            body="Follow a chef from any recipe page — their new dishes show up here."
-            action={
-              <button
-                type="button"
-                onClick={() => pickChip({ id: "all", kind: "all", label: "All" })}
-                className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
-              >
-                Browse Hot recipes
-              </button>
-            }
-          />
+          <>
+            <EmptyState
+              emoji="👥"
+              title="No recipes from chefs you follow"
+              body="Follow a chef from any recipe page — their new dishes show up here. Meanwhile, try Editor’s picks:"
+              action={
+                <button
+                  type="button"
+                  onClick={() => pickChip({ id: "all", kind: "all", label: "All" })}
+                  className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+                >
+                  Browse Hot recipes
+                </button>
+              }
+            />
+            {recipes &&
+              recipes.filter((r) => r.featured).slice(0, 3).length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <p className="px-1 text-xs font-bold tracking-wide text-faint uppercase">
+                    Editor’s picks
+                  </p>
+                  {recipes
+                    .filter((r) => r.featured)
+                    .slice(0, 3)
+                    .map((r, i) => (
+                      <RecipeCard key={r.id} recipe={r} index={i} />
+                    ))}
+                </div>
+              )}
+          </>
         )}
 
       {!error &&

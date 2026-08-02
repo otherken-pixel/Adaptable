@@ -55,6 +55,10 @@ export interface Recipe {
   source_prompt: string;
   /** Set when the recipe was imported rather than generated. */
   source_url?: string | null;
+  /** AI-generated dish photo (public URL); null → emoji/gradient fallback. */
+  image_url?: string | null;
+  /** Curated Discover pick for empty Following / social states. */
+  featured?: boolean;
   net_upvotes: number;
   /** Completed Cook Mode sessions — the strongest trending signal. */
   cook_count: number;

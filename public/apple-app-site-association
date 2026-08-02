@@ -8,6 +8,10 @@
           {
             "/": "/recipe/*",
             "comment": "Open shared recipes in the native app"
+          },
+          {
+            "/": "/cook/*",
+            "comment": "Open cook mode deep links"
           }
         ]
       }
