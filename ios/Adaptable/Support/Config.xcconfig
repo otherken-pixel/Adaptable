@@ -12,3 +12,9 @@
 // xcconfig treats `//` as a comment — use `/$()/` to emit a literal slash pair.
 SUPABASE_URL = https:/$()/ypziulvtfsyrwpotlevp.supabase.co
 SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlweml1bHZ0ZnN5cndwb3RsZXZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwNzY4MjYsImV4cCI6MjA5ODY1MjgyNn0.MQ_Cm60vcs46ErhyzBz5WPC69zQLewhS2WmExKjnk5Y
+
+// Public web domain used to build shareable recipe links whose OpenGraph
+// tags render the dish photo in link previews (iMessage, WhatsApp, …).
+// Set this to your deployed web origin, e.g. https:/$()/adaptable.app
+// Leave blank to fall back to sharing plain text (no link preview).
+SHARE_BASE_URL =

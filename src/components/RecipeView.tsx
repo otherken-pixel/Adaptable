@@ -68,10 +68,14 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
     });
 
   const share = async () => {
+    // Share the recipe URL so the link preview (iMessage, WhatsApp, Slack…)
+    // renders the dish photo via the page's OpenGraph tags, instead of just
+    // pasting plain text.
+    const url = `${window.location.origin}/recipe/${recipe.id}`;
     const text = `${recipe.emoji} ${recipe.title} — made with Adaptable`;
     try {
-      if (navigator.share) await navigator.share({ title: recipe.title, text });
-      else await navigator.clipboard.writeText(text);
+      if (navigator.share) await navigator.share({ title: recipe.title, text, url });
+      else await navigator.clipboard.writeText(`${text}\n${url}`);
     } catch {
       /* user dismissed the share sheet */
     }
@@ -86,14 +90,23 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
 
   return (
     <div className="animate-fade-up">
-      {/* Hero */}
+      {/* Hero — dish photo when available, emoji-on-gradient otherwise */}
       <div
-        className="relative flex h-56 flex-col items-center justify-center rounded-card"
+        className="relative flex h-56 flex-col items-center justify-center overflow-hidden rounded-card"
         style={{ background: coverGradient(recipe.id) }}
       >
-        <span className="animate-float text-8xl drop-shadow-[0_10px_20px_rgb(0_0_0/0.3)]">
-          {recipe.emoji}
-        </span>
+        {recipe.image_url ? (
+          <img
+            src={recipe.image_url}
+            alt={recipe.title}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <span className="animate-float text-8xl drop-shadow-[0_10px_20px_rgb(0_0_0/0.3)]">
+            {recipe.emoji}
+          </span>
+        )}
         <span className="absolute bottom-4 left-4 rounded-full bg-black/35 px-3 py-1 text-xs font-bold tracking-wide text-white backdrop-blur-sm">
           {recipe.cuisine}
         </span>

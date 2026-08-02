@@ -20,14 +20,23 @@ export default function RecipeCard({
       className="animate-fade-up block overflow-hidden rounded-card border border-line bg-raised shadow-[0_2px_16px_rgb(0_0_0/0.05)]"
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
-      {/* Cover */}
+      {/* Cover — dish photo when available, emoji-on-gradient otherwise */}
       <div
-        className="relative flex h-44 items-center justify-center"
+        className="relative flex h-44 items-center justify-center overflow-hidden"
         style={{ background: coverGradient(recipe.id) }}
       >
-        <span className="animate-float text-7xl drop-shadow-[0_8px_16px_rgb(0_0_0/0.25)]">
-          {recipe.emoji}
-        </span>
+        {recipe.image_url ? (
+          <img
+            src={recipe.image_url}
+            alt={recipe.title}
+            className="absolute inset-0 h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <span className="animate-float text-7xl drop-shadow-[0_8px_16px_rgb(0_0_0/0.25)]">
+            {recipe.emoji}
+          </span>
+        )}
         <div className="absolute top-3 right-3">
           <SaveButton recipeId={recipe.id} />
         </div>

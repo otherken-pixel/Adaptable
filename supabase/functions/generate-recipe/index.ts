@@ -8,6 +8,7 @@
 //   supabase secrets set GEMINI_API_KEY=...
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { attachHeroImage } from "../_shared/heroImage.ts";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -266,6 +267,11 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Generate the dish photo in the background so the recipe returns
+    // immediately — the emoji hero shows until the image lands. Best-effort:
+    // never blocks or fails the request.
+    runInBackground(attachHeroImage(supabase, geminiKey, row));
+
     return json({ recipe: row }, 200);
   } catch (err) {
     console.error("Unhandled error", err);
@@ -285,6 +291,20 @@ function json(body: unknown, status: number): Response {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+/**
+ * Keeps a fire-and-forget task alive past the response when the runtime
+ * supports it (Supabase Edge), otherwise just lets it run detached. Any
+ * rejection is swallowed — background work must never surface to the user.
+ */
+function runInBackground(task: Promise<unknown>): void {
+  const p = Promise.resolve(task).catch((err) =>
+    console.error("Background task failed", err)
+  );
+  // deno-lint-ignore no-explicit-any
+  const edge = (globalThis as any).EdgeRuntime;
+  if (edge?.waitUntil) edge.waitUntil(p);
 }
 
 /**

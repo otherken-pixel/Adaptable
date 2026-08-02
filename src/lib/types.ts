@@ -40,6 +40,8 @@ export interface Recipe {
   title: string;
   description: string;
   emoji: string;
+  /** AI-generated dish photo (16:9). Null until generated; UI falls back to the emoji hero. */
+  image_url?: string | null;
   cuisine: string;
   difficulty: Difficulty;
   prep_time_minutes: number;
