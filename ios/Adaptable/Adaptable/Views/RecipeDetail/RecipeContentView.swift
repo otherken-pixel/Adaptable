@@ -16,6 +16,7 @@ struct RecipeContentView: View {
     @State private var planOpen = false
     @State private var planned: String?
     @State private var shareItem: ShareItem?
+    @State private var shareBusy = false
 
     init(recipe: Recipe) {
         self.recipe = recipe
@@ -46,32 +47,21 @@ struct RecipeContentView: View {
         }
         .sheet(isPresented: $planOpen) { dayPickerSheet }
         .sheet(item: $shareItem) { item in
-            ShareSheet(items: item.url.map { [item.text, $0] } ?? [item.text])
+            ShareSheet(items: item.activityItems)
         }
     }
 
     // MARK: - Hero
 
     private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            Gradients.cover(for: recipe.id).frame(height: 224)
-            if let image = recipe.image_url, let url = URL(string: image) {
-                AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: {
-                    Text(recipe.emoji ?? "").font(.system(size: 96)).floating
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-            } else {
-                Text(recipe.emoji ?? "").font(.system(size: 96)).frame(maxWidth: .infinity).floating
-            }
-            Text(recipe.cuisine ?? "")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(.black.opacity(0.35), in: Capsule())
-                .padding(16)
-        }
-        .frame(height: 224)
+        RecipeCoverView(
+            recipeId: recipe.id,
+            emoji: recipe.emoji,
+            imageUrl: recipe.image_url,
+            cuisine: recipe.cuisine,
+            height: 224,
+            emojiSize: 96
+        )
         .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
     }
 
@@ -135,18 +125,24 @@ struct RecipeContentView: View {
     }
 
     private var macroBand: some View {
-        HStack {
-            MacroColumn(value: recipe.calories, unit: "", label: "Calories")
-            Spacer()
-            MacroColumn(value: recipe.protein_g, unit: "g", label: "Protein")
-            Spacer()
-            MacroColumn(value: recipe.carbs_g, unit: "g", label: "Carbs")
-            Spacer()
-            MacroColumn(value: recipe.fat_g, unit: "g", label: "Fat")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                MacroColumn(value: recipe.calories, unit: "", label: "Calories")
+                Spacer()
+                MacroColumn(value: recipe.protein_g, unit: "g", label: "Protein")
+                Spacer()
+                MacroColumn(value: recipe.carbs_g, unit: "g", label: "Carbs")
+                Spacer()
+                MacroColumn(value: recipe.fat_g, unit: "g", label: "Fat")
+            }
+            .padding(14)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
+            Text("Estimated per serving — not a lab analysis.")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.faint)
+                .padding(.horizontal, 4)
         }
-        .padding(14)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
     }
 
     // MARK: - Start cooking + plan
@@ -355,21 +351,39 @@ struct RecipeContentView: View {
             VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
             SaveButtonView(recipeId: recipe.id, variant: .bar)
             Button {
-                // Include the recipe URL when a web domain is configured so the
-                // link preview shows the dish photo (via the page's OG tags).
-                shareItem = ShareItem(
-                    text: "\(recipe.emoji ?? "") \(recipe.title ?? "") — made with Adaptable",
-                    url: SupabaseManager.recipeShareURL(id: recipe.id)
-                )
+                Task { await presentShare() }
             } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .frame(width: 48, height: 48)
-                    .foregroundStyle(Theme.muted)
-                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+                Group {
+                    if shareBusy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+                .frame(width: 48, height: 48)
+                .foregroundStyle(Theme.muted)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
             }
             .buttonStyle(.pressable)
+            .disabled(shareBusy)
+            .accessibilityLabel("Share recipe")
         }
+    }
+
+    private func presentShare() async {
+        guard !shareBusy else { return }
+        shareBusy = true
+        defer { shareBusy = false }
+        let payload = RecipeShare.build(recipe: recipe, servings: servings)
+        // Prefer AI dish photo on the share card; falls back to emoji gradient.
+        let card = await RecipeShare.cardImage(recipe: recipe, servings: servings)
+        Haptics.light()
+        shareItem = ShareItem(
+            text: payload.text,
+            url: payload.url,
+            image: card
+        )
     }
 
     private var remixButton: some View {
@@ -404,7 +418,7 @@ private struct MacroColumn: View {
     let value: Int?; let unit: String; let label: String
     var body: some View {
         VStack(spacing: 3) {
-            Text(value != nil ? "\(value!)\(unit)" : "—").font(.system(size: 15, weight: .heavy)).monospacedDigit()
+            Text(value.map { "\($0)\(unit)" } ?? "—").font(.system(size: 15, weight: .heavy)).monospacedDigit()
             Text(label.uppercased()).font(.system(size: 9, weight: .bold)).foregroundStyle(Theme.faint)
         }
     }
@@ -413,13 +427,38 @@ private struct MacroColumn: View {
 struct ShareItem: Identifiable {
     let id = UUID()
     let text: String
-    var url: URL? = nil
+    let url: URL?
+    let image: UIImage?
+
+    init(text: String, url: URL? = nil, image: UIImage? = nil) {
+        self.text = text
+        self.url = url
+        self.image = image
+    }
+
+    /// Prefer image + text for iMessage; URL is already embedded in the body
+    /// for rich previews and Universal Links when the link unfurls.
+    var activityItems: [Any] {
+        var items: [Any] = []
+        if let image { items.append(image) }
+        items.append(text)
+        // Avoid duplicating the URL as a separate item when it's already in the
+        // body — Messages then shows a clean bubble with image + full recipe.
+        // Still pass URL alone when text is empty (defensive).
+        if text.isEmpty, let url { items.append(url) }
+        return items
+    }
 }
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        vc.excludedActivityTypes = [
+            .addToReadingList,
+            .assignToContact,
+        ]
+        return vc
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

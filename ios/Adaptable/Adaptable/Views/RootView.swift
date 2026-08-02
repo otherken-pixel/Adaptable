@@ -5,14 +5,18 @@ struct RootView: View {
     @EnvironmentObject private var engagementStore: EngagementStore
     @EnvironmentObject private var shoppingStore: ShoppingStore
     @EnvironmentObject private var notificationsStore: NotificationsStore
+    @EnvironmentObject private var network: NetworkMonitor
     @Binding var showResetPassword: Bool
 
     var body: some View {
         Group {
             if authStore.loading {
                 SplashView()
-            } else if authStore.profile == nil {
+            } else if authStore.profile == nil && !authStore.hasSession {
                 AuthView()
+            } else if authStore.profile == nil, authStore.hasSession {
+                // Soft-fail: session exists but profile fetch failed.
+                ProfileLoadErrorView()
             } else {
                 MainTabView()
             }
@@ -26,8 +30,96 @@ struct RootView: View {
             await notificationsStore.start(for: authStore.profile)
             PushManager.shared.setCurrentUser(authStore.profile?.id)
         }
+        .overlay(alignment: .top) {
+            if !network.isOnline {
+                OfflineBanner()
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: network.isOnline)
+        .overlay(alignment: .bottom) {
+            if let message = engagementStore.lastActionError {
+                ActionToast(message: message) {
+                    engagementStore.lastActionError = nil
+                }
+                .padding(.bottom, 88)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: message) {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if engagementStore.lastActionError == message {
+                        engagementStore.lastActionError = nil
+                    }
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.2), value: engagementStore.lastActionError)
     }
 }
+
+private struct OfflineBanner: View {
+    var body: some View {
+        Text("You're offline — some actions are paused")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Theme.content.opacity(0.92), in: Capsule())
+            .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+    }
+}
+
+private struct ActionToast: View {
+    let message: String
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(message)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.leading)
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Theme.down.opacity(0.95), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 20)
+    }
+}
+
+private struct ProfileLoadErrorView: View {
+    @EnvironmentObject private var authStore: AuthStore
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("📡").font(.system(size: 48))
+            Text("Couldn't load your kitchen")
+                .font(.system(size: 20, weight: .heavy))
+            Text(authStore.profileLoadError ?? "Check your connection and try again.")
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.muted)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 280)
+            PillButton(title: "Retry") {
+                Task { await authStore.retryProfileLoad() }
+            }
+            Button("Sign out") {
+                Task { await authStore.signOut() }
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(Theme.muted)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.surface.ignoresSafeArea())
+    }
+}
+
+
 
 struct SplashView: View {
     var body: some View {
@@ -53,6 +145,7 @@ struct MainTabView: View {
     @State private var createPath = NavigationPath()
     @State private var groceriesPath = NavigationPath()
     @State private var profilePath = NavigationPath()
+    @State private var showOnboarding = false
 
     var body: some View {
         TabView(selection: $deepLinks.activeTab) {
@@ -93,10 +186,62 @@ struct MainTabView: View {
             .tag(AppTab.profile)
         }
         .tint(Theme.accent)
+        // Consume deep links that arrived before this tab shell mounted
+        // (e.g. Universal Link while signed out, then auth completes).
+        .task { consumePendingRecipeIfNeeded() }
         .onChange(of: deepLinks.pendingRecipeId) { _, id in
-            guard let id else { return }
-            discoverPath.append(Route.recipe(id: id))
-            deepLinks.pendingRecipeId = nil
+            guard id != nil else { return }
+            consumePendingRecipeIfNeeded()
+        }
+        .onChange(of: deepLinks.activeTab) { _, tab in
+            // Returning to Discover after Create should pick up new recipes.
+            if tab == .discover {
+                deepLinks.requestFeedRefresh()
+            }
+        }
+        .onChange(of: authStore.profile?.id) { _, _ in
+            // After sign-in, open any recipe that was pending from a shared link.
+            consumePendingRecipeIfNeeded()
+            maybeShowOnboarding()
+        }
+        .task {
+            maybeShowOnboarding()
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView {
+                showOnboarding = false
+            }
+            .environmentObject(authStore)
+            .environmentObject(deepLinks)
+        }
+    }
+
+    private let onboardingKey = "adaptable.onboarding.v1.done"
+
+    private func consumePendingRecipeIfNeeded() {
+        guard let id = deepLinks.pendingRecipeId else { return }
+        deepLinks.activeTab = .discover
+        // Avoid stacking duplicate pushes of the same recipe.
+        discoverPath.append(Route.recipe(id: id))
+        deepLinks.pendingRecipeId = nil
+    }
+
+    private func maybeShowOnboarding() {
+        guard authStore.profile != nil else { return }
+        if UserDefaults.standard.bool(forKey: onboardingKey) { return }
+        // Skip wizard when the account already has a taste profile (other device).
+        let prefs = authStore.profile?.preferences
+        if !(prefs?.diets ?? []).isEmpty || !(prefs?.allergies ?? []).isEmpty || (prefs?.household_size ?? 0) > 0 {
+            UserDefaults.standard.set(true, forKey: onboardingKey)
+            return
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            await MainActor.run {
+                if !UserDefaults.standard.bool(forKey: onboardingKey) {
+                    showOnboarding = true
+                }
+            }
         }
     }
 

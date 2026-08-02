@@ -21,8 +21,6 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
-	<key>SHARE_BASE_URL</key>
-	<string>$(SHARE_BASE_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
@@ -46,6 +44,10 @@
 	<string>Cook Mode listens for voice commands like "next" and "start timer" so your hands can stay on the food.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Cook Mode uses speech recognition to understand voice commands like "next", "back" and "start timer".</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Adaptable can add your grocery list to Apple Reminders so you can check items off while shopping.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Adaptable can add your grocery list to Apple Reminders so you can check items off while shopping.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UILaunchScreen</key>

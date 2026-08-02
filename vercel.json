@@ -1,16 +1,25 @@
 {
-  "rewrites": [
+  "headers": [
     {
-      "source": "/recipe/:id",
-      "has": [
-        {
-          "type": "header",
-          "key": "user-agent",
-          "value": ".*(facebookexternalhit|Facebot|Twitterbot|Slackbot|Slack-ImgProxy|WhatsApp|LinkedInBot|Discordbot|TelegramBot|Applebot|Googlebot|bingbot|Pinterest|redditbot|SkypeUriPreview|vkShare|Iframely|Embedly).*"
-        }
-      ],
-      "destination": "/api/recipe-meta?id=:id"
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
     },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/apple-app-site-association",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    {
+      "source": "/((?!api/|\\.well-known/).*)",
+      "destination": "/index.html"
+    }
   ]
 }

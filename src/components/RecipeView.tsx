@@ -17,14 +17,17 @@ import {
   Users,
 } from "lucide-react";
 import type { Recipe } from "@/lib/types";
-import { coverGradient } from "@/lib/gradients";
 import { scaleQuantity } from "@/lib/quantity";
 import { localISODate } from "@/lib/format";
 import { addMealPlan } from "@/lib/api";
+import { shareRecipe } from "@/lib/shareRecipe";
+import { recipeMayContainAllergens } from "@/lib/allergy";
 import { useShopping } from "@/context/ShoppingContext";
 import { useAuth } from "@/context/AuthContext";
 import VotePill from "./VotePill";
 import SaveButton from "./SaveButton";
+import RecipeCover from "./RecipeCover";
+import { formatList } from "@/lib/locale";
 
 function nextDays(count: number): Array<{ iso: string; label: string }> {
   const fmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
@@ -43,14 +46,23 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
   const navigate = useNavigate();
   const { addRecipe } = useShopping();
   const { profile } = useAuth();
+  const signedIn = !!profile;
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [servings, setServings] = useState(recipe.servings);
   const [addedToList, setAddedToList] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [planned, setPlanned] = useState<string | null>(null);
 
+  const requireSignIn = (nextPath?: string) => {
+    const next = nextPath ?? `/recipe/${recipe.id}`;
+    navigate(`/auth?next=${encodeURIComponent(next)}`);
+  };
+
   const planFor = (iso: string, label: string) => {
-    if (!profile) return;
+    if (!profile) {
+      requireSignIn();
+      return;
+    }
     addMealPlan(profile.id, recipe.id, iso, servings).catch(() => {});
     setPlanOpen(false);
     setPlanned(label);
@@ -58,6 +70,10 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
   };
 
   const factor = servings / recipe.servings;
+  const allergyHits = recipeMayContainAllergens(
+    recipe,
+    profile?.preferences?.allergies,
+  );
 
   const toggle = (i: number) =>
     setChecked((prev) => {
@@ -68,20 +84,19 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
     });
 
   const share = async () => {
-    // Share the recipe URL so the link preview (iMessage, WhatsApp, Slack…)
-    // renders the dish photo via the page's OpenGraph tags, instead of just
-    // pasting plain text.
-    const url = `${window.location.origin}/recipe/${recipe.id}`;
-    const text = `${recipe.emoji} ${recipe.title} — made with Adaptable`;
     try {
-      if (navigator.share) await navigator.share({ title: recipe.title, text, url });
-      else await navigator.clipboard.writeText(`${text}\n${url}`);
+      // Includes dish photo as a file when the browser supports it (iOS Messages).
+      await shareRecipe(recipe, servings);
     } catch {
       /* user dismissed the share sheet */
     }
   };
 
   const addToGroceries = () => {
+    if (!signedIn) {
+      requireSignIn();
+      return;
+    }
     if (addedToList) return;
     addRecipe(recipe, factor);
     setAddedToList(true);
@@ -90,26 +105,15 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
 
   return (
     <div className="animate-fade-up">
-      {/* Hero — dish photo when available, emoji-on-gradient otherwise */}
-      <div
-        className="relative flex h-56 flex-col items-center justify-center overflow-hidden rounded-card"
-        style={{ background: coverGradient(recipe.id) }}
-      >
-        {recipe.image_url ? (
-          <img
-            src={recipe.image_url}
-            alt={recipe.title}
-            className="absolute inset-0 h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : (
-          <span className="animate-float text-8xl drop-shadow-[0_10px_20px_rgb(0_0_0/0.3)]">
-            {recipe.emoji}
-          </span>
-        )}
-        <span className="absolute bottom-4 left-4 rounded-full bg-black/35 px-3 py-1 text-xs font-bold tracking-wide text-white backdrop-blur-sm">
-          {recipe.cuisine}
-        </span>
+      <div className="overflow-hidden rounded-card">
+        <RecipeCover
+          recipeId={recipe.id}
+          emoji={recipe.emoji}
+          imageUrl={recipe.image_url}
+          cuisine={recipe.cuisine}
+          heightClass="h-56"
+          emojiClass="text-8xl"
+        />
       </div>
 
       {/* Title block */}
@@ -162,18 +166,51 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
 
       {/* Nutrition per serving */}
       {(recipe.protein_g ?? recipe.carbs_g ?? recipe.fat_g) !== null && (
-        <div className="mt-3 grid grid-cols-4 gap-2 rounded-card border border-line bg-raised p-3">
-          <Macro value={recipe.calories} unit="" label="Calories" />
-          <Macro value={recipe.protein_g} unit="g" label="Protein" />
-          <Macro value={recipe.carbs_g} unit="g" label="Carbs" />
-          <Macro value={recipe.fat_g} unit="g" label="Fat" />
+        <div className="mt-3">
+          <div className="grid grid-cols-4 gap-2 rounded-card border border-line bg-raised p-3">
+            <Macro value={recipe.calories} unit="" label="Calories" />
+            <Macro value={recipe.protein_g} unit="g" label="Protein" />
+            <Macro value={recipe.carbs_g} unit="g" label="Carbs" />
+            <Macro value={recipe.fat_g} unit="g" label="Fat" />
+          </div>
+          <p className="mt-1.5 px-1 text-[11px] font-semibold text-faint">
+            Estimated per serving — not a lab analysis.
+          </p>
         </div>
       )}
 
-      {/* Start cooking + plan */}
+      {allergyHits.length > 0 && (
+        <div
+          className="mt-4 rounded-2xl border border-down/30 bg-down/10 px-4 py-3 text-[13px] font-semibold text-down"
+          role="alert"
+        >
+          Possible match to your allergies: {formatList(allergyHits)}. Double-check
+          every ingredient before cooking.
+        </div>
+      )}
+
+      {!signedIn && (
+        <div className="mt-4 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 text-[13px] font-semibold text-accent">
+          You’re viewing a shared recipe —{" "}
+          <strong className="font-extrabold">Start Cooking</strong> works without
+          an account.{" "}
+          <button
+            type="button"
+            onClick={() => requireSignIn()}
+            className="underline underline-offset-2"
+          >
+            Sign in
+          </button>{" "}
+          to save, plan meals, vote, and add groceries.
+        </div>
+      )}
+
+      {/* Start cooking + plan — guests can cook; account needed for social/write. */}
       <div className="mt-4 flex gap-3">
         <button
-          onClick={() => navigate(`/cook/${recipe.id}?servings=${servings}`)}
+          onClick={() =>
+            navigate(`/cook/${recipe.id}?servings=${servings}`)
+          }
           className="pressable flex h-14 flex-1 items-center justify-center gap-2.5 rounded-2xl text-[16px] font-extrabold text-white shadow-lg shadow-accent/25"
           style={{
             background:
@@ -185,7 +222,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
         </button>
         <button
           aria-label="Add to meal plan"
-          onClick={() => setPlanOpen(true)}
+          onClick={() => (signedIn ? setPlanOpen(true) : requireSignIn())}
           className={`pressable flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border transition-colors ${
             planned ? "border-accent bg-accent-soft text-accent" : "border-line bg-raised text-muted"
           }`}

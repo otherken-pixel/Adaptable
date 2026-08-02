@@ -87,8 +87,6 @@ struct Recipe: Codable, Equatable, Identifiable {
     var title: String?
     var description: String?
     var emoji: String?
-    /// AI-generated dish photo (16:9). Nil until generated; UI falls back to the emoji hero.
-    var image_url: String?
     var cuisine: String?
     var difficulty: Difficulty?
     var prep_time_minutes: Int?
@@ -103,6 +101,9 @@ struct Recipe: Codable, Equatable, Identifiable {
     var steps: [RecipeStep]?
     var source_prompt: String?
     var source_url: String?
+    /// AI-generated dish photo URL; nil falls back to emoji gradient.
+    var image_url: String?
+    var featured: Bool?
     var net_upvotes: Int?
     var cook_count: Int?
     var comment_count: Int?
@@ -202,11 +203,39 @@ struct ImportSource {
 
 // MARK: - App-level errors
 
-struct AppError: LocalizedError {
+struct AppError: LocalizedError, Equatable {
+    enum ErrorKind: Equatable {
+        case noNetwork
+        case unauthorized
+        case serverDown
+        case requestFailed(String)
+        case generic
+    }
+
+    let kind: ErrorKind
     let message: String
     var errorDescription: String? { message }
 
-    init(_ message: String) { self.message = message }
+    init(_ kind: ErrorKind, message: String = "") {
+        self.kind = kind
+        if !message.isEmpty {
+            self.message = message
+        } else {
+            switch kind {
+            case .noNetwork: self.message = "You're offline — check your connection."
+            case .unauthorized: self.message = "Please sign in again."
+            case .serverDown: self.message = "Server is unavailable — try again shortly."
+            case .requestFailed(let detail): self.message = detail
+            case .generic: self.message = "Something went wrong."
+            }
+        }
+    }
+
+    /// Convenience for call sites that only have user-facing copy.
+    init(_ message: String) {
+        self.kind = .generic
+        self.message = message
+    }
 
     /// Maps a caught error to text safe to show a user. `AppError` carries
     /// copy we deliberately wrote (e.g. edge function messages), so it
@@ -219,5 +248,13 @@ struct AppError: LocalizedError {
             return appError.message
         }
         return "Something went wrong — please check your connection and try again."
+    }
+
+    /// Helper to determine if an error is likely retryable (e.g., network timeout)
+    var isRetryable: Bool {
+        switch kind {
+        case .noNetwork, .serverDown: return true
+        default: return false
+        }
     }
 }

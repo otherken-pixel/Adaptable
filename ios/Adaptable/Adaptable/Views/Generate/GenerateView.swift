@@ -95,7 +95,8 @@ struct GenerateView: View {
         .onChange(of: photosPickerItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                if let raw = try? await item.loadTransferable(type: Data.self),
+                   let data = ImageCompressor.jpegData(from: raw) {
                     await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import")
                 }
             }
@@ -103,7 +104,7 @@ struct GenerateView: View {
         .fullScreenCover(isPresented: $showCameraPicker) {
             CameraPicker { image in
                 showCameraPicker = false
-                if let data = image.jpegData(compressionQuality: 0.8) {
+                if let data = ImageCompressor.jpegData(from: image) {
                     Task { await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import") }
                 }
             }
@@ -469,8 +470,13 @@ struct GenerateView: View {
     private func submit(_ text: String? = nil) async {
         let p = (text ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !p.isEmpty, phase != .loading else { return }
-        guard let _ = authStore.profile else {
+        guard authStore.profile != nil else {
             errorMessage = "You need to be logged in to generate recipes."
+            phase = .error
+            return
+        }
+        if !NetworkMonitor.shared.isOnline {
+            errorMessage = "You're offline — connect to generate a recipe."
             phase = .error
             return
         }
@@ -487,6 +493,7 @@ struct GenerateView: View {
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result
             phase = .done
+            deepLinks.requestFeedRefresh()
         } catch {
             print("[GenerateView] Failed to generate recipe: \(error)")
             errorMessage = AppError.friendlyMessage(for: error)
@@ -496,6 +503,11 @@ struct GenerateView: View {
 
     private func runImport(_ source: ImportSource, label: String) async {
         guard phase != .loading else { return }
+        if !NetworkMonitor.shared.isOnline {
+            errorMessage = "You're offline — connect to import a recipe."
+            phase = .error
+            return
+        }
         lastImportSource = source
         prompt = label
         phase = .loading
@@ -505,6 +517,7 @@ struct GenerateView: View {
             recipe = result
             phase = .done
             importUrl = ""; importText = ""
+            deepLinks.requestFeedRefresh()
         } catch {
             print("[GenerateView] Failed to import recipe: \(error)")
             errorMessage = AppError.friendlyMessage(for: error)

@@ -3,12 +3,12 @@ import Speech
 import AVFoundation
 
 /// Hands-free Cook Mode voice commands ("next", "back", "ingredients",
-/// "start timer"). Mirrors the SpeechRecognition usage in
-/// `src/pages/CookModePage.tsx`.
+/// "start timer"). Mirrors SpeechRecognition usage on the web Cook Mode page.
 @MainActor
 final class VoiceCommandListener: ObservableObject {
     @Published private(set) var isListening = false
-    @Published private(set) var lastError = false
+    /// User-facing status when mic/speech is unavailable or denied.
+    @Published private(set) var statusMessage: String?
 
     var onNext: (() -> Void)?
     var onBack: (() -> Void)?
@@ -20,56 +20,99 @@ final class VoiceCommandListener: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    private var lastHandled = ""
+    private var lastHandledAt = Date.distantPast
 
     func start() {
         guard !isListening else { return }
+        statusMessage = nil
+
         SFSpeechRecognizer.requestAuthorization { [weak self] status in
             Task { @MainActor in
                 guard let self else { return }
-                guard status == .authorized else {
-                    self.lastError = true
-                    return
+                switch status {
+                case .authorized:
+                    self.beginSession()
+                case .denied, .restricted:
+                    self.statusMessage = "Speech recognition is off — enable it in Settings → Adaptable."
+                case .notDetermined:
+                    self.statusMessage = "Speech permission is required for voice commands."
+                @unknown default:
+                    self.statusMessage = "Speech recognition isn't available right now."
                 }
-                self.beginSession()
             }
         }
     }
 
     private func beginSession() {
-        guard let recognizer, recognizer.isAvailable else { lastError = true; return }
-        // NOTE: The audio session category must already be configured by
-         // CookModeManager.startCookMode() before this method is called.
-        // We activate the session (required for mic input) without changing
-        // the category — leaving .playAndRecord with .mixWithOthers intact
-         // so background music keeps playing at reduced volume.
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-         } catch {
-            print("Failed to activate audio session for voice recognition: \(error)")
-            lastError = true
+        guard let recognizer, recognizer.isAvailable else {
+            statusMessage = "Speech recognition isn't available on this device."
             return
-          }
+        }
+
+        // Ensure playAndRecord is active even if CookModeManager was missed.
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.allowBluetoothHFP, .defaultToSpeaker, .mixWithOthers]
+            )
+            try session.setActive(true, options: [])
+        } catch {
+            print("[VoiceCommandListener] Audio session failed: \(error)")
+            statusMessage = "Couldn't access the microphone."
+            return
+        }
+
+        // Mic permission (separate from speech recognition).
+        switch AVAudioApplication.shared.recordPermission {
+        case .denied:
+            statusMessage = "Microphone access is off — enable it in Settings → Adaptable."
+            return
+        case .undetermined:
+            AVAudioApplication.requestRecordPermission { [weak self] granted in
+                Task { @MainActor in
+                    if granted {
+                        self?.beginSession()
+                    } else {
+                        self?.statusMessage = "Microphone access is off — enable it in Settings → Adaptable."
+                    }
+                }
+            }
+            return
+        case .granted:
+            break
+        @unknown default:
+            break
+        }
 
         let req = SFSpeechAudioBufferRecognitionRequest()
-        req.shouldReportPartialResults = false
+        req.shouldReportPartialResults = true
+        req.requiresOnDeviceRecognition = false
         request = req
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            statusMessage = "No microphone input available."
+            return
+        }
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             self?.request?.append(buffer)
         }
+
         audioEngine.prepare()
         do {
             try audioEngine.start()
         } catch {
-            lastError = true
+            statusMessage = "Couldn't start listening."
             return
         }
 
         isListening = true
+        statusMessage = nil
         task = recognizer.recognitionTask(with: req) { [weak self] result, error in
             guard let self else { return }
             if let result {
@@ -85,17 +128,34 @@ final class VoiceCommandListener: ObservableObject {
     }
 
     private func handle(_ heard: String) {
-        if heard.contains("next") || heard.contains("continue") || heard.contains("done") || heard.contains("forward") {
-            onNext?()
-        } else if heard.contains("back") || heard.contains("previous") {
-            onBack?()
+        // Debounce: ignore repeats of the same phrase within 1.2s so partial
+        // results don't fire "next" three times while the user is speaking.
+        let now = Date()
+        if heard == lastHandled, now.timeIntervalSince(lastHandledAt) < 1.2 { return }
+
+        let triggered: Bool
+        if matches(heard, anyOf: ["next", "continue", "done", "forward"]) {
+            onNext?(); triggered = true
+        } else if matches(heard, anyOf: ["back", "previous"]) {
+            onBack?(); triggered = true
         } else if heard.contains("ingredient") {
-            onShowIngredients?()
-        } else if heard.contains("close") || heard.contains("hide") {
-            onHideIngredients?()
+            onShowIngredients?(); triggered = true
+        } else if matches(heard, anyOf: ["close", "hide"]) {
+            onHideIngredients?(); triggered = true
         } else if heard.contains("timer") {
-            onStartTimer?()
+            onStartTimer?(); triggered = true
+        } else {
+            triggered = false
         }
+
+        if triggered {
+            lastHandled = heard
+            lastHandledAt = now
+        }
+    }
+
+    private func matches(_ heard: String, anyOf words: [String]) -> Bool {
+        words.contains { heard.contains($0) }
     }
 
     private func restart() {
@@ -109,13 +169,17 @@ final class VoiceCommandListener: ObservableObject {
 
     private func stop(deactivateSession: Bool) {
         isListening = false
-        audioEngine.stop()
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
         audioEngine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
         task?.cancel()
         task = nil
         request = nil
         if deactivateSession {
+            // CookModeManager owns full teardown when leaving Cook Mode;
+            // only deactivate if voice is toggled off mid-session.
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
     }

@@ -24,6 +24,11 @@ struct ActivityView: View {
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
+        .refreshable {
+            if let userId = authStore.profile?.id {
+                await notificationsStore.refresh(userId: userId)
+            }
+        }
         .onAppear {
             guard notificationsStore.unreadCount > 0, let userId = authStore.profile?.id else { return }
             Task {
@@ -86,31 +91,40 @@ private struct NotificationRow: View {
     }
 
     var body: some View {
-        NavigationLink(value: notification.recipe_id.map { Route.recipe(id: $0) }) {
-            HStack(spacing: 12) {
-                ZStack(alignment: .bottomTrailing) {
-                    AuthorAvatar(username: notification.actor?.username ?? notification.actor_id ?? "?", size: 44)
-                    Circle().fill(badgeColor.opacity(0.15)).frame(width: 20, height: 20)
-                        .overlay(Circle().stroke(Theme.raised, lineWidth: 2))
-                        .overlay(Image(systemName: icon).font(.system(size: 10, weight: .bold)).foregroundStyle(badgeColor))
+        Group {
+            if let recipeId = notification.recipe_id {
+                NavigationLink(value: Route.recipe(id: recipeId)) {
+                    rowContent
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    (Text(notification.actor?.username ?? "Someone").fontWeight(.bold)
-                     + Text(" \(verb) ").foregroundColor(Theme.muted)
-                     + Text(notification.recipe.map { "\($0.emoji) \($0.title)" } ?? "your recipe").fontWeight(.semibold))
-                        .font(.system(size: 14))
-                    Text(Format.timeAgo(notification.created_at)).font(.system(size: 12)).foregroundStyle(Theme.faint)
-                }
-                Spacer()
-                if !notification.read {
-                    Circle().fill(Theme.accent).frame(width: 10, height: 10)
-                }
+                .buttonStyle(.plain)
+            } else {
+                rowContent
             }
-            .padding(14)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
         }
-        .buttonStyle(.plain)
-        .disabled(notification.recipe_id == nil)
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 12) {
+            ZStack(alignment: .bottomTrailing) {
+                AuthorAvatar(username: notification.actor?.username ?? notification.actor_id ?? "?", size: 44)
+                Circle().fill(badgeColor.opacity(0.15)).frame(width: 20, height: 20)
+                    .overlay(Circle().stroke(Theme.raised, lineWidth: 2))
+                    .overlay(Image(systemName: icon).font(.system(size: 10, weight: .bold)).foregroundStyle(badgeColor))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                (Text(notification.actor?.username ?? "Someone").fontWeight(.bold)
+                 + Text(" \(verb) ").foregroundColor(Theme.muted)
+                 + Text(notification.recipe.map { "\($0.emoji) \($0.title)" } ?? "your recipe").fontWeight(.semibold))
+                    .font(.system(size: 14))
+                Text(Format.timeAgo(notification.created_at)).font(.system(size: 12)).foregroundStyle(Theme.faint)
+            }
+            Spacer()
+            if !notification.read {
+                Circle().fill(Theme.accent).frame(width: 10, height: 10)
+            }
+        }
+        .padding(14)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
     }
 }

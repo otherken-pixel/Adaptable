@@ -10,11 +10,22 @@
 // (RLS enforced), and returned. Import is free and unlimited by design.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { attachHeroImage } from "../_shared/heroImage.ts";
+import {
+  assertDailyRecipeLimit,
+  extractAllergies,
+  findAllergyViolations,
+} from "../_shared/safety.ts";
+import { generateAndUploadCover } from "../_shared/coverImage.ts";
 
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GEMINI_URL =
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+/** Soft daily cap on imports per user (UTC day). Free but not infinite. */
+const DAILY_IMPORT_LIMIT = 40;
+
+/** Gemini 2.0 Flash family shut down 2026-06-01 — use 2.5+. */
+const GEMINI_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-latest",
+];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,6 +87,7 @@ const IMPORT_INSTRUCTIONS =
   "estimates only for missing metadata (times, servings, nutrition). " +
   "Write the description in an appetizing but honest tone. 3-5 short tags " +
   '(include "Low-cal" if 500 calories/serving or fewer). ' +
+  "Include every ingredient and step you can extract. " +
   "If the source contains no recipe at all, return a recipe titled exactly " +
   '"NO_RECIPE_FOUND".';
 
@@ -85,7 +97,10 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return json({ error: "Invalid request body." }, 400);
+    }
     const url: string | undefined = typeof body.url === "string" ? body.url.trim() : undefined;
     const text: string | undefined = typeof body.text === "string" ? body.text.trim() : undefined;
     const imageBase64: string | undefined =
@@ -100,10 +115,15 @@ Deno.serve(async (req) => {
       return json({ error: "Image too large — keep it under ~4 MB." }, 400);
     }
 
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return json({ error: "You must be signed in to import recipes." }, 401);
+    }
+
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: req.headers.get("Authorization")! } } },
+      { global: { headers: { Authorization: authHeader } } },
     );
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -112,15 +132,32 @@ Deno.serve(async (req) => {
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) {
-      return json({ error: "GEMINI_API_KEY is not configured." }, 500);
+      console.error("GEMINI_API_KEY is not configured");
+      return json({ error: "The import engine is not configured. Contact support." }, 500);
     }
 
-    // Build the Gemini parts from whichever source we were given.
+    const rate = await assertDailyRecipeLimit(
+      supabase,
+      user.id,
+      DAILY_IMPORT_LIMIT,
+      "import",
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("preferences")
+      .eq("id", user.id)
+      .maybeSingle();
+    const allergies = extractAllergies(profileRow?.preferences);
+
     const parts: unknown[] = [];
     let sourceUrl: string | null = null;
 
     if (imageBase64) {
-      parts.push({ inline_data: { mime_type: mimeType, data: imageBase64 } });
+      // Strip data-URL prefix if a client sent one.
+      const pure = imageBase64.replace(/^data:[^;]+;base64,/, "");
+      parts.push({ inline_data: { mime_type: mimeType, data: pure } });
       parts.push({ text: IMPORT_INSTRUCTIONS });
     } else if (url) {
       let parsed: URL;
@@ -144,8 +181,6 @@ Deno.serve(async (req) => {
         });
         if (!res.ok) throw new Error(`status ${res.status}`);
         const html = await res.text();
-        // Prefer JSON-LD Recipe blocks (most food blogs ship them),
-        // fall back to stripped page text.
         const ldBlocks = [...html.matchAll(
           /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi,
         )].map((m) => m[1]).join("\n");
@@ -173,40 +208,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    const geminiRes = await callGeminiWithRetry(geminiKey, {
+    const payload = {
       contents: [{ role: "user", parts }],
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: recipeSchema,
-        temperature: 0.2, // faithful extraction, not creativity
+        temperature: 0.2,
       },
-    });
+    };
 
-    if (!geminiRes.ok) {
-      const detail = await geminiRes.text();
-      console.error("Gemini error", geminiRes.status, detail);
-      if (geminiRes.status === 400 || geminiRes.status === 404) {
-        return json(
-          { error: "Couldn't read that source — try pasting the text instead." },
-          502,
-        );
-      }
-      if (geminiRes.status === 429 || geminiRes.status === 402) {
-        return json(
-          { error: "Too many requests — please wait a moment and try again." },
-          502,
-        );
-      }
-      return json({ error: "The import engine is unavailable. Try again." }, 502);
+    const gemini = await callGeminiWithModelFallback(geminiKey, payload);
+    if (!gemini.ok) {
+      return geminiErrorResponse(gemini.status, gemini.detail);
     }
 
-    const geminiJson = await geminiRes.json();
-    const raw = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!raw) return json({ error: "Nothing could be extracted." }, 502);
-
-    const recipe = JSON.parse(raw);
+    const recipe = parseRecipeJson(gemini.text);
+    if (!recipe) {
+      return json({ error: "Nothing could be extracted." }, 502);
+    }
     if (recipe.title === "NO_RECIPE_FOUND") {
       return json({ error: "No recipe found in that source." }, 422);
+    }
+    if (!isValidRecipe(recipe)) {
+      return json(
+        { error: "Couldn't extract a complete recipe — try a clearer photo or paste the text." },
+        422,
+      );
+    }
+
+    const violations = findAllergyViolations(recipe, allergies);
+    if (violations.length > 0) {
+      return json(
+        {
+          error:
+            `This source appears to contain your allergen(s): ${violations.join(", ")}. ` +
+            `We didn't save it. Remove those from Taste Profile only if that is intentional, or pick another recipe.`,
+        },
+        422,
+      );
     }
 
     const { data: row, error: insertError } = await supabase
@@ -220,14 +259,14 @@ Deno.serve(async (req) => {
         difficulty: ["Easy", "Medium", "Hard"].includes(recipe.difficulty)
           ? recipe.difficulty
           : "Easy",
-        prep_time_minutes: recipe.prep_time_minutes ?? 0,
-        cook_time_minutes: recipe.cook_time_minutes ?? 0,
-        servings: recipe.servings ?? 2,
-        calories: recipe.calories ?? null,
-        protein_g: recipe.protein_g ?? null,
-        carbs_g: recipe.carbs_g ?? null,
-        fat_g: recipe.fat_g ?? null,
-        tags: Array.isArray(recipe.tags) ? recipe.tags.slice(0, 6) : [],
+        prep_time_minutes: clampInt(recipe.prep_time_minutes, 0, 24 * 60, 0),
+        cook_time_minutes: clampInt(recipe.cook_time_minutes, 0, 24 * 60, 0),
+        servings: clampInt(recipe.servings, 1, 24, 2),
+        calories: nullableInt(recipe.calories),
+        protein_g: nullableInt(recipe.protein_g),
+        carbs_g: nullableInt(recipe.carbs_g),
+        fat_g: nullableInt(recipe.fat_g),
+        tags: Array.isArray(recipe.tags) ? recipe.tags.map(String).slice(0, 6) : [],
         ingredients: recipe.ingredients ?? [],
         steps: recipe.steps ?? [],
         source_prompt: "",
@@ -241,9 +280,31 @@ Deno.serve(async (req) => {
       return json({ error: "Could not save the imported recipe." }, 500);
     }
 
-    // Generate the dish photo in the background — best-effort, never blocks
-    // the response. The emoji hero shows until the image lands.
-    runInBackground(attachHeroImage(supabase, geminiKey, row));
+    if (row?.id) {
+      try {
+        const imageUrl = await generateAndUploadCover({
+          supabase,
+          geminiKey,
+          userId: user.id,
+          recipeId: row.id,
+          title: row.title ?? recipe.title,
+          description: row.description ?? recipe.description,
+          cuisine: row.cuisine ?? recipe.cuisine,
+          emoji: row.emoji ?? recipe.emoji,
+        });
+        if (imageUrl) {
+          const { data: updated } = await supabase
+            .from("recipes")
+            .update({ image_url: imageUrl })
+            .eq("id", row.id)
+            .select("*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)")
+            .single();
+          if (updated) return json({ recipe: updated }, 200);
+        }
+      } catch (e) {
+        console.error("cover generation skipped", e);
+      }
+    }
 
     return json({ recipe: row }, 200);
   } catch (err) {
@@ -252,45 +313,160 @@ Deno.serve(async (req) => {
   }
 });
 
-/**
- * Keeps a fire-and-forget task alive past the response when the runtime
- * supports it (Supabase Edge), otherwise lets it run detached. Any
- * rejection is swallowed — background work must never surface to the user.
- */
-function runInBackground(task: Promise<unknown>): void {
-  const p = Promise.resolve(task).catch((err) =>
-    console.error("Background task failed", err)
-  );
-  // deno-lint-ignore no-explicit-any
-  const edge = (globalThis as any).EdgeRuntime;
-  if (edge?.waitUntil) edge.waitUntil(p);
-}
-
-/**
- * Calls Gemini, retrying once after a short backoff on a 5xx response —
- * those are transient on Google's end, unlike 4xx (bad request/model)
- * which will just fail the same way again.
- */
-async function callGeminiWithRetry(
-  geminiKey: string,
-  payload: unknown,
-): Promise<Response> {
-  const call = () =>
-    fetch(`${GEMINI_URL}?key=${geminiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-  const first = await call();
-  if (first.ok || first.status < 500) return first;
-  console.error("Gemini 5xx, retrying once", first.status);
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  return call();
-}
-
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+function geminiErrorResponse(status: number, detail: string): Response {
+  console.error("Gemini import error", status, detail.slice(0, 500));
+  const lower = detail.toLowerCase();
+  if (
+    status === 401 ||
+    status === 403 ||
+    lower.includes("api key not valid") ||
+    lower.includes("api_key_invalid") ||
+    lower.includes("permission_denied")
+  ) {
+    return json(
+      {
+        error:
+          "Import engine authentication failed — GEMINI_API_KEY needs to be updated.",
+      },
+      500,
+    );
+  }
+  if (status === 429 || status === 402) {
+    return json(
+      { error: "Too many requests — please wait a moment and try again." },
+      502,
+    );
+  }
+  if (status === 400 || status === 404) {
+    return json(
+      { error: "Couldn't read that source — try pasting the text instead." },
+      502,
+    );
+  }
+  return json({ error: "The import engine is unavailable. Try again." }, 502);
+}
+
+async function callGeminiWithModelFallback(
+  geminiKey: string,
+  payload: unknown,
+): Promise<{ ok: true; text: string } | { ok: false; status: number; detail: string }> {
+  let lastStatus = 502;
+  let lastDetail = "";
+
+  for (const model of GEMINI_MODELS) {
+    const url =
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+    const result = await callGeminiWithRetry(url, payload);
+    if (result.ok) return result;
+    lastStatus = result.status;
+    lastDetail = result.detail;
+    if (result.status !== 404) break;
+    console.error(`Gemini model unavailable, trying next: ${model}`);
+  }
+
+  return { ok: false, status: lastStatus, detail: lastDetail };
+}
+
+async function callGeminiWithRetry(
+  url: string,
+  payload: unknown,
+): Promise<{ ok: true; text: string } | { ok: false; status: number; detail: string }> {
+  const call = () =>
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+  let res = await call();
+  if (!res.ok && res.status >= 500) {
+    console.error("Gemini 5xx, retrying once", res.status);
+    await sleep(600);
+    res = await call();
+  }
+  if (!res.ok && res.status === 429) {
+    await sleep(1200);
+    res = await call();
+  }
+
+  if (!res.ok) {
+    return { ok: false, status: res.status, detail: await res.text() };
+  }
+
+  const geminiJson = await res.json();
+  const finishReason = geminiJson?.candidates?.[0]?.finishReason;
+  if (finishReason === "SAFETY" || finishReason === "BLOCKED") {
+    return { ok: false, status: 400, detail: `blocked: ${finishReason}` };
+  }
+
+  const text = extractCandidateText(geminiJson);
+  if (!text) {
+    return {
+      ok: false,
+      status: 502,
+      detail: JSON.stringify(geminiJson).slice(0, 400),
+    };
+  }
+  return { ok: true, text };
+}
+
+function extractCandidateText(geminiJson: unknown): string | null {
+  // deno-lint-ignore no-explicit-any
+  const j = geminiJson as any;
+  const part = j?.candidates?.[0]?.content?.parts?.[0];
+  if (typeof part?.text === "string" && part.text.trim()) return part.text;
+  return null;
+}
+
+// deno-lint-ignore no-explicit-any
+function parseRecipeJson(raw: string): any | null {
+  let text = raw.trim();
+  const fence = text.match(/^```(?:json)?\s*([\s\S]*?)```$/i);
+  if (fence) text = fence[1].trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+// deno-lint-ignore no-explicit-any
+function isValidRecipe(recipe: any): boolean {
+  if (!recipe || typeof recipe !== "object") return false;
+  if (!recipe.title || typeof recipe.title !== "string") return false;
+  if (!Array.isArray(recipe.ingredients) || recipe.ingredients.length < 1) return false;
+  if (!Array.isArray(recipe.steps) || recipe.steps.length < 1) return false;
+  return true;
+}
+
+function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
+function nullableInt(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

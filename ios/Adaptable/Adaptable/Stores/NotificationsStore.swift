@@ -1,12 +1,13 @@
 import Foundation
 import Supabase
+import UIKit
 
 /// Activity inbox: DB triggers write a row when someone votes, comments or
 /// cooks your recipe; Supabase Realtime streams it in instantly. Mirrors
 /// `src/context/NotificationsContext.tsx`.
 @MainActor
 final class NotificationsStore: ObservableObject {
-     @Published private(set) var items: [AppNotification] = []
+    @Published private(set) var items: [AppNotification] = []
 
     var unreadCount: Int { items.filter { !$0.read }.count }
 
@@ -14,100 +15,118 @@ final class NotificationsStore: ObservableObject {
     private var realtimeTask: Task<Void, Never>?
     private var demoUnsubscribe: (() -> Void)?
     private var channel: RealtimeChannelV2?
-     /// Prevents duplicate start() calls during profile switching.
     private var isStarting = false
+    private var foregroundObserver: NSObjectProtocol?
+
+    init() {
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                await self?.resubscribeIfNeeded()
+            }
+        }
+    }
+
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
+        }
+    }
 
     func start(for profile: Profile?) async {
-          // Guard against re-entrancy during profile switches.
         guard !isStarting else { return }
         isStarting = true
+        defer { isStarting = false }
 
         guard let profile else {
             stop()
             items = []
             loadedForProfileId = nil
-            isStarting = false
             return
-           }
+        }
 
-          // If already subscribed to this exact profile, nothing to do.
-        guard loadedForProfileId != profile.id else {
-            isStarting = false
+        // Same profile: just refresh, keep subscription.
+        if loadedForProfileId == profile.id {
+            await refresh(userId: profile.id)
             return
-           }
+        }
 
-          // If switching profiles, the `stop()` call below handles cleanup.
         loadedForProfileId = profile.id
-        stop()
+        stopSubscriptionOnly()
         await refresh(userId: profile.id)
+        await subscribe(userId: profile.id)
+    }
 
+    /// Re-fetch + re-subscribe after returning from background.
+    func resubscribeIfNeeded() async {
+        guard let userId = loadedForProfileId else { return }
+        await refresh(userId: userId)
+        if !SupabaseManager.isDemo, channel == nil {
+            await subscribe(userId: userId)
+        }
+    }
+
+    private func subscribe(userId: String) async {
         if SupabaseManager.isDemo {
             demoUnsubscribe = DemoStore.shared.subscribe { [weak self] in
-                Task { @MainActor in await self?.refresh(userId: profile.id) }
-             }
-          } else {
-              // Use a consistent channel naming pattern that matches RealtimeManager.
-            let ch = SupabaseManager.client.channel("notifications:\(profile.id)")
-            let changes = ch.postgresChange(
-                InsertAction.self,
-                schema: "public",
-                table: "notifications",
-                filter: .eq("user_id", value: profile.id)
-             )
-            self.channel = ch
-             // Use a cancellable task so we can detect cancellation cleanly.
-            realtimeTask = Task { [weak self] in
-                guard let self else { return }
-                do {
-                    try await ch.subscribeWithError()
-                } catch {
-                    print("Realtime subscription failed: \(error)")
-                    return
-                }
-                for await _ in changes {
-                    guard !Task.isCancelled else { return }
-                    await self.refresh(userId: profile.id)
-                }
+                Task { @MainActor in await self?.refresh(userId: userId) }
             }
-           }
+            return
+        }
 
-        isStarting = false
-       }
+        let ch = SupabaseManager.client.channel("notifications:\(userId)")
+        let changes = ch.postgresChange(
+            InsertAction.self,
+            schema: "public",
+            table: "notifications",
+            filter: .eq("user_id", value: userId)
+        )
+        self.channel = ch
+        realtimeTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await ch.subscribeWithError()
+            } catch {
+                print("[NotificationsStore] Realtime subscription failed: \(error)")
+                await MainActor.run { self.channel = nil }
+                return
+            }
+            for await _ in changes {
+                guard !Task.isCancelled else { return }
+                await self.refresh(userId: userId)
+            }
+        }
+    }
+
+    private func stopSubscriptionOnly() {
+        realtimeTask?.cancel()
+        realtimeTask = nil
+        demoUnsubscribe?()
+        demoUnsubscribe = nil
+        if let channel {
+            let ch = channel
+            Task { await SupabaseManager.client.removeChannel(ch) }
+        }
+        channel = nil
+    }
 
     func stop() {
-         realtimeTask?.cancel()
-         realtimeTask = nil
-         demoUnsubscribe?()
-         demoUnsubscribe = nil
-
-        if let channel {
-            Task { await SupabaseManager.client.removeChannel(channel) }
-           }
-        channel = nil
-       }
+        stopSubscriptionOnly()
+    }
 
     func refresh(userId: String) async {
-          items = (try? await API.fetchNotifications(userId: userId)) ?? []
-
-          // Mark the sync timestamp after a successful fetch so catch-up
-          // doesn't re-fetch already-seen events.
-        UserDefaults.standard.set(ISO8601DateFormatter().string(from: Date()),
-                                   forKey: "lastNotificationsSync")
-       }
+        items = (try? await API.fetchNotifications(userId: userId)) ?? items
+    }
 
     func markAllRead(userId: String) {
         items = items.map {
             var n = $0
             n.read = true
             return n
-           }
-         Task { try? await API.markNotificationsRead(userId: userId) }
-       }
-
-     /// Re-fetch notifications for a new profile without full stop/start cycle.
-      func refreshForNewProfile(userId: String) async {
-          items = (try? await API.fetchNotifications(userId: userId)) ?? []
-         UserDefaults.standard.set(ISO8601DateFormatter().string(from: Date()),
-                                     forKey: "lastNotificationsSync")
-       }
+        }
+        Task { try? await API.markNotificationsRead(userId: userId) }
+    }
 }

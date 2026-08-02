@@ -8,6 +8,7 @@ struct CommentsSectionView: View {
     @State private var comments: [Comment]?
     @State private var draft = ""
     @State private var posting = false
+    @State private var reported: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -18,47 +19,58 @@ struct CommentsSectionView: View {
                     Text("\(comments.count)").font(.system(size: 15, weight: .bold)).foregroundStyle(Theme.faint)
                 }
             }
+            .accessibilityElement(children: .combine)
 
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("How did it turn out? Tips, swaps, results…", text: $draft, axis: .vertical)
-                    .font(.system(size: 15))
-                    .lineLimit(1...4)
-                    .padding(.horizontal, 12).padding(.vertical, 10)
-                Button {
-                    Task { await post() }
-                } label: {
-                    Image(systemName: "paperplane.fill")
-                        .foregroundStyle(.white)
-                        .frame(width: 40, height: 40)
-                        .background(Theme.heroGradient, in: Circle())
+            if authStore.profile != nil {
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("How did it turn out? Tips, swaps, results…", text: $draft, axis: .vertical)
+                        .font(.system(size: 15))
+                        .lineLimit(1...4)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .accessibilityLabel("Write a comment")
+                    Button {
+                        Task { await post() }
+                    } label: {
+                        Image(systemName: "paperplane.fill")
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(Theme.heroGradient, in: Circle())
+                    }
+                    .buttonStyle(.pressable)
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || posting)
+                    .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.3 : 1)
+                    .padding(.trailing, 6).padding(.bottom, 6)
+                    .accessibilityLabel("Post comment")
                 }
-                .buttonStyle(.pressable)
-                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || posting)
-                .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.3 : 1)
-                .padding(.trailing, 6).padding(.bottom, 6)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line))
             }
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line))
 
-            if comments == nil {
-                SkeletonBlock(height: 64, cornerRadius: 16)
-                SkeletonBlock(height: 64, cornerRadius: 16)
-            } else if comments!.isEmpty {
-                Text("No comments yet — cooked it? Tell everyone how it went. 👩‍🍳")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.muted)
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center)
-                    .padding(.vertical, 24)
-                    .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(dash: [4])))
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(comments!) { comment in
-                        CommentRow(comment: comment, isOwn: authStore.profile?.id == comment.user_id) {
-                            remove(comment.id)
+            if let comments {
+                if comments.isEmpty {
+                    Text("No comments yet — cooked it? Tell everyone how it went. 👩‍🍳")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.muted)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 24)
+                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.line, style: StrokeStyle(dash: [4])))
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(comments) { comment in
+                            CommentRow(
+                                comment: comment,
+                                isOwn: authStore.profile?.id == comment.user_id,
+                                reported: reported.contains(comment.id),
+                                onDelete: { remove(comment.id) },
+                                onReport: { report(comment.id) }
+                            )
                         }
                     }
                 }
+            } else {
+                SkeletonBlock(height: 64, cornerRadius: 16)
+                SkeletonBlock(height: 64, cornerRadius: 16)
             }
         }
         .task { await load() }
@@ -76,6 +88,7 @@ struct CommentsSectionView: View {
         if let created = try? await API.addComment(userId: userId, recipeId: recipeId, body: body) {
             comments = [created] + (comments ?? [])
             draft = ""
+            Haptics.light()
         }
     }
 
@@ -84,12 +97,28 @@ struct CommentsSectionView: View {
         comments = comments?.filter { $0.id != id }
         Task { try? await API.deleteComment(userId: userId, commentId: id) }
     }
+
+    private func report(_ id: String) {
+        guard let userId = authStore.profile?.id, !reported.contains(id) else { return }
+        Task {
+            try? await API.reportContent(
+                userId: userId,
+                targetType: "comment",
+                targetId: id,
+                reason: "Inappropriate or unsafe"
+            )
+            reported.insert(id)
+            Haptics.warning()
+        }
+    }
 }
 
 private struct CommentRow: View {
     let comment: Comment
     let isOwn: Bool
+    let reported: Bool
     var onDelete: () -> Void
+    var onReport: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -98,13 +127,28 @@ private struct CommentRow: View {
                 Text(comment.author?.username ?? "anonymous").font(.system(size: 13, weight: .bold))
                 Text(Format.timeAgo(comment.created_at ?? "")).font(.system(size: 12)).foregroundStyle(Theme.faint)
                 Spacer()
+                if !isOwn {
+                    Button(action: onReport) {
+                        Image(systemName: reported ? "flag.fill" : "flag")
+                            .font(.system(size: 12))
+                            .foregroundStyle(reported ? Theme.accent : Theme.faint)
+                    }
+                    .accessibilityLabel(reported ? "Comment reported" : "Report comment")
+                    .disabled(reported)
+                }
                 if isOwn {
                     Button(action: onDelete) {
                         Image(systemName: "trash").font(.system(size: 12)).foregroundStyle(Theme.faint)
                     }
+                    .accessibilityLabel("Delete comment")
                 }
             }
             Text(comment.body ?? "").font(.system(size: 14)).fixedSize(horizontal: false, vertical: true)
+            if reported {
+                Text("Thanks — we received your report.")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+            }
         }
         .padding(14)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))

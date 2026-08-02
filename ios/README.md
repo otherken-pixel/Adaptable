@@ -89,9 +89,10 @@ Same pipeline as the web app's native builds: DB trigger → `notifications`
 row → Database Webhook → `push-dispatch` edge function → APNs directly.
 To receive real device pushes:
 
-1. In Xcode, the **Push Notifications** capability is already declared in
-   `Support/Adaptable.entitlements` (`aps-environment: development`; flip
-   to `production` for a release build/TestFlight).
+1. In Xcode, push entitlements are split by configuration:
+   `Support/AdaptableDebug.entitlements` (`aps-environment: development`)
+   and `Support/AdaptableRelease.entitlements` (`production` for
+   TestFlight / App Store).
 2. Follow the "`Notifications — the no-Firebase pipeline`" setup steps in
    `../README.md` (APNs auth key, edge function secrets, Database
    Webhook) — it's the same backend, so nothing iOS-specific to deploy.

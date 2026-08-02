@@ -22,36 +22,79 @@ enum API {
             case .hot: return Trending.sorted(list)
             }
         }
-        var query = db.from("recipes").select(recipeSelect).limit(50)
-        query = sort == .top
-            ? query.order("net_upvotes", ascending: false).order("created_at", ascending: false)
-            : query.order("created_at", ascending: false)
-        let rows: [Recipe] = try await query.execute().value
-        return sort == .hot ? Trending.sorted(rows) : rows
+        do {
+            var query = db.from("recipes").select(recipeSelect).limit(80)
+            query = sort == .top
+                ? query.order("net_upvotes", ascending: false).order("created_at", ascending: false)
+                : query.order("created_at", ascending: false)
+            let rows: [Recipe] = try await query.execute().value
+            let result = sort == .hot ? Trending.sorted(rows) : rows
+            RecipeCache.saveFeed(result)
+            return result
+        } catch {
+            if let cached = RecipeCache.loadFeed(), !cached.isEmpty { return cached }
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     static func fetchRecipe(id: String) async throws -> Recipe? {
         if SupabaseManager.isDemo { return await DemoStore.shared.getRecipe(id) }
-        let rows: [Recipe] = try await db.from("recipes").select(recipeSelect).eq("id", value: id).limit(1).execute().value
-        return rows.first
+        do {
+            let rows: [Recipe] = try await db.from("recipes").select(recipeSelect).eq("id", value: id).limit(1).execute().value
+            if let recipe = rows.first {
+                RecipeCache.saveRecipe(recipe)
+            }
+            return rows.first
+        } catch {
+            if let cached = RecipeCache.loadRecipe(id: id) { return cached }
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
+    }
+
+    /// Recipes authored by a specific user (Profile "Your creations").
+    static func fetchRecipesByAuthor(userId: String, limit: Int = 100) async throws -> [Recipe] {
+        if SupabaseManager.isDemo {
+            let list = await DemoStore.shared.listRecipes()
+            return list.filter { $0.author_id == userId }
+        }
+        do {
+            let rows: [Recipe] = try await db.from("recipes")
+                .select(recipeSelect)
+                .eq("author_id", value: userId)
+                .order("created_at", ascending: false)
+                .limit(limit)
+                .execute()
+                .value
+            return rows
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     // MARK: - Votes
 
     static func fetchMyVotes(userId: String) async throws -> [String: VoteValue] {
         if SupabaseManager.isDemo { return await DemoStore.shared.getVotes() }
-        struct Row: Decodable { let recipe_id: String; let value: Int }
-        let rows: [Row] = try await db.from("user_votes").select("recipe_id, value").eq("user_id", value: userId).execute().value
-        return Dictionary(uniqueKeysWithValues: rows.map { ($0.recipe_id, $0.value) })
+        do {
+            struct Row: Decodable { let recipe_id: String; let value: Int }
+            let rows: [Row] = try await db.from("user_votes").select("recipe_id, value").eq("user_id", value: userId).execute().value
+            return Dictionary(uniqueKeysWithValues: rows.map { ($0.recipe_id, $0.value) })
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     static func setVote(userId: String, recipeId: String, value: VoteValue?) async throws {
         if SupabaseManager.isDemo { return await DemoStore.shared.setVote(recipeId, value: value) }
-        if let value {
-            struct Payload: Encodable { let user_id: String; let recipe_id: String; let value: Int }
-            try await db.from("user_votes").upsert(Payload(user_id: userId, recipe_id: recipeId, value: value)).execute()
-        } else {
-            try await db.from("user_votes").delete().eq("user_id", value: userId).eq("recipe_id", value: recipeId).execute()
+        do {
+            if let value {
+                struct Payload: Encodable { let user_id: String; let recipe_id: String; let value: Int }
+                try await db.from("user_votes").upsert(Payload(user_id: userId, recipe_id: recipeId, value: value)).execute()
+            } else {
+                try await db.from("user_votes").delete().eq("user_id", value: userId).eq("recipe_id", value: recipeId).execute()
+            }
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
         }
     }
 
@@ -59,9 +102,13 @@ enum API {
 
     static func fetchMySaveIds(userId: String) async throws -> [String] {
         if SupabaseManager.isDemo { return await DemoStore.shared.getSaves() }
-        struct Row: Decodable { let recipe_id: String }
-        let rows: [Row] = try await db.from("saves").select("recipe_id").eq("user_id", value: userId).order("created_at", ascending: false).execute().value
-        return rows.map(\.recipe_id)
+        do {
+            struct Row: Decodable { let recipe_id: String }
+            let rows: [Row] = try await db.from("saves").select("recipe_id").eq("user_id", value: userId).order("created_at", ascending: false).execute().value
+            return rows.map(\.recipe_id)
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     static func fetchSavedRecipes(userId: String) async throws -> [Recipe] {
@@ -71,50 +118,100 @@ enum API {
             for id in ids { if let r = await DemoStore.shared.getRecipe(id) { out.append(r) } }
             return out
         }
-        struct Row: Decodable { let recipe: Recipe? }
-        let rows: [Row] = try await db.from("saves").select("recipe:recipes(\(recipeSelect))").eq("user_id", value: userId).order("created_at", ascending: false).execute().value
-        return rows.compactMap(\.recipe)
+        do {
+            struct Row: Decodable { let recipe: Recipe? }
+            let rows: [Row] = try await db.from("saves").select("recipe:recipes(\(recipeSelect))").eq("user_id", value: userId).order("created_at", ascending: false).execute().value
+            return rows.compactMap(\.recipe)
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     @discardableResult
     static func toggleSave(userId: String, recipeId: String, currentlySaved: Bool) async throws -> Bool {
         if SupabaseManager.isDemo { return await DemoStore.shared.toggleSave(recipeId) }
-        if currentlySaved {
-            try await db.from("saves").delete().eq("user_id", value: userId).eq("recipe_id", value: recipeId).execute()
-            return false
+        do {
+            if currentlySaved {
+                try await db.from("saves").delete().eq("user_id", value: userId).eq("recipe_id", value: recipeId).execute()
+                return false
+            }
+            struct Payload: Encodable { let user_id: String; let recipe_id: String }
+            try await db.from("saves").upsert(Payload(user_id: userId, recipe_id: recipeId)).execute()
+            return true
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
         }
-        struct Payload: Encodable { let user_id: String; let recipe_id: String }
-        try await db.from("saves").upsert(Payload(user_id: userId, recipe_id: recipeId)).execute()
-        return true
     }
 
     // MARK: - Comments
 
     static func fetchComments(recipeId: String) async throws -> [Comment] {
         if SupabaseManager.isDemo { return await DemoStore.shared.listComments(recipeId) }
-        return try await db.from("comments").select(commentSelect).eq("recipe_id", value: recipeId)
-            .order("created_at", ascending: false).limit(100).execute().value
+        do {
+            return try await db.from("comments").select(commentSelect).eq("recipe_id", value: recipeId)
+                .order("created_at", ascending: false).limit(100).execute().value
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     static func addComment(userId: String, recipeId: String, body: String) async throws -> Comment {
         if SupabaseManager.isDemo { return await DemoStore.shared.addComment(recipeId, body: body) }
-        struct Payload: Encodable { let user_id: String; let recipe_id: String; let body: String }
-        return try await db.from("comments")
-            .insert(Payload(user_id: userId, recipe_id: recipeId, body: body))
-            .select(commentSelect).single().execute().value
+        do {
+            struct Payload: Encodable { let user_id: String; let recipe_id: String; let body: String }
+            return try await db.from("comments")
+                .insert(Payload(user_id: userId, recipe_id: recipeId, body: body))
+                .select(commentSelect).single().execute().value
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     static func deleteComment(userId: String, commentId: String) async throws {
         if SupabaseManager.isDemo { return await DemoStore.shared.deleteComment(commentId) }
-        try await db.from("comments").delete().eq("user_id", value: userId).eq("id", value: commentId).execute()
+        do {
+            try await db.from("comments").delete().eq("user_id", value: userId).eq("id", value: commentId).execute()
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
+    }
+
+    static func reportContent(userId: String, targetType: String, targetId: String, reason: String) async throws {
+        if SupabaseManager.isDemo { return }
+        let clean = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count >= 3 else { throw AppError("Please add a short reason.") }
+        do {
+            struct Payload: Encodable {
+                let reporter_id: String
+                let target_type: String
+                let target_id: String
+                let reason: String
+            }
+            try await db.from("content_reports")
+                .upsert(
+                    Payload(
+                        reporter_id: userId,
+                        target_type: targetType,
+                        target_id: targetId,
+                        reason: String(clean.prefix(500))
+                    )
+                )
+                .execute()
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     // MARK: - Cooks
 
     static func recordCook(userId: String, recipeId: String) async throws {
         if SupabaseManager.isDemo { return await DemoStore.shared.recordCook(recipeId) }
-        struct Payload: Encodable { let user_id: String; let recipe_id: String }
-        try await db.from("cooks").insert(Payload(user_id: userId, recipe_id: recipeId)).execute()
+        do {
+            struct Payload: Encodable { let user_id: String; let recipe_id: String }
+            try await db.from("cooks").insert(Payload(user_id: userId, recipe_id: recipeId)).execute()
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
     }
 
     // MARK: - Notifications
@@ -138,6 +235,15 @@ enum API {
         if SupabaseManager.isDemo { return }
         struct Payload: Encodable { let token: String; let user_id: String; let platform: String }
         try await db.from("device_tokens").upsert(Payload(token: token, user_id: userId, platform: platform)).execute()
+    }
+
+    static func unregisterDeviceToken(userId: String, token: String) async throws {
+        if SupabaseManager.isDemo { return }
+        try await db.from("device_tokens")
+            .delete()
+            .eq("user_id", value: userId)
+            .eq("token", value: token)
+            .execute()
     }
 
     // MARK: - Shopping list
@@ -294,7 +400,19 @@ enum API {
     static func generateRecipe(prompt: String, servings: Int?) async throws -> Recipe {
         if SupabaseManager.isDemo { return await DemoStore.shared.generate(prompt: prompt, servings: servings) }
         struct Body: Encodable { let prompt: String; let servings: Int? }
-        return try await invoke("generate-recipe", body: Body(prompt: prompt, servings: servings))
+        let body = Body(prompt: prompt, servings: servings)
+        // One client-side retry for transient edge/Gemini failures.
+        do {
+            return try await invoke("generate-recipe", body: body)
+        } catch {
+            let message = (error as? AppError)?.message ?? error.localizedDescription
+            let retryable = message.localizedCaseInsensitiveContains("temporarily unavailable")
+                || message.localizedCaseInsensitiveContains("try again")
+                || message.localizedCaseInsensitiveContains("Too many requests")
+            guard retryable else { throw error }
+            try await Task.sleep(nanoseconds: 800_000_000)
+            return try await invoke("generate-recipe", body: body)
+        }
     }
 
     // MARK: - Account deletion

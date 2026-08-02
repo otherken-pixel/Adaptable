@@ -308,11 +308,20 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      <div className="mt-6 flex justify-center gap-4 text-[13px] font-semibold text-muted">
+        <Link to="/support" className="pressable underline-offset-2 hover:underline">
+          Support
+        </Link>
+        <Link to="/privacy" className="pressable underline-offset-2 hover:underline">
+          Privacy
+        </Link>
+      </div>
+
       {!isDemo && (
         <>
           <button
             onClick={() => void signOut()}
-            className="pressable mt-8 flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-raised py-3.5 text-[15px] font-bold"
+            className="pressable mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-raised py-3.5 text-[15px] font-bold"
           >
             <LogOut size={17} strokeWidth={2.2} />
             Sign out

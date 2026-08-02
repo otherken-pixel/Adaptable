@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, Search, X } from "lucide-react";
+import { Bell, Search, WifiOff, X } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
+import { filterFeedRecipes, type FeedChip } from "@/lib/feedFilter";
+import { getCachedFeed, setCachedFeed } from "@/lib/cache";
 import type { FeedSort, Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
 import { FeedSkeleton } from "@/components/Skeletons";
@@ -9,6 +11,7 @@ import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useEngagement } from "@/context/EngagementContext";
+import { useOnline } from "@/hooks/useOnline";
 
 type Chip =
   | { id: string; kind: "all"; label: string }
@@ -18,6 +21,25 @@ type Chip =
   | { id: string; kind: "cal"; label: string; maxCalories: number }
   | { id: string; kind: "protein"; label: string; minProtein: number }
   | { id: string; kind: "tag"; label: string };
+
+function toFeedChip(chip: Chip): FeedChip {
+  switch (chip.kind) {
+    case "all":
+      return { kind: "all" };
+    case "foryou":
+      return { kind: "foryou" };
+    case "following":
+      return { kind: "following" };
+    case "time":
+      return { kind: "time", maxMinutes: chip.maxMinutes };
+    case "cal":
+      return { kind: "cal", maxCalories: chip.maxCalories };
+    case "protein":
+      return { kind: "protein", minProtein: chip.minProtein };
+    case "tag":
+      return { kind: "tag", label: chip.label };
+  }
+}
 
 const tagChipId = (label: string) => `tag:${label.toLowerCase()}`;
 
@@ -31,9 +53,11 @@ export default function FeedPage() {
   const [search, setSearch] = useState("");
   const [activeChipId, setActiveChipId] = useState("all");
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
   const { profile } = useAuth();
   const { unreadCount } = useNotifications();
   const { followedIds } = useEngagement();
+  const online = useOnline();
 
   // Deep link: /?tag=High-protein (recipe tag pills navigate here).
   const [params, setParams] = useSearchParams();
@@ -44,17 +68,47 @@ export default function FeedPage() {
 
   const load = useCallback(() => {
     let cancelled = false;
-    setRecipes(null);
     setError(null);
+    // Instant paint from cache while network refreshes.
+    const cached = getCachedFeed<{ sort: FeedSort; rows: Recipe[] }>();
+    if (cached?.rows?.length && cached.sort === sort) {
+      setRecipes(cached.rows);
+      setFromCache(true);
+    } else if (!online) {
+      // Any cached feed is better than empty offline.
+      if (cached?.rows?.length) {
+        setRecipes(cached.rows);
+        setFromCache(true);
+      } else {
+        setRecipes(null);
+      }
+    } else {
+      setRecipes(null);
+    }
+
+    if (!online && cached?.rows?.length) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     fetchFeed(sort)
-      .then((r) => !cancelled && setRecipes(r))
-      .catch(
-        (e) => !cancelled && setError(e?.message ?? "Couldn't load the feed."),
-      );
+      .then((r) => {
+        if (cancelled) return;
+        setRecipes(r);
+        setFromCache(false);
+        setCachedFeed({ sort, rows: r });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (!cached?.rows?.length) {
+          setError(e?.message ?? "Couldn't load the feed.");
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [sort]);
+  }, [sort, online]);
 
   useEffect(() => load(), [load]);
 
@@ -113,46 +167,19 @@ export default function FeedPage() {
     setActiveChipId(chip.id);
     // Manual picks replace any deep-linked tag in the URL.
     if (tagParam) setParams({}, { replace: true });
+    // Make the filtered set obvious when the user is mid-scroll.
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const filtered = useMemo(() => {
     if (!recipes) return null;
-    const q = search.trim().toLowerCase();
-    const chip = activeChip;
-    return recipes.filter((r) => {
-      if (q) {
-        const haystack = [r.title, r.description, r.cuisine, ...r.tags]
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      switch (chip.kind) {
-        case "time":
-          return r.prep_time_minutes + r.cook_time_minutes <= chip.maxMinutes;
-        case "cal":
-          // Recipes without calorie data can't claim to be low-cal.
-          return r.calories !== null && r.calories <= chip.maxCalories;
-        case "protein":
-          return (
-            (r.protein_g !== null && r.protein_g >= chip.minProtein) ||
-            r.tags.some((t) => t.toLowerCase() === "high-protein")
-          );
-        case "foryou": {
-          const diets = (profile?.preferences?.diets ?? []).map((d) =>
-            d.toLowerCase(),
-          );
-          return r.tags.some((t) => diets.includes(t.toLowerCase()));
-        }
-        case "following":
-          return followedIds.has(r.author_id);
-        case "tag":
-          return r.tags.some(
-            (t) => t.toLowerCase() === chip.label.toLowerCase(),
-          );
-        default:
-          return true;
-      }
-    });
+    return filterFeedRecipes(
+      recipes,
+      search,
+      toFeedChip(activeChip),
+      profile?.preferences?.diets ?? [],
+      followedIds,
+    );
   }, [recipes, search, activeChip, profile, followedIds]);
 
   const filteredEmpty = filtered !== null && filtered.length === 0;
@@ -199,6 +226,17 @@ export default function FeedPage() {
           <div>Profile: {profile?.username ?? "(not signed in)"}</div>
           <div>Recipes loaded: {recipes?.length ?? "—"}</div>
           <div>Error: {error ?? "(none)"}</div>
+        </div>
+      )}
+
+      {!online && (
+        <div
+          className="mb-4 flex items-center gap-2 rounded-2xl border border-line bg-sunken px-4 py-3 text-[13px] font-semibold text-muted"
+          role="status"
+        >
+          <WifiOff size={16} className="shrink-0" aria-hidden />
+          You&apos;re offline
+          {fromCache ? " — showing saved recipes." : " — connect to load the feed."}
         </div>
       )}
 
@@ -281,7 +319,46 @@ export default function FeedPage() {
         />
       )}
 
-      {!error && filteredEmpty && !isForYouEmpty && (
+      {!error &&
+        filteredEmpty &&
+        !isForYouEmpty &&
+        activeChip.kind === "following" && (
+          <>
+            <EmptyState
+              emoji="👥"
+              title="No recipes from chefs you follow"
+              body="Follow a chef from any recipe page — their new dishes show up here. Meanwhile, try Editor’s picks:"
+              action={
+                <button
+                  type="button"
+                  onClick={() => pickChip({ id: "all", kind: "all", label: "All" })}
+                  className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+                >
+                  Browse Hot recipes
+                </button>
+              }
+            />
+            {recipes &&
+              recipes.filter((r) => r.featured).slice(0, 3).length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <p className="px-1 text-xs font-bold tracking-wide text-faint uppercase">
+                    Editor’s picks
+                  </p>
+                  {recipes
+                    .filter((r) => r.featured)
+                    .slice(0, 3)
+                    .map((r, i) => (
+                      <RecipeCard key={r.id} recipe={r} index={i} />
+                    ))}
+                </div>
+              )}
+          </>
+        )}
+
+      {!error &&
+        filteredEmpty &&
+        !isForYouEmpty &&
+        activeChip.kind !== "following" && (
         <EmptyState
           emoji={search || activeChip.kind !== "all" ? "🔍" : "🍳"}
           title={
@@ -295,12 +372,25 @@ export default function FeedPage() {
               : "Be the first — describe what you're craving and let the AI take it from there."
           }
           action={
-            <Link
-              to="/create"
-              className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
-            >
-              Generate a recipe
-            </Link>
+            search || activeChip.kind !== "all" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  pickChip({ id: "all", kind: "all", label: "All" });
+                }}
+                className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+              >
+                Clear filters & browse
+              </button>
+            ) : (
+              <Link
+                to="/create"
+                className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+              >
+                Generate a recipe
+              </Link>
+            )
           }
         />
       )}

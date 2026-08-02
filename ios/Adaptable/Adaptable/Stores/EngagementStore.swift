@@ -10,6 +10,8 @@ final class EngagementStore: ObservableObject {
     @Published private(set) var followedIds: Set<String> = []
     /// Local net_upvote deltas from the user's own optimistic votes.
     @Published private(set) var voteDelta: [String: Int] = [:]
+    /// Last mutation error for a short offline / failure toast.
+    @Published var lastActionError: String?
 
     private var loadedForProfileId: String?
 
@@ -35,6 +37,10 @@ final class EngagementStore: ObservableObject {
     }
 
     func castVote(recipeId: String, value: VoteValue, userId: String) {
+        if !NetworkMonitor.shared.isOnline {
+            lastActionError = "You're offline — try again when you're connected."
+            return
+        }
         let current = votes[recipeId] ?? 0
         let next: VoteValue? = current == value ? nil : value
         voteDelta[recipeId, default: 0] += -current + (next ?? 0)
@@ -44,14 +50,18 @@ final class EngagementStore: ObservableObject {
             do {
                 try await API.setVote(userId: userId, recipeId: recipeId, value: next)
             } catch {
-                // Roll back on failure.
                 voteDelta[recipeId, default: 0] += current - (next ?? 0)
                 if current == 0 { votes.removeValue(forKey: recipeId) } else { votes[recipeId] = current }
+                lastActionError = AppError.friendlyMessage(for: error)
             }
         }
     }
 
     func toggleSaved(recipeId: String, userId: String) {
+        if !NetworkMonitor.shared.isOnline {
+            lastActionError = "You're offline — try again when you're connected."
+            return
+        }
         let wasSaved = savedIds.contains(recipeId)
         if wasSaved { savedIds.remove(recipeId) } else { savedIds.insert(recipeId) }
 
@@ -60,12 +70,17 @@ final class EngagementStore: ObservableObject {
                 try await API.toggleSave(userId: userId, recipeId: recipeId, currentlySaved: wasSaved)
             } catch {
                 if wasSaved { savedIds.insert(recipeId) } else { savedIds.remove(recipeId) }
+                lastActionError = AppError.friendlyMessage(for: error)
             }
         }
     }
 
     func toggleFollowChef(chefId: String, userId: String) {
         guard chefId != userId else { return }
+        if !NetworkMonitor.shared.isOnline {
+            lastActionError = "You're offline — try again when you're connected."
+            return
+        }
         let wasFollowing = followedIds.contains(chefId)
         if wasFollowing { followedIds.remove(chefId) } else { followedIds.insert(chefId) }
 
@@ -74,6 +89,7 @@ final class EngagementStore: ObservableObject {
                 try await API.setFollow(userId: userId, chefId: chefId, follow: !wasFollowing)
             } catch {
                 if wasFollowing { followedIds.insert(chefId) } else { followedIds.remove(chefId) }
+                lastActionError = AppError.friendlyMessage(for: error)
             }
         }
     }

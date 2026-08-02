@@ -51,16 +51,19 @@ export default function RecipeDetailPage() {
     };
   }, [id]);
 
-  const isOwnRecipe = recipe?.author_id === profile?.id;
+  const isOwnRecipe = !!profile && recipe?.author_id === profile.id;
   const following = recipe ? followedIds.has(recipe.author_id) : false;
+  const signedIn = !!profile;
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
+    <div className={`mx-auto max-w-lg px-4 pt-safe ${signedIn ? "pb-nav" : "pb-safe"}`}>
       <div className="flex items-center pt-4 pb-3">
         <button
           aria-label="Back"
           onClick={() =>
-            window.history.length > 1 ? navigate(-1) : navigate("/")
+            window.history.length > 1
+              ? navigate(-1)
+              : navigate(signedIn ? "/" : "/auth")
           }
           className="pressable -ml-2 flex h-10 w-10 items-center justify-center rounded-full text-muted"
         >
@@ -71,7 +74,7 @@ export default function RecipeDetailPage() {
             by <span className="text-content">{recipe.author.username}</span>
           </p>
         )}
-        {recipe && !isOwnRecipe && (
+        {recipe && !isOwnRecipe && signedIn && (
           <button
             onClick={() => toggleFollowChef(recipe.author_id)}
             className={`pressable flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-bold transition-colors ${
@@ -90,6 +93,14 @@ export default function RecipeDetailPage() {
               </>
             )}
           </button>
+        )}
+        {recipe && !signedIn && (
+          <Link
+            to={`/auth?next=${encodeURIComponent(`/recipe/${recipe.id}`)}`}
+            className="pressable shrink-0 rounded-full bg-content px-4 py-2 text-[13px] font-bold text-surface"
+          >
+            Sign in
+          </Link>
         )}
       </div>
 

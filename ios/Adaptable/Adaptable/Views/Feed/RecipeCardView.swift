@@ -8,38 +8,18 @@ struct RecipeCardView: View {
     var body: some View {
         NavigationLink(value: Route.recipe(id: recipe.id)) {
             VStack(alignment: .leading, spacing: 0) {
-                // Cover
-                ZStack(alignment: .bottomLeading) {
-                    Gradients.cover(for: recipe.id)
-                        .frame(height: 176)
-                    if let image = recipe.image_url, let url = URL(string: image) {
-                        AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: {
-                            Text(recipe.emoji ?? "")
-                                .font(.system(size: 64))
-                                .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
-                                .floating
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: 176)
-                        .clipped()
-                    } else {
-                        Text(recipe.emoji ?? "")
-                            .font(.system(size: 64))
-                            .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .floating
-                    }
-                    Text(recipe.cuisine ?? "")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(.black.opacity(0.35), in: Capsule())
+                ZStack(alignment: .topTrailing) {
+                    RecipeCoverView(
+                        recipeId: recipe.id,
+                        emoji: recipe.emoji,
+                        imageUrl: recipe.image_url,
+                        cuisine: recipe.cuisine,
+                        height: 176,
+                        emojiSize: 64
+                    )
+                    SaveButtonView(recipeId: recipe.id)
                         .padding(12)
-                    HStack { Spacer(); SaveButtonView(recipeId: recipe.id) }
-                        .padding(12)
-                        .frame(maxWidth: .infinity, alignment: .top)
                 }
-                .frame(height: 176)
-                .clipped()
 
                 // Body
                 VStack(alignment: .leading, spacing: 12) {

@@ -37,6 +37,7 @@ struct CookModeView: View {
 
     @StateObject private var voice = VoiceCommandListener()
     @State private var voiceOn = false
+    @State private var shareItem: ShareItem?
 
     private var factor: Double {
         guard let recipe, let servings, (recipe.servings ?? 1) > 0 else { return 1 }
@@ -54,14 +55,17 @@ struct CookModeView: View {
         .task {
             recipe = try? await API.fetchRecipe(id: recipeId)
         }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onAppear { CookModeManager.startCookMode() }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
             voice.stop()
+            CookModeManager.stopCookMode()
         }
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .background(Theme.surface.ignoresSafeArea())
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: item.activityItems)
+        }
     }
 
     @ViewBuilder
@@ -77,12 +81,16 @@ struct CookModeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if voiceOn {
-                        Text("🎙️ Listening — say \u{201C}next\u{201D}, \u{201C}back\u{201D}, \u{201C}ingredients\u{201D} or \u{201C}start timer\u{201D}")
+                        Text(voice.statusMessage ?? "🎙️ Listening — say “next”, “back”, “ingredients” or “start timer”")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(voice.statusMessage != nil ? Theme.down : Theme.accent)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
-                            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 14))
+                            .background(
+                                (voice.statusMessage != nil ? Theme.down.opacity(0.12) : Theme.accentSoft),
+                                in: RoundedRectangle(cornerRadius: 14)
+                            )
+                            .accessibilityLabel(voice.statusMessage ?? "Voice commands listening")
                     }
 
                     if isPrep { prepView(recipe: recipe) }
@@ -115,7 +123,7 @@ struct CookModeView: View {
         .fullScreenCover(isPresented: $showCameraPicker) {
             CameraPicker { image in
                 showCameraPicker = false
-                if let data = image.jpegData(compressionQuality: 0.8) {
+                if let data = ImageCompressor.jpegData(from: image) {
                     Task { await uploadPhoto(data, recipe: recipe) }
                 }
             }.ignoresSafeArea()
@@ -124,7 +132,8 @@ struct CookModeView: View {
         .onChange(of: photosPickerItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                if let raw = try? await item.loadTransferable(type: Data.self),
+                   let data = ImageCompressor.jpegData(from: raw) {
                     await uploadPhoto(data, recipe: recipe)
                 }
             }
@@ -253,13 +262,15 @@ struct CookModeView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         let remaining = currentTimer.map { max(0, Int($0.endsAt.timeIntervalSince(now).rounded())) } ?? timerSeconds
                         Text(DurationParser.formatClock(remaining)).font(.system(size: 20, weight: .heavy)).monospacedDigit()
-                        Text(currentTimer == nil ? "Step timer" : (currentTimer!.endsAt <= now ? "Time's up!" : "Running — keeps going between steps"))
+                        Text(timerCaption(currentTimer: currentTimer))
                             .font(.system(size: 11, weight: .semibold)).foregroundStyle(Theme.faint)
                     }
                     Spacer()
                     if currentTimer == nil {
                         Button {
-                            startTimer(step: idx, total: total, recipe: recipe!)
+                            if let recipe {
+                                startTimer(step: idx, total: total, recipe: recipe)
+                            }
                         } label: {
                             Image(systemName: "play.fill").foregroundStyle(.white)
                                 .frame(width: 44, height: 44).background(Theme.heroGradient, in: Circle())
@@ -281,11 +292,19 @@ struct CookModeView: View {
         .padding(.vertical, 8)
     }
 
+    private func timerCaption(currentTimer: RunningTimer?) -> String {
+        guard let currentTimer else { return "Step timer" }
+        return currentTimer.endsAt <= now ? "Time's up!" : "Running — keeps going between steps"
+    }
+
     private func startTimer(step: Int, total: Int, recipe: Recipe) {
         guard step >= 1, step <= total else { return }
         guard !timers.contains(where: { $0.step == step }) else { return }
-        guard let steps = recipe.steps, let seconds = DurationParser.extractTimerSeconds(steps[step - 1].instruction) else { return }
+        guard let steps = recipe.steps, step - 1 < steps.count,
+              let seconds = DurationParser.extractTimerSeconds(steps[step - 1].instruction) else { return }
         timers.append(RunningTimer(step: step, endsAt: Date().addingTimeInterval(Double(seconds)), totalSeconds: seconds, rang: false))
+        Alarm.scheduleTimerNotification(seconds: seconds, step: step)
+        Haptics.light()
         now = Date()
     }
 
@@ -309,7 +328,7 @@ struct CookModeView: View {
                 .frame(width: 96, height: 96)
                 .overlay(Image(systemName: "party.popper.fill").font(.system(size: 40)).foregroundStyle(.white))
             Text("Chef's kiss! 🤌").font(.system(size: 26, weight: .heavy))
-            Text("You just cooked **\(recipe.title)**. How did it turn out? Your vote shapes the community feed.")
+            Text("You just cooked \(recipe.title ?? "this dish"). How did it turn out? Your vote shapes the community feed.")
                 .font(.system(size: 15)).foregroundStyle(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 280)
             Text("🍳 You're cook #\(Format.compactCount((recipe.cook_count ?? 0) + 1)) — this fuels the Trending feed")
                 .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accent)
@@ -320,6 +339,19 @@ struct CookModeView: View {
                 SaveButtonView(recipeId: recipe.id, variant: .bar)
             }
             .frame(maxWidth: 320)
+
+            Button {
+                shareCooked(recipe)
+            } label: {
+                Label("Share this recipe", systemImage: "square.and.arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(maxWidth: 320).frame(height: 48)
+                    .foregroundStyle(Theme.content)
+                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Share this recipe")
 
             if !SupabaseManager.isDemo {
                 Menu {
@@ -344,13 +376,25 @@ struct CookModeView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(photoState == .done ? Theme.accent : Theme.line))
                 }
                 .disabled(photoState == .uploading || photoState == .done)
+                .accessibilityLabel("Share a photo of your plate")
             }
 
             Button("Back to Discover") { dismiss() }
                 .font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted)
+                .accessibilityLabel("Back to Discover")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+    }
+
+    private func shareCooked(_ recipe: Recipe) {
+        Task {
+            Haptics.success()
+            let serves = servings ?? recipe.servings ?? 2
+            let payload = RecipeShare.build(recipe: recipe, servings: serves)
+            let card = await RecipeShare.cardImage(recipe: recipe, servings: serves)
+            shareItem = ShareItem(text: payload.text, url: payload.url, image: card)
+        }
     }
 
     private func recordCookIfNeeded(recipe: Recipe) {
@@ -384,6 +428,7 @@ struct CookModeView: View {
                         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
                 }
+                .accessibilityLabel("Previous step")
             }
             Button {
                 self.idx = min(self.idx + 1, total + 1)
@@ -397,6 +442,7 @@ struct CookModeView: View {
                 .foregroundStyle(.white)
                 .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
+            .accessibilityLabel(isPrep ? "Start cooking" : (idx == total ? "Finish cooking" : "Next step"))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

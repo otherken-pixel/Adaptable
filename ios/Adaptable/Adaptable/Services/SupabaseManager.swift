@@ -45,23 +45,4 @@ enum SupabaseManager {
     /// Custom URL scheme used for OAuth + password-reset redirects.
     static let redirectURL = URL(string: "com.adaptable.app://login-callback")!
     static let resetPasswordRedirectURL = URL(string: "com.adaptable.app://reset-password")!
-
-    /// Public web origin used to build shareable recipe links (e.g.
-    /// `https://your-domain.com/recipe/<id>`). Those pages carry OpenGraph
-    /// tags so a shared link previews with the dish photo instead of plain
-    /// text. Set `SHARE_BASE_URL` in `Support/Config.xcconfig` to the
-    /// deployed web domain; when unset the share falls back to text only.
-    static let webBaseURL: String? = {
-        let raw = (Bundle.main.object(forInfoDictionaryKey: "SHARE_BASE_URL") as? String ?? "")
-            .trimmingCharacters(in: .whitespaces)
-        guard !raw.isEmpty, !raw.hasPrefix("$("), URL(string: raw)?.scheme?.hasPrefix("http") == true
-        else { return nil }
-        return raw.hasSuffix("/") ? String(raw.dropLast()) : raw
-    }()
-
-    /// Public URL for a recipe, or nil when no web domain is configured.
-    static func recipeShareURL(id: String) -> URL? {
-        guard let base = webBaseURL else { return nil }
-        return URL(string: "\(base)/recipe/\(id)")
-    }
 }

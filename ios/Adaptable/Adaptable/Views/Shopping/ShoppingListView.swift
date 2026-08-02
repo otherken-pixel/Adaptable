@@ -6,15 +6,17 @@ struct ShoppingListView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var deepLinks: DeepLinkCenter
 
+    @State private var remindersBusy = false
+    @State private var remindersMessage: String?
+    @State private var showRemindersDenied = false
+
     private var groups: [(String, [ShoppingItem])] {
-        var byRecipe: [String: [ShoppingItem]] = [:]
-        var order: [String] = []
+        var byAisle: [String: [ShoppingItem]] = [:]
         for item in shoppingStore.items {
-            let key = item.recipe_title.isEmpty ? "Other items" : item.recipe_title
-            if byRecipe[key] == nil { order.append(key) }
-            byRecipe[key, default: []].append(item)
+            let key = GroceryAisle.aisle(for: item.item)
+            byAisle[key, default: []].append(item)
         }
-        return order.map { ($0, byRecipe[$0] ?? []) }
+        return GroceryAisle.sortAisles(Array(byAisle.keys)).map { ($0, byAisle[$0] ?? []) }
     }
 
     var body: some View {
@@ -27,6 +29,22 @@ struct ShoppingListView: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 20) {
+                        remindersButton
+                        if shoppingStore.pendingSync > 0 || !NetworkMonitor.shared.isOnline {
+                            Text(
+                                NetworkMonitor.shared.isOnline
+                                    ? "\(shoppingStore.pendingSync) change\(shoppingStore.pendingSync == 1 ? "" : "s") syncing…"
+                                    : "Offline — checks will sync when you’re back online."
+                            )
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(Theme.muted)
+                        }
+                        if let remindersMessage {
+                            Text(remindersMessage)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Theme.accent)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                         ForEach(groups, id: \.0) { title, items in
                             let done = items.filter(\.checked).count
                             VStack(alignment: .leading, spacing: 8) {
@@ -54,6 +72,16 @@ struct ShoppingListView: View {
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
+        .alert("Reminders access needed", isPresented: $showRemindersDenied) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("Allow Adaptable to add grocery items to Apple Reminders in Settings → Adaptable → Reminders.")
+        }
     }
 
     private var header: some View {
@@ -78,6 +106,56 @@ struct ShoppingListView: View {
         }
         .padding(.top, 16)
         .padding(.bottom, 16)
+    }
+
+    private var remindersButton: some View {
+        Button {
+            Task { await sendToReminders() }
+        } label: {
+            HStack(spacing: 8) {
+                if remindersBusy {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "checklist")
+                }
+                Text(shoppingStore.uncheckedCount == 0
+                     ? "All items checked — nothing to send"
+                     : "Add \(shoppingStore.uncheckedCount) to Apple Reminders")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .foregroundStyle(Theme.content)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+        }
+        .buttonStyle(.pressable)
+        .disabled(remindersBusy || shoppingStore.uncheckedCount == 0)
+        .opacity(shoppingStore.uncheckedCount == 0 ? 0.55 : 1)
+        .accessibilityLabel("Add grocery items to Apple Reminders")
+    }
+
+    private func sendToReminders() async {
+        remindersBusy = true
+        remindersMessage = nil
+        let result = await RemindersExporter.export(items: shoppingStore.items)
+        remindersBusy = false
+        switch result {
+        case .success(let count, let listName):
+            remindersMessage = "\(count) item\(count == 1 ? "" : "s") added to “\(listName)”"
+            Task {
+                try? await Task.sleep(nanoseconds: 3_500_000_000)
+                if remindersMessage?.hasPrefix("\(count)") == true {
+                    remindersMessage = nil
+                }
+            }
+        case .empty:
+            remindersMessage = "Nothing left to send"
+        case .denied:
+            showRemindersDenied = true
+        case .failed(let message):
+            remindersMessage = "Couldn’t add to Reminders: \(message)"
+        }
     }
 
     private func itemRow(_ item: ShoppingItem) -> some View {

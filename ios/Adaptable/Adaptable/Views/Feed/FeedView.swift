@@ -6,6 +6,18 @@ private enum ChipKind: Equatable {
     case calories(max: Int)
     case protein(min: Int)
     case tag(String)
+
+    var filterChip: FeedFilter.Chip {
+        switch self {
+        case .all: return .all
+        case .forYou: return .forYou
+        case .following: return .following
+        case .time(let maxMinutes): return .time(maxMinutes: maxMinutes)
+        case .calories(let max): return .calories(max: max)
+        case .protein(let min): return .protein(min: min)
+        case .tag(let label): return .tag(label)
+        }
+    }
 }
 
 private struct Chip: Identifiable, Equatable {
@@ -15,6 +27,7 @@ private struct Chip: Identifiable, Equatable {
 }
 
 private let builtinTagLabels: Set<String> = ["high-protein", "low-cal"]
+private let feedTopID = "feed-top"
 private func tagChipId(_ label: String) -> String { "tag:\(label.lowercased())" }
 
 struct FeedView: View {
@@ -28,42 +41,81 @@ struct FeedView: View {
     @State private var errorMessage: String?
     @State private var search = ""
     @State private var activeChipId = "all"
+    /// Bumped when filters change so we can scroll the list back to the top.
+    @State private var scrollToTopToken = 0
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
-                searchAndChips
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear.frame(height: 0).id(feedTopID)
+                    header
+                    searchAndChips
 
-                if let errorMessage {
-                    EmptyStateView(emoji: "📡", title: "Connection hiccup", message: errorMessage) {
-                        PillButton(title: "Retry") { Task { await load() } }
-                    }
-                } else if recipes == nil {
-                    FeedSkeleton()
-                } else if filtered.isEmpty {
-                    emptyView
-                } else {
-                    LazyVStack(spacing: 16) {
-                        ForEach(Array(filtered.enumerated()), id: \.element.id) { index, recipe in
-                            RecipeCardView(recipe: recipe, index: index)
+                    if let errorMessage {
+                        EmptyStateView(emoji: "📡", title: "Connection hiccup", message: errorMessage) {
+                            PillButton(title: "Retry") { Task { await load() } }
+                        }
+                    } else if recipes == nil {
+                        FeedSkeleton()
+                    } else if filteredRecipes.isEmpty {
+                        emptyView
+                    } else {
+                        LazyVStack(spacing: 16) {
+                            ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
+                                RecipeCardView(recipe: recipe, index: index)
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
-        }
-        .background(Theme.surface)
-        .navigationBarHidden(true)
-        .task { if recipes == nil { await load() } }
-        .onChange(of: sort) { _, _ in Task { await load() } }
-        .onChange(of: deepLinks.feedTagFilter) { _, tag in
-            guard let tag else { return }
-            activeChipId = tagChipId(tag)
-            deepLinks.feedTagFilter = nil
+            .background(Theme.surface)
+            .navigationBarHidden(true)
+            .refreshable { await load(showSkeleton: false) }
+            .task { if recipes == nil { await load() } }
+            .onChange(of: sort) { _, _ in
+                Task { await load() }
+            }
+            .onChange(of: deepLinks.feedRefreshToken) { _, _ in
+                Task { await load(showSkeleton: false) }
+            }
+            .onChange(of: deepLinks.feedTagFilter) { _, tag in
+                guard let tag else { return }
+                selectChip(tagChipId(tag))
+                deepLinks.feedTagFilter = nil
+            }
+            .onChange(of: scrollToTopToken) { _, _ in
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(feedTopID, anchor: .top)
+                }
+            }
         }
     }
+
+    // MARK: - Derived filter (single source of truth)
+
+    /// Always computed from recipes + search + active chip — never a stale
+    /// `@State` copy that forgets to update when a chip is tapped.
+    private var filteredRecipes: [Recipe] {
+        guard let recipes else { return [] }
+        return FeedFilter.apply(
+            recipes: recipes,
+            search: search,
+            chip: activeChip.kind.filterChip,
+            dietTags: authStore.profile?.preferences?.diets ?? [],
+            followedAuthorIds: engagement.followedIds
+        )
+    }
+
+    private func selectChip(_ id: String) {
+        guard activeChipId != id else { return }
+        activeChipId = id
+        scrollToTopToken &+= 1
+    }
+
+    // MARK: - Header
 
     private var header: some View {
         HStack(alignment: .bottom) {
@@ -120,20 +172,29 @@ struct FeedView: View {
         .background(Theme.sunken, in: Capsule())
     }
 
+    // MARK: - Search + chips
+
     private var searchAndChips: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass").foregroundStyle(Theme.faint)
                 TextField("Search recipes, tags, cuisines…", text: $search)
                     .font(.system(size: 15))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                 if !search.isEmpty {
-                    Button { search = "" } label: {
+                    Button {
+                        search = ""
+                        scrollToTopToken &+= 1
+                    } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundStyle(Theme.muted)
                             .frame(width: 22, height: 22)
                             .background(Theme.sunken, in: Circle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
                 }
             }
             .padding(.horizontal, 14)
@@ -141,16 +202,20 @@ struct FeedView: View {
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
 
+            // Horizontal chip strip. Buttons (not nested scroll gestures) drive
+            // selection so taps remain reliable inside the parent ScrollView.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(chips) { chip in
                         Button {
-                            activeChipId = chip.id
+                            selectChip(chip.id)
                         } label: {
                             Text(chip.label)
                                 .font(.system(size: 13, weight: .bold))
                                 .foregroundStyle(activeChipId == chip.id ? Theme.surface : Theme.muted)
-                                .padding(.horizontal, 16).padding(.vertical, 7)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .contentShape(Capsule())
                                 .background(
                                     activeChipId == chip.id ? AnyShapeStyle(Theme.content) : AnyShapeStyle(Theme.raised),
                                     in: Capsule()
@@ -158,21 +223,29 @@ struct FeedView: View {
                                 .overlay(Capsule().stroke(activeChipId == chip.id ? .clear : Theme.line))
                         }
                         .buttonStyle(.pressable)
+                        .accessibilityAddTraits(activeChipId == chip.id ? .isSelected : [])
+                        .accessibilityLabel(chip.label)
                     }
                 }
+                // Extra vertical padding so hit targets aren't clipped by the strip.
+                .padding(.vertical, 2)
             }
 
+            // Confirms a filter took effect even when the top card is unchanged.
             if recipes != nil, activeChipId != "all" || !search.isEmpty {
-                Text("\(filtered.count) \(filtered.count == 1 ? "recipe" : "recipes")")
+                Text("\(filteredRecipes.count) \(filteredRecipes.count == 1 ? "recipe" : "recipes")")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.faint)
+                    .accessibilityLabel("\(filteredRecipes.count) recipes match this filter")
             }
         }
         .padding(.bottom, 16)
     }
 
+    // MARK: - Empty states
+
     private var isForYouEmpty: Bool {
-        filtered.isEmpty && activeChip.kind == .forYou
+        recipes != nil && filteredRecipes.isEmpty && activeChip.kind == .forYou
     }
 
     private var emptyView: some View {
@@ -184,30 +257,56 @@ struct FeedView: View {
                 ) {
                     PillButton(title: "Generate one for my diet") { deepLinks.activeTab = .create }
                 }
-            } else {
+            } else if recipes != nil && filteredRecipes.isEmpty && activeChip.kind == .following {
                 EmptyStateView(
-                    emoji: (!search.isEmpty || activeChip.kind != .all) ? "🔍" : "🍳",
-                    title: (!search.isEmpty || activeChip.kind != .all) ? "No matches" : "Nothing cooking yet",
-                    message: (!search.isEmpty || activeChip.kind != .all)
+                    emoji: "👥",
+                    title: "No recipes from chefs you follow",
+                    message: "Follow a chef from any recipe page — their new dishes show up here."
+                ) {
+                    PillButton(title: "Browse Hot recipes") { selectChip("all") }
+                }
+            } else {
+                let filtering = !search.isEmpty || activeChip.kind != .all
+                EmptyStateView(
+                    emoji: filtering ? "🔍" : "🍳",
+                    title: filtering ? "No matches" : "Nothing cooking yet",
+                    message: filtering
                         ? "Try a different search or filter — or generate exactly what you're craving."
                         : "Be the first — describe what you're craving and let the AI take it from there."
                 ) {
-                    PillButton(title: "Generate a recipe") { deepLinks.activeTab = .create }
+                    PillButton(title: filtering ? "Clear filters & browse" : "Generate a recipe") {
+                        if filtering {
+                            search = ""
+                            selectChip("all")
+                        } else {
+                            deepLinks.activeTab = .create
+                        }
+                    }
                 }
             }
         }
     }
 
-    private func load() async {
-        recipes = nil
+    // MARK: - Load
+
+    private func load(showSkeleton: Bool = true) async {
         errorMessage = nil
+        // Stale-while-revalidate: paint cache first for speed + offline.
+        if let cached = RecipeCache.loadFeed(), !cached.isEmpty {
+            recipes = cached
+        } else if showSkeleton {
+            recipes = nil
+        }
         do {
             recipes = try await API.fetchFeed(sort: sort)
-         } catch {
+        } catch {
             print("[FeedView] Failed to load feed: \(error)")
-            errorMessage = AppError.friendlyMessage(for: error)
-         }
-     }
+            if recipes == nil || recipes?.isEmpty == true {
+                errorMessage = AppError.friendlyMessage(for: error)
+                if recipes == nil { recipes = [] }
+            }
+        }
+    }
 
     // MARK: - Chips
 
@@ -239,34 +338,5 @@ struct FeedView: View {
 
     private var activeChip: Chip {
         chips.first { $0.id == activeChipId } ?? chips[0]
-    }
-
-    private var filtered: [Recipe] {
-        guard let recipes else { return [] }
-        let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let chip = activeChip
-        return recipes.filter { r in
-            if !q.isEmpty {
-                let haystack = ([r.title ?? "", r.description ?? "", r.cuisine ?? ""] + (r.tags ?? [])).joined(separator: " ").lowercased()
-                if !haystack.contains(q) { return false }
-            }
-            switch chip.kind {
-            case .time(let maxMinutes):
-                return (r.prep_time_minutes ?? 0) + (r.cook_time_minutes ?? 0) <= maxMinutes
-            case .calories(let max):
-                return r.calories != nil && r.calories! <= max
-            case .protein(let min):
-                return (r.protein_g != nil && r.protein_g! >= min) || (r.tags ?? []).contains { $0.lowercased() == "high-protein" }
-            case .forYou:
-                let diets = (authStore.profile?.preferences?.diets ?? []).map { $0.lowercased() }
-                return (r.tags ?? []).contains { diets.contains($0.lowercased()) }
-            case .following:
-                return engagement.followedIds.contains(r.author_id ?? "")
-            case .tag(let label):
-                return (r.tags ?? []).contains { $0.lowercased() == label.lowercased() }
-            case .all:
-                return true
-            }
-        }
     }
 }
