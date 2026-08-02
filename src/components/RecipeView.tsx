@@ -44,14 +44,23 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
   const navigate = useNavigate();
   const { addRecipe } = useShopping();
   const { profile } = useAuth();
+  const signedIn = !!profile;
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [servings, setServings] = useState(recipe.servings);
   const [addedToList, setAddedToList] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [planned, setPlanned] = useState<string | null>(null);
 
+  const requireSignIn = (nextPath?: string) => {
+    const next = nextPath ?? `/recipe/${recipe.id}`;
+    navigate(`/auth?next=${encodeURIComponent(next)}`);
+  };
+
   const planFor = (iso: string, label: string) => {
-    if (!profile) return;
+    if (!profile) {
+      requireSignIn();
+      return;
+    }
     addMealPlan(profile.id, recipe.id, iso, servings).catch(() => {});
     setPlanOpen(false);
     setPlanned(label);
@@ -88,6 +97,10 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
   };
 
   const addToGroceries = () => {
+    if (!signedIn) {
+      requireSignIn();
+      return;
+    }
     if (addedToList) return;
     addRecipe(recipe, factor);
     setAddedToList(true);
@@ -167,10 +180,28 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
         </div>
       )}
 
+      {!signedIn && (
+        <div className="mt-4 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 text-[13px] font-semibold text-accent">
+          You’re viewing a shared recipe.{" "}
+          <button
+            type="button"
+            onClick={() => requireSignIn()}
+            className="underline underline-offset-2"
+          >
+            Sign in
+          </button>{" "}
+          to cook in the app, save, plan meals, and add groceries.
+        </div>
+      )}
+
       {/* Start cooking + plan */}
       <div className="mt-4 flex gap-3">
         <button
-          onClick={() => navigate(`/cook/${recipe.id}?servings=${servings}`)}
+          onClick={() =>
+            signedIn
+              ? navigate(`/cook/${recipe.id}?servings=${servings}`)
+              : requireSignIn(`/cook/${recipe.id}?servings=${servings}`)
+          }
           className="pressable flex h-14 flex-1 items-center justify-center gap-2.5 rounded-2xl text-[16px] font-extrabold text-white shadow-lg shadow-accent/25"
           style={{
             background:
@@ -182,7 +213,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
         </button>
         <button
           aria-label="Add to meal plan"
-          onClick={() => setPlanOpen(true)}
+          onClick={() => (signedIn ? setPlanOpen(true) : requireSignIn())}
           className={`pressable flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border transition-colors ${
             planned ? "border-accent bg-accent-soft text-accent" : "border-line bg-raised text-muted"
           }`}

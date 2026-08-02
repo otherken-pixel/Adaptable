@@ -86,6 +86,7 @@ struct CookModeView: View {
                                 (voice.statusMessage != nil ? Theme.down.opacity(0.12) : Theme.accentSoft),
                                 in: RoundedRectangle(cornerRadius: 14)
                             )
+                            .accessibilityLabel(voice.statusMessage ?? "Voice commands listening")
                     }
 
                     if isPrep { prepView(recipe: recipe) }
@@ -396,6 +397,7 @@ struct CookModeView: View {
                         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
                 }
+                .accessibilityLabel("Previous step")
             }
             Button {
                 self.idx = min(self.idx + 1, total + 1)
@@ -409,6 +411,7 @@ struct CookModeView: View {
                 .foregroundStyle(.white)
                 .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
+            .accessibilityLabel(isPrep ? "Start cooking" : (idx == total ? "Finish cooking" : "Next step"))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

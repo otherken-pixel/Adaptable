@@ -200,17 +200,31 @@ struct ProfileView: View {
     }
 
     private var signOutButton: some View {
-        Button {
-            Task { await authStore.signOut() }
-        } label: {
-            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
-                .font(.system(size: 15, weight: .bold))
-                .frame(maxWidth: .infinity).frame(height: 52)
-                .foregroundStyle(Theme.content)
-                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+        VStack(spacing: 12) {
+            HStack(spacing: 16) {
+                if let support = URL(string: "https://adaptable-pi.vercel.app/support") {
+                    Link("Support", destination: support)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                }
+                if let privacy = URL(string: "https://adaptable-pi.vercel.app/privacy") {
+                    Link("Privacy", destination: privacy)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+            Button {
+                Task { await authStore.signOut() }
+            } label: {
+                Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .foregroundStyle(Theme.content)
+                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+            }
+            .buttonStyle(.pressable)
         }
-        .buttonStyle(.pressable)
     }
 
     private var dangerZone: some View {

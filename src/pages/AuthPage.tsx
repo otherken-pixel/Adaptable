@@ -1,12 +1,21 @@
 import { useState, type FormEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ChefHat, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 type Mode = "signin" | "signup" | "forgot";
 
+function safeNext(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return null;
+  return raw;
+}
+
 export default function AuthPage() {
   const { signInWithPassword, signUp, signInWithGoogle, requestPasswordReset } =
     useAuth();
+  const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeNext(params.get("next"));
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,6 +32,7 @@ export default function AuthPage() {
     try {
       if (mode === "signin") {
         await signInWithPassword(email, password);
+        if (next) navigate(next, { replace: true });
       } else if (mode === "signup") {
         await signUp(email, password, username);
         setNotice("Check your inbox to confirm your email, then sign in.");
@@ -40,6 +50,8 @@ export default function AuthPage() {
   const google = async () => {
     setError(null);
     try {
+      // OAuth returns to origin; next path is preserved via sessionStorage.
+      if (next) sessionStorage.setItem("adaptable.next", next);
       await signInWithGoogle();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Google sign-in failed.");
@@ -151,13 +163,23 @@ export default function AuthPage() {
         </>
       )}
 
+      <p className="mt-6 text-center text-[12px] text-faint">
+        <Link to="/privacy" className="font-semibold text-muted underline-offset-2 hover:underline">
+          Privacy
+        </Link>
+        {" · "}
+        <Link to="/support" className="font-semibold text-muted underline-offset-2 hover:underline">
+          Support
+        </Link>
+      </p>
+
       <button
         onClick={() => {
           setMode((m) => (m === "signin" ? "signup" : "signin"));
           setError(null);
           setNotice(null);
         }}
-        className="pressable mt-6 text-center text-sm font-semibold text-muted"
+        className="pressable mt-4 text-center text-sm font-semibold text-muted"
       >
         {mode === "signin" ? (
           <>

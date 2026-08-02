@@ -56,34 +56,46 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
       </h2>
 
       {/* Composer */}
-      <div className="mt-3 flex items-end gap-2 rounded-2xl border border-line bg-raised p-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void post();
-            }
-          }}
-          rows={1}
-          maxLength={1000}
-          placeholder="How did it turn out? Tips, swaps, results…"
-          className="max-h-24 min-h-[40px] flex-1 resize-none bg-transparent px-3 py-2 text-[15px] outline-none placeholder:text-faint"
-        />
-        <button
-          aria-label="Post comment"
-          onClick={() => void post()}
-          disabled={!draft.trim() || posting}
-          className="pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-opacity disabled:opacity-30"
-          style={{
-            background:
-              "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
-          }}
-        >
-          <Send size={16} strokeWidth={2.4} />
-        </button>
-      </div>
+      {profile ? (
+        <div className="mt-3 flex items-end gap-2 rounded-2xl border border-line bg-raised p-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void post();
+              }
+            }}
+            rows={1}
+            maxLength={1000}
+            placeholder="How did it turn out? Tips, swaps, results…"
+            className="max-h-24 min-h-[40px] flex-1 resize-none bg-transparent px-3 py-2 text-[15px] outline-none placeholder:text-faint"
+          />
+          <button
+            aria-label="Post comment"
+            onClick={() => void post()}
+            disabled={!draft.trim() || posting}
+            className="pressable flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-opacity disabled:opacity-30"
+            style={{
+              background:
+                "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+            }}
+          >
+            <Send size={16} strokeWidth={2.4} />
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 rounded-2xl border border-dashed border-line px-4 py-3 text-center text-sm text-muted">
+          <a
+            href={`/auth?next=${encodeURIComponent(`/recipe/${recipeId}`)}`}
+            className="font-bold text-accent underline-offset-2 hover:underline"
+          >
+            Sign in
+          </a>{" "}
+          to leave a comment.
+        </p>
+      )}
 
       {/* List */}
       <div className="mt-4 space-y-3">

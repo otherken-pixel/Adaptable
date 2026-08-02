@@ -75,14 +75,16 @@ final class ShoppingStore: ObservableObject {
     }
 
     func clearChecked(userId: String) {
+        let removed = items.filter(\.checked)
+        guard !removed.isEmpty else { return }
+        // Optimistic local clear so the list updates immediately.
+        items = items.filter { !$0.checked }
         Task {
             do {
                 try await API.clearCheckedShoppingItems(userId: userId)
             } catch {
-                // If it fails, we don't need to roll back unless we want 
-                // to visually indicate the failure. Since clearChecked is
-                // usually a batch operation, rolling back every change since
-                // the start of the request (previous version) is risky.
+                // Restore on failure.
+                items = removed + items
                 print("Failed to clear checked items: \(error)")
             }
         }

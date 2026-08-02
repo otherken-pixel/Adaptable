@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, Search, X } from "lucide-react";
+import { Bell, Search, Sparkles, X } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
+import { filterFeedRecipes, type FeedChip } from "@/lib/feedFilter";
 import type { FeedSort, Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
 import { FeedSkeleton } from "@/components/Skeletons";
@@ -9,6 +10,8 @@ import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useEngagement } from "@/context/EngagementContext";
+
+const TASTE_NUDGE_KEY = "adaptable.tasteNudge.v1.dismissed";
 
 type Chip =
   | { id: string; kind: "all"; label: string }
@@ -18,6 +21,25 @@ type Chip =
   | { id: string; kind: "cal"; label: string; maxCalories: number }
   | { id: string; kind: "protein"; label: string; minProtein: number }
   | { id: string; kind: "tag"; label: string };
+
+function toFeedChip(chip: Chip): FeedChip {
+  switch (chip.kind) {
+    case "all":
+      return { kind: "all" };
+    case "foryou":
+      return { kind: "foryou" };
+    case "following":
+      return { kind: "following" };
+    case "time":
+      return { kind: "time", maxMinutes: chip.maxMinutes };
+    case "cal":
+      return { kind: "cal", maxCalories: chip.maxCalories };
+    case "protein":
+      return { kind: "protein", minProtein: chip.minProtein };
+    case "tag":
+      return { kind: "tag", label: chip.label };
+  }
+}
 
 const tagChipId = (label: string) => `tag:${label.toLowerCase()}`;
 
@@ -31,9 +53,25 @@ export default function FeedPage() {
   const [search, setSearch] = useState("");
   const [activeChipId, setActiveChipId] = useState("all");
   const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [showTasteNudge, setShowTasteNudge] = useState(false);
   const { profile } = useAuth();
   const { unreadCount } = useNotifications();
   const { followedIds } = useEngagement();
+
+  useEffect(() => {
+    if (!profile) return;
+    if (localStorage.getItem(TASTE_NUDGE_KEY)) return;
+    const prefs = profile.preferences;
+    const empty =
+      !(prefs?.diets?.length) &&
+      !(prefs?.allergies?.length) &&
+      !(prefs?.dislikes?.length);
+    if (!empty) {
+      localStorage.setItem(TASTE_NUDGE_KEY, "1");
+      return;
+    }
+    setShowTasteNudge(true);
+  }, [profile]);
 
   // Deep link: /?tag=High-protein (recipe tag pills navigate here).
   const [params, setParams] = useSearchParams();
@@ -113,46 +151,19 @@ export default function FeedPage() {
     setActiveChipId(chip.id);
     // Manual picks replace any deep-linked tag in the URL.
     if (tagParam) setParams({}, { replace: true });
+    // Make the filtered set obvious when the user is mid-scroll.
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const filtered = useMemo(() => {
     if (!recipes) return null;
-    const q = search.trim().toLowerCase();
-    const chip = activeChip;
-    return recipes.filter((r) => {
-      if (q) {
-        const haystack = [r.title, r.description, r.cuisine, ...r.tags]
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      switch (chip.kind) {
-        case "time":
-          return r.prep_time_minutes + r.cook_time_minutes <= chip.maxMinutes;
-        case "cal":
-          // Recipes without calorie data can't claim to be low-cal.
-          return r.calories !== null && r.calories <= chip.maxCalories;
-        case "protein":
-          return (
-            (r.protein_g !== null && r.protein_g >= chip.minProtein) ||
-            r.tags.some((t) => t.toLowerCase() === "high-protein")
-          );
-        case "foryou": {
-          const diets = (profile?.preferences?.diets ?? []).map((d) =>
-            d.toLowerCase(),
-          );
-          return r.tags.some((t) => diets.includes(t.toLowerCase()));
-        }
-        case "following":
-          return followedIds.has(r.author_id);
-        case "tag":
-          return r.tags.some(
-            (t) => t.toLowerCase() === chip.label.toLowerCase(),
-          );
-        default:
-          return true;
-      }
-    });
+    return filterFeedRecipes(
+      recipes,
+      search,
+      toFeedChip(activeChip),
+      profile?.preferences?.diets ?? [],
+      followedIds,
+    );
   }, [recipes, search, activeChip, profile, followedIds]);
 
   const filteredEmpty = filtered !== null && filtered.length === 0;
@@ -199,6 +210,40 @@ export default function FeedPage() {
           <div>Profile: {profile?.username ?? "(not signed in)"}</div>
           <div>Recipes loaded: {recipes?.length ?? "—"}</div>
           <div>Error: {error ?? "(none)"}</div>
+        </div>
+      )}
+
+      {showTasteNudge && (
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-accent/25 bg-accent-soft p-4">
+          <Sparkles size={18} className="mt-0.5 shrink-0 text-accent" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-extrabold text-content">
+              Make recipes adapt to you
+            </p>
+            <p className="mt-0.5 text-[13px] leading-snug text-muted">
+              Set diets and allergies once — we treat allergies as a hard safety
+              rule on every AI generate.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                to="/taste"
+                onClick={() => localStorage.setItem(TASTE_NUDGE_KEY, "1")}
+                className="pressable rounded-full bg-content px-4 py-1.5 text-[13px] font-bold text-surface"
+              >
+                Set taste profile
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem(TASTE_NUDGE_KEY, "1");
+                  setShowTasteNudge(false);
+                }}
+                className="pressable rounded-full px-3 py-1.5 text-[13px] font-bold text-muted"
+              >
+                Not now
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -281,7 +326,30 @@ export default function FeedPage() {
         />
       )}
 
-      {!error && filteredEmpty && !isForYouEmpty && (
+      {!error &&
+        filteredEmpty &&
+        !isForYouEmpty &&
+        activeChip.kind === "following" && (
+          <EmptyState
+            emoji="👥"
+            title="No recipes from chefs you follow"
+            body="Follow a chef from any recipe page — their new dishes show up here."
+            action={
+              <button
+                type="button"
+                onClick={() => pickChip({ id: "all", kind: "all", label: "All" })}
+                className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+              >
+                Browse Hot recipes
+              </button>
+            }
+          />
+        )}
+
+      {!error &&
+        filteredEmpty &&
+        !isForYouEmpty &&
+        activeChip.kind !== "following" && (
         <EmptyState
           emoji={search || activeChip.kind !== "all" ? "🔍" : "🍳"}
           title={
@@ -295,12 +363,25 @@ export default function FeedPage() {
               : "Be the first — describe what you're craving and let the AI take it from there."
           }
           action={
-            <Link
-              to="/create"
-              className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
-            >
-              Generate a recipe
-            </Link>
+            search || activeChip.kind !== "all" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  pickChip({ id: "all", kind: "all", label: "All" });
+                }}
+                className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+              >
+                Clear filters & browse
+              </button>
+            ) : (
+              <Link
+                to="/create"
+                className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+              >
+                Generate a recipe
+              </Link>
+            )
           }
         />
       )}

@@ -8,6 +8,14 @@
 //   supabase secrets set GEMINI_API_KEY=...
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  assertDailyRecipeLimit,
+  extractAllergies,
+  findAllergyViolations,
+} from "../_shared/safety.ts";
+
+/** Soft daily cap on AI generations per user (UTC day). */
+const DAILY_GENERATE_LIMIT = 25;
 
 /** Preferred model first; fall back if Google returns 404 (retired model id).
  *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
@@ -146,58 +154,67 @@ Deno.serve(async (req) => {
       );
     }
 
+    const rate = await assertDailyRecipeLimit(
+      supabase,
+      user.id,
+      DAILY_GENERATE_LIMIT,
+      "generation",
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+
     const { data: profileRow } = await supabase
       .from("profiles")
       .select("preferences")
       .eq("id", user.id)
       .maybeSingle();
-    const prefsText = preferencesToPrompt(profileRow?.preferences);
+    const prefs = profileRow?.preferences;
+    const allergies = extractAllergies(prefs);
+    const prefsText = preferencesToPrompt(prefs);
+    // Lower temperature when hard safety constraints are present.
+    const temperature = allergies.length > 0 ? 0.45 : 0.85;
 
-    const payload = {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text:
-                `Create one complete, realistic, delicious recipe for this request: "${prompt}". ` +
-                (requestedServings
-                  ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
-                  : "") +
-                prefsText +
-                "Respect every dietary constraint, time limit and equipment restriction in the request. " +
-                "Quantities must use both metric and imperial where sensible. " +
-                "Steps must be specific enough for a beginner to follow. " +
-                "Include at least 4 ingredients and at least 3 steps. " +
-                "Estimate calories, protein, carbs and fat per serving. " +
-                'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +
-                'if it has 30 g protein per serving or more, include a "High-protein" tag.',
-            },
-          ],
+    const baseInstruction =
+      `Create one complete, realistic, delicious recipe for this request: "${prompt}". ` +
+      (requestedServings
+        ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
+        : "") +
+      prefsText +
+      "Respect every dietary constraint, time limit and equipment restriction in the request. " +
+      "Quantities must use both metric and imperial where sensible. " +
+      "Steps must be specific enough for a beginner to follow. " +
+      "Include at least 4 ingredients and at least 3 steps. " +
+      "Estimate calories, protein, carbs and fat per serving. " +
+      'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +
+      'if it has 30 g protein per serving or more, include a "High-protein" tag.';
+
+    async function generateOnce(extra: string) {
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: baseInstruction + extra }],
+          },
+        ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: recipeSchema,
+          temperature,
         },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: recipeSchema,
-        temperature: 0.9,
-      },
-    };
+      };
+      return await callGeminiWithModelFallback(geminiKey!, payload);
+    }
 
-    const gemini = await callGeminiWithModelFallback(geminiKey, payload);
+    let gemini = await generateOnce("");
     if (!gemini.ok) {
       console.error(
         "Gemini call failed",
         gemini.status,
         (gemini.detail || "").slice(0, 800),
-        "key_prefix",
-        geminiKey.slice(0, 6),
-        "key_len",
-        geminiKey.length,
       );
       return geminiErrorResponse(gemini.status, gemini.detail);
     }
 
-    const recipe = parseRecipeJson(gemini.text);
+    let recipe = parseRecipeJson(gemini.text);
     if (!recipe) {
       console.error("Failed to parse Gemini recipe JSON", gemini.text?.slice(0, 400));
       return json(
@@ -218,6 +235,34 @@ Deno.serve(async (req) => {
         },
         502,
       );
+    }
+
+    // Hard safety: scan ingredients/steps; one automatic rewrite if needed.
+    let violations = findAllergyViolations(recipe, allergies);
+    if (violations.length > 0) {
+      console.warn("Allergy violations on first pass", violations);
+      const rewriteExtra =
+        ` CRITICAL REWRITE: The previous draft illegally contained ${violations.join(", ")}. ` +
+        `Produce a completely different recipe with ZERO ${violations.join(", ")} ` +
+        `or any derivatives. Do not mention those ingredients at all.`;
+      gemini = await generateOnce(rewriteExtra);
+      if (gemini.ok) {
+        const rewritten = parseRecipeJson(gemini.text);
+        if (rewritten && isValidRecipe(rewritten)) {
+          recipe = rewritten;
+          violations = findAllergyViolations(recipe, allergies);
+        }
+      }
+      if (violations.length > 0) {
+        return json(
+          {
+            error:
+              `We blocked this recipe because it still looked like it contained your allergen(s): ${violations.join(", ")}. ` +
+              `Try a different prompt, or double-check Taste Profile allergies.`,
+          },
+          422,
+        );
+      }
     }
 
     const { data: row, error: insertError } = await supabase

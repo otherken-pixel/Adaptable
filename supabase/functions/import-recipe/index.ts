@@ -10,6 +10,14 @@
 // (RLS enforced), and returned. Import is free and unlimited by design.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  assertDailyRecipeLimit,
+  extractAllergies,
+  findAllergyViolations,
+} from "../_shared/safety.ts";
+
+/** Soft daily cap on imports per user (UTC day). Free but not infinite. */
+const DAILY_IMPORT_LIMIT = 40;
 
 /** Gemini 2.0 Flash family shut down 2026-06-01 — use 2.5+. */
 const GEMINI_MODELS = [
@@ -127,6 +135,21 @@ Deno.serve(async (req) => {
       return json({ error: "The import engine is not configured. Contact support." }, 500);
     }
 
+    const rate = await assertDailyRecipeLimit(
+      supabase,
+      user.id,
+      DAILY_IMPORT_LIMIT,
+      "import",
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("preferences")
+      .eq("id", user.id)
+      .maybeSingle();
+    const allergies = extractAllergies(profileRow?.preferences);
+
     const parts: unknown[] = [];
     let sourceUrl: string | null = null;
 
@@ -208,6 +231,18 @@ Deno.serve(async (req) => {
     if (!isValidRecipe(recipe)) {
       return json(
         { error: "Couldn't extract a complete recipe — try a clearer photo or paste the text." },
+        422,
+      );
+    }
+
+    const violations = findAllergyViolations(recipe, allergies);
+    if (violations.length > 0) {
+      return json(
+        {
+          error:
+            `This source appears to contain your allergen(s): ${violations.join(", ")}. ` +
+            `We didn't save it. Remove those from Taste Profile only if that is intentional, or pick another recipe.`,
+        },
         422,
       );
     }
