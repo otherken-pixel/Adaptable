@@ -49,6 +49,9 @@ final class ShoppingStore: ObservableObject {
             if i.id == id { i.checked = next }
             return i
         }
+        Haptics.selection()
+        // Offline: keep optimistic state; sync when back online via next load.
+        guard NetworkMonitor.shared.isOnline else { return }
         Task {
             do {
                 try await API.setShoppingItemChecked(userId: userId, id: id, checked: next)

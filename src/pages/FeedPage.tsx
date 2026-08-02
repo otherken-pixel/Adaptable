@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Bell, Search, Sparkles, X } from "lucide-react";
+import { Bell, Search, WifiOff, X } from "lucide-react";
 import { fetchFeed } from "@/lib/api";
 import { filterFeedRecipes, type FeedChip } from "@/lib/feedFilter";
+import { getCachedFeed, setCachedFeed } from "@/lib/cache";
 import type { FeedSort, Recipe } from "@/lib/types";
 import RecipeCard from "@/components/RecipeCard";
 import { FeedSkeleton } from "@/components/Skeletons";
@@ -10,8 +11,7 @@ import EmptyState from "@/components/EmptyState";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useEngagement } from "@/context/EngagementContext";
-
-const TASTE_NUDGE_KEY = "adaptable.tasteNudge.v1.dismissed";
+import { useOnline } from "@/hooks/useOnline";
 
 type Chip =
   | { id: string; kind: "all"; label: string }
@@ -53,25 +53,11 @@ export default function FeedPage() {
   const [search, setSearch] = useState("");
   const [activeChipId, setActiveChipId] = useState("all");
   const [showDebugInfo, setShowDebugInfo] = useState(false);
-  const [showTasteNudge, setShowTasteNudge] = useState(false);
+  const [fromCache, setFromCache] = useState(false);
   const { profile } = useAuth();
   const { unreadCount } = useNotifications();
   const { followedIds } = useEngagement();
-
-  useEffect(() => {
-    if (!profile) return;
-    if (localStorage.getItem(TASTE_NUDGE_KEY)) return;
-    const prefs = profile.preferences;
-    const empty =
-      !(prefs?.diets?.length) &&
-      !(prefs?.allergies?.length) &&
-      !(prefs?.dislikes?.length);
-    if (!empty) {
-      localStorage.setItem(TASTE_NUDGE_KEY, "1");
-      return;
-    }
-    setShowTasteNudge(true);
-  }, [profile]);
+  const online = useOnline();
 
   // Deep link: /?tag=High-protein (recipe tag pills navigate here).
   const [params, setParams] = useSearchParams();
@@ -82,17 +68,47 @@ export default function FeedPage() {
 
   const load = useCallback(() => {
     let cancelled = false;
-    setRecipes(null);
     setError(null);
+    // Instant paint from cache while network refreshes.
+    const cached = getCachedFeed<{ sort: FeedSort; rows: Recipe[] }>();
+    if (cached?.rows?.length && cached.sort === sort) {
+      setRecipes(cached.rows);
+      setFromCache(true);
+    } else if (!online) {
+      // Any cached feed is better than empty offline.
+      if (cached?.rows?.length) {
+        setRecipes(cached.rows);
+        setFromCache(true);
+      } else {
+        setRecipes(null);
+      }
+    } else {
+      setRecipes(null);
+    }
+
+    if (!online && cached?.rows?.length) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     fetchFeed(sort)
-      .then((r) => !cancelled && setRecipes(r))
-      .catch(
-        (e) => !cancelled && setError(e?.message ?? "Couldn't load the feed."),
-      );
+      .then((r) => {
+        if (cancelled) return;
+        setRecipes(r);
+        setFromCache(false);
+        setCachedFeed({ sort, rows: r });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        if (!cached?.rows?.length) {
+          setError(e?.message ?? "Couldn't load the feed.");
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [sort]);
+  }, [sort, online]);
 
   useEffect(() => load(), [load]);
 
@@ -213,37 +229,14 @@ export default function FeedPage() {
         </div>
       )}
 
-      {showTasteNudge && (
-        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-accent/25 bg-accent-soft p-4">
-          <Sparkles size={18} className="mt-0.5 shrink-0 text-accent" />
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-extrabold text-content">
-              Make recipes adapt to you
-            </p>
-            <p className="mt-0.5 text-[13px] leading-snug text-muted">
-              Set diets and allergies once — we treat allergies as a hard safety
-              rule on every AI generate.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                to="/taste"
-                onClick={() => localStorage.setItem(TASTE_NUDGE_KEY, "1")}
-                className="pressable rounded-full bg-content px-4 py-1.5 text-[13px] font-bold text-surface"
-              >
-                Set taste profile
-              </Link>
-              <button
-                type="button"
-                onClick={() => {
-                  localStorage.setItem(TASTE_NUDGE_KEY, "1");
-                  setShowTasteNudge(false);
-                }}
-                className="pressable rounded-full px-3 py-1.5 text-[13px] font-bold text-muted"
-              >
-                Not now
-              </button>
-            </div>
-          </div>
+      {!online && (
+        <div
+          className="mb-4 flex items-center gap-2 rounded-2xl border border-line bg-sunken px-4 py-3 text-[13px] font-semibold text-muted"
+          role="status"
+        >
+          <WifiOff size={16} className="shrink-0" aria-hidden />
+          You&apos;re offline
+          {fromCache ? " — showing saved recipes." : " — connect to load the feed."}
         </div>
       )}
 

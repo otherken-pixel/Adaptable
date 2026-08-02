@@ -16,6 +16,7 @@ import ProfilePage from "@/pages/ProfilePage";
 import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import TasteProfilePage from "@/pages/TasteProfilePage";
+import OnboardingPage from "@/pages/OnboardingPage";
 import { PrivacyPage, SupportPage } from "@/pages/LegalPages";
 import { ChefHat } from "lucide-react";
 
@@ -43,12 +44,36 @@ function Splash() {
   );
 }
 
+function needsOnboarding(): boolean {
+  try {
+    return !localStorage.getItem("adaptable.onboarding.v1.done");
+  } catch {
+    return false;
+  }
+}
+
 /** Full signed-in app chrome. */
 function AuthenticatedShell() {
+  const { profile } = useAuth();
+  const location = useLocation();
+
+  // First session: full multi-step onboarding before a cold feed.
+  const showOnboarding =
+    !!profile &&
+    needsOnboarding() &&
+    !location.pathname.startsWith("/privacy") &&
+    !location.pathname.startsWith("/support") &&
+    !location.pathname.startsWith("/reset-password");
+
+  if (showOnboarding && location.pathname !== "/onboarding") {
+    return <Navigate to="/onboarding" replace />;
+  }
+
   return (
     <>
       <ScrollToTop />
       <Routes>
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/" element={<FeedPage />} />
         <Route path="/create" element={<GeneratePage />} />
         <Route path="/recipe/:id" element={<RecipeDetailPage />} />
@@ -64,7 +89,7 @@ function AuthenticatedShell() {
         <Route path="/auth" element={<Navigate to="/" replace />} />
         <Route path="*" element={<FeedPage />} />
       </Routes>
-      <BottomNav />
+      {location.pathname !== "/onboarding" && <BottomNav />}
     </>
   );
 }

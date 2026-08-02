@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { MessageCircle, Send, Trash2 } from "lucide-react";
-import { addComment, deleteComment, fetchComments } from "@/lib/api";
+import { Flag, MessageCircle, Send, Trash2 } from "lucide-react";
+import {
+  addComment,
+  deleteComment,
+  fetchComments,
+  reportComment,
+} from "@/lib/api";
 import { coverGradient } from "@/lib/gradients";
 import { timeAgo } from "@/lib/format";
 import type { Comment } from "@/lib/types";
@@ -11,6 +16,8 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
   const [comments, setComments] = useState<Comment[] | null>(null);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
+  const [reported, setReported] = useState<Set<string>>(new Set());
+  const [reportBusy, setReportBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,20 +52,41 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
     });
   };
 
+  const report = async (id: string) => {
+    if (!profile || reportBusy || reported.has(id)) return;
+    const reason = window.prompt(
+      "Why are you reporting this comment? (spam, abuse, unsafe advice…)",
+      "Inappropriate or unsafe",
+    );
+    if (!reason?.trim()) return;
+    setReportBusy(id);
+    try {
+      await reportComment(profile.id, id, reason.trim());
+      setReported((prev) => new Set(prev).add(id));
+    } catch {
+      /* toast omitted — silent fail is fine for rare path */
+    } finally {
+      setReportBusy(null);
+    }
+  };
+
   return (
-    <section className="mt-8">
+    <section className="mt-8" aria-label="Comments">
       <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
-        <MessageCircle size={19} strokeWidth={2.4} className="text-accent" />
+        <MessageCircle size={19} strokeWidth={2.4} className="text-accent" aria-hidden />
         Comments
         {comments !== null && (
           <span className="text-sm font-bold text-faint">{comments.length}</span>
         )}
       </h2>
 
-      {/* Composer */}
       {profile ? (
         <div className="mt-3 flex items-end gap-2 rounded-2xl border border-line bg-raised p-2">
+          <label className="sr-only" htmlFor="comment-draft">
+            Write a comment
+          </label>
           <textarea
+            id="comment-draft"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -82,7 +110,7 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
                 "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
             }}
           >
-            <Send size={16} strokeWidth={2.4} />
+            <Send size={16} strokeWidth={2.4} aria-hidden />
           </button>
         </div>
       ) : (
@@ -97,7 +125,6 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
         </p>
       )}
 
-      {/* List */}
       <div className="mt-4 space-y-3">
         {comments === null && (
           <>
@@ -124,6 +151,7 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
                 style={{
                   background: coverGradient(c.author?.username ?? c.user_id),
                 }}
+                aria-hidden
               >
                 {(c.author?.username ?? "?").slice(0, 1).toUpperCase()}
               </span>
@@ -131,17 +159,40 @@ export default function CommentsSection({ recipeId }: { recipeId: string }) {
                 {c.author?.username ?? "anonymous"}
               </span>
               <span className="text-xs text-faint">{timeAgo(c.created_at)}</span>
-              {profile?.id === c.user_id && (
-                <button
-                  aria-label="Delete comment"
-                  onClick={() => remove(c.id)}
-                  className="pressable ml-auto flex h-7 w-7 items-center justify-center rounded-full text-faint"
-                >
-                  <Trash2 size={14} strokeWidth={2.2} />
-                </button>
-              )}
+              <div className="ml-auto flex items-center gap-1">
+                {profile && profile.id !== c.user_id && (
+                  <button
+                    aria-label={
+                      reported.has(c.id) ? "Comment reported" : "Report comment"
+                    }
+                    disabled={reported.has(c.id) || reportBusy === c.id}
+                    onClick={() => void report(c.id)}
+                    className="pressable flex h-7 w-7 items-center justify-center rounded-full text-faint disabled:opacity-40"
+                  >
+                    <Flag
+                      size={14}
+                      strokeWidth={2.2}
+                      className={reported.has(c.id) ? "text-accent" : undefined}
+                    />
+                  </button>
+                )}
+                {profile?.id === c.user_id && (
+                  <button
+                    aria-label="Delete comment"
+                    onClick={() => remove(c.id)}
+                    className="pressable flex h-7 w-7 items-center justify-center rounded-full text-faint"
+                  >
+                    <Trash2 size={14} strokeWidth={2.2} />
+                  </button>
+                )}
+              </div>
             </div>
             <p className="mt-2 text-[14px] leading-relaxed">{c.body}</p>
+            {reported.has(c.id) && (
+              <p className="mt-2 text-[12px] font-semibold text-accent">
+                Thanks — we received your report.
+              </p>
+            )}
           </div>
         ))}
       </div>

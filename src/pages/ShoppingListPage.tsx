@@ -1,12 +1,35 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, Trash2, X } from "lucide-react";
+import { Check, Share2, Trash2, X } from "lucide-react";
 import { useShopping } from "@/context/ShoppingContext";
 import EmptyState from "@/components/EmptyState";
 import type { ShoppingItem } from "@/lib/types";
 
+function formatGroceryList(items: ShoppingItem[]): string {
+  const unchecked = items.filter((i) => !i.checked);
+  const byRecipe = new Map<string, ShoppingItem[]>();
+  for (const item of unchecked) {
+    const key = item.recipe_title || "Other items";
+    const list = byRecipe.get(key) ?? [];
+    list.push(item);
+    byRecipe.set(key, list);
+  }
+  const lines: string[] = ["🛒 Grocery list — Adaptable", ""];
+  for (const [title, group] of byRecipe) {
+    lines.push(title);
+    for (const item of group) {
+      const qty = item.quantity?.trim() ? ` — ${item.quantity}` : "";
+      lines.push(`• ${item.item}${qty}`);
+    }
+    lines.push("");
+  }
+  lines.push("Tip: paste into Apple Reminders, Notes, or Messages.");
+  return lines.join("\n").trim();
+}
+
 export default function ShoppingListPage() {
   const { items, uncheckedCount, toggle, remove, clearChecked } = useShopping();
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   const groups = useMemo(() => {
     const byRecipe = new Map<string, ShoppingItem[]>();
@@ -21,9 +44,25 @@ export default function ShoppingListPage() {
 
   const checkedCount = items.length - uncheckedCount;
 
+  const exportList = async () => {
+    const text = formatGroceryList(items);
+    if (!text || uncheckedCount === 0) return;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "Grocery list", text });
+      } else {
+        await navigator.clipboard.writeText(text);
+        setShareNote("List copied — paste into Reminders or Notes");
+        setTimeout(() => setShareNote(null), 2500);
+      }
+    } catch {
+      /* dismissed */
+    }
+  };
+
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
-      <header className="flex items-end justify-between pt-6 pb-4">
+      <header className="flex items-end justify-between gap-2 pt-6 pb-4">
         <div>
           <p className="text-xs font-bold tracking-[0.18em] text-accent uppercase">
             {uncheckedCount > 0 ? `${uncheckedCount} to grab` : "All set"}
@@ -32,16 +71,34 @@ export default function ShoppingListPage() {
             Groceries
           </h1>
         </div>
-        {checkedCount > 0 && (
-          <button
-            onClick={clearChecked}
-            className="pressable flex items-center gap-1.5 rounded-full bg-sunken px-4 py-2 text-[13px] font-bold text-muted"
-          >
-            <Trash2 size={14} strokeWidth={2.4} />
-            Clear done
-          </button>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {uncheckedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => void exportList()}
+              className="pressable flex items-center gap-1.5 rounded-full bg-sunken px-4 py-2 text-[13px] font-bold text-muted"
+              aria-label="Share or copy grocery list"
+            >
+              <Share2 size={14} strokeWidth={2.4} />
+              Export
+            </button>
+          )}
+          {checkedCount > 0 && (
+            <button
+              onClick={clearChecked}
+              className="pressable flex items-center gap-1.5 rounded-full bg-sunken px-4 py-2 text-[13px] font-bold text-muted"
+            >
+              <Trash2 size={14} strokeWidth={2.4} />
+              Clear done
+            </button>
+          )}
+        </div>
       </header>
+      {shareNote && (
+        <p className="mb-3 text-[13px] font-bold text-accent" role="status">
+          {shareNote}
+        </p>
+      )}
 
       {items.length === 0 && (
         <EmptyState

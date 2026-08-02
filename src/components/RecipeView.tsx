@@ -22,10 +22,12 @@ import { scaleQuantity } from "@/lib/quantity";
 import { localISODate } from "@/lib/format";
 import { addMealPlan } from "@/lib/api";
 import { buildRecipeShare } from "@/lib/shareRecipe";
+import { recipeMayContainAllergens } from "@/lib/allergy";
 import { useShopping } from "@/context/ShoppingContext";
 import { useAuth } from "@/context/AuthContext";
 import VotePill from "./VotePill";
 import SaveButton from "./SaveButton";
+import { formatList } from "@/lib/locale";
 
 function nextDays(count: number): Array<{ iso: string; label: string }> {
   const fmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
@@ -68,6 +70,10 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
   };
 
   const factor = servings / recipe.servings;
+  const allergyHits = recipeMayContainAllergens(
+    recipe,
+    profile?.preferences?.allergies,
+  );
 
   const toggle = (i: number) =>
     setChecked((prev) => {
@@ -177,6 +183,16 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
           <Macro value={recipe.protein_g} unit="g" label="Protein" />
           <Macro value={recipe.carbs_g} unit="g" label="Carbs" />
           <Macro value={recipe.fat_g} unit="g" label="Fat" />
+        </div>
+      )}
+
+      {allergyHits.length > 0 && (
+        <div
+          className="mt-4 rounded-2xl border border-down/30 bg-down/10 px-4 py-3 text-[13px] font-semibold text-down"
+          role="alert"
+        >
+          Possible match to your allergies: {formatList(allergyHits)}. Double-check
+          every ingredient before cooking.
         </div>
       )}
 

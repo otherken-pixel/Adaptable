@@ -119,40 +119,7 @@ private struct ProfileLoadErrorView: View {
     }
 }
 
-/// First-run nudge so allergies/diets land before the first generate.
-private struct TasteNudgeSheet: View {
-    var onOpen: () -> Void
-    var onDismiss: () -> Void
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("✨").font(.system(size: 40))
-            Text("Make it yours in 30 seconds")
-                .font(.system(size: 22, weight: .heavy))
-            Text("Add diets, allergies and household size so every AI recipe adapts to you — especially allergies, which we treat as a hard safety rule.")
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.muted)
-            Button(action: onOpen) {
-                Text("Set taste profile")
-                    .font(.system(size: 15, weight: .bold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .foregroundStyle(Theme.surface)
-                    .background(Theme.content, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-            .buttonStyle(.pressable)
-            .accessibilityLabel("Set taste profile")
-            Button("Not now", action: onDismiss)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel("Dismiss taste profile reminder")
-            Spacer(minLength: 0)
-        }
-        .padding(24)
-        .background(Theme.surface)
-    }
-}
 
 struct SplashView: View {
     var body: some View {
@@ -178,7 +145,7 @@ struct MainTabView: View {
     @State private var createPath = NavigationPath()
     @State private var groceriesPath = NavigationPath()
     @State private var profilePath = NavigationPath()
-    @State private var showTasteNudge = false
+    @State private var showOnboarding = false
 
     var body: some View {
         TabView(selection: $deepLinks.activeTab) {
@@ -235,28 +202,21 @@ struct MainTabView: View {
         .onChange(of: authStore.profile?.id) { _, _ in
             // After sign-in, open any recipe that was pending from a shared link.
             consumePendingRecipeIfNeeded()
-            maybePromptTasteProfile()
+            maybeShowOnboarding()
         }
         .task {
-            maybePromptTasteProfile()
+            maybeShowOnboarding()
         }
-        .sheet(isPresented: $showTasteNudge) {
-            TasteNudgeSheet(
-                onOpen: {
-                    showTasteNudge = false
-                    deepLinks.activeTab = .profile
-                    profilePath.append(Route.tasteProfile)
-                },
-                onDismiss: {
-                    showTasteNudge = false
-                    UserDefaults.standard.set(true, forKey: tasteNudgeKey)
-                }
-            )
-            .presentationDetents([.medium])
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView {
+                showOnboarding = false
+            }
+            .environmentObject(authStore)
+            .environmentObject(deepLinks)
         }
     }
 
-    private let tasteNudgeKey = "adaptable.tasteNudge.v1.dismissed"
+    private let onboardingKey = "adaptable.onboarding.v1.done"
 
     private func consumePendingRecipeIfNeeded() {
         guard let id = deepLinks.pendingRecipeId else { return }
@@ -266,24 +226,14 @@ struct MainTabView: View {
         deepLinks.pendingRecipeId = nil
     }
 
-    private func maybePromptTasteProfile() {
+    private func maybeShowOnboarding() {
         guard authStore.profile != nil else { return }
-        guard !UserDefaults.standard.bool(forKey: tasteNudgeKey) else { return }
-        let prefs = authStore.profile?.preferences
-        let empty =
-            (prefs?.diets ?? []).isEmpty &&
-            (prefs?.allergies ?? []).isEmpty &&
-            (prefs?.dislikes ?? []).isEmpty
-        guard empty else {
-            UserDefaults.standard.set(true, forKey: tasteNudgeKey)
-            return
-        }
-        // Slight delay so tabs finish appearing.
+        guard !UserDefaults.standard.bool(forKey: onboardingKey) else { return }
         Task {
-            try? await Task.sleep(nanoseconds: 600_000_000)
+            try? await Task.sleep(nanoseconds: 400_000_000)
             await MainActor.run {
-                if !UserDefaults.standard.bool(forKey: tasteNudgeKey) {
-                    showTasteNudge = true
+                if !UserDefaults.standard.bool(forKey: onboardingKey) {
+                    showOnboarding = true
                 }
             }
         }

@@ -290,14 +290,21 @@ struct FeedView: View {
     // MARK: - Load
 
     private func load(showSkeleton: Bool = true) async {
-        if showSkeleton { recipes = nil }
         errorMessage = nil
+        // Stale-while-revalidate: paint cache first for speed + offline.
+        if let cached = RecipeCache.loadFeed(), !cached.isEmpty {
+            recipes = cached
+        } else if showSkeleton {
+            recipes = nil
+        }
         do {
             recipes = try await API.fetchFeed(sort: sort)
         } catch {
             print("[FeedView] Failed to load feed: \(error)")
-            errorMessage = AppError.friendlyMessage(for: error)
-            if recipes == nil { recipes = [] }
+            if recipes == nil || recipes?.isEmpty == true {
+                errorMessage = AppError.friendlyMessage(for: error)
+                if recipes == nil { recipes = [] }
+            }
         }
     }
 

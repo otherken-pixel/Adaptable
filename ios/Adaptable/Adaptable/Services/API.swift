@@ -23,13 +23,16 @@ enum API {
             }
         }
         do {
-            var query = db.from("recipes").select(recipeSelect).limit(50)
+            var query = db.from("recipes").select(recipeSelect).limit(80)
             query = sort == .top
                 ? query.order("net_upvotes", ascending: false).order("created_at", ascending: false)
                 : query.order("created_at", ascending: false)
             let rows: [Recipe] = try await query.execute().value
-            return sort == .hot ? Trending.sorted(rows) : rows
+            let result = sort == .hot ? Trending.sorted(rows) : rows
+            RecipeCache.saveFeed(result)
+            return result
         } catch {
+            if let cached = RecipeCache.loadFeed(), !cached.isEmpty { return cached }
             throw AppError(.requestFailed(error.localizedDescription))
         }
     }
@@ -38,8 +41,12 @@ enum API {
         if SupabaseManager.isDemo { return await DemoStore.shared.getRecipe(id) }
         do {
             let rows: [Recipe] = try await db.from("recipes").select(recipeSelect).eq("id", value: id).limit(1).execute().value
+            if let recipe = rows.first {
+                RecipeCache.saveRecipe(recipe)
+            }
             return rows.first
         } catch {
+            if let cached = RecipeCache.loadRecipe(id: id) { return cached }
             throw AppError(.requestFailed(error.localizedDescription))
         }
     }
@@ -164,6 +171,32 @@ enum API {
         if SupabaseManager.isDemo { return await DemoStore.shared.deleteComment(commentId) }
         do {
             try await db.from("comments").delete().eq("user_id", value: userId).eq("id", value: commentId).execute()
+        } catch {
+            throw AppError(.requestFailed(error.localizedDescription))
+        }
+    }
+
+    static func reportContent(userId: String, targetType: String, targetId: String, reason: String) async throws {
+        if SupabaseManager.isDemo { return }
+        let clean = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count >= 3 else { throw AppError("Please add a short reason.") }
+        do {
+            struct Payload: Encodable {
+                let reporter_id: String
+                let target_type: String
+                let target_id: String
+                let reason: String
+            }
+            try await db.from("content_reports")
+                .upsert(
+                    Payload(
+                        reporter_id: userId,
+                        target_type: targetType,
+                        target_id: targetId,
+                        reason: String(clean.prefix(500))
+                    )
+                )
+                .execute()
         } catch {
             throw AppError(.requestFailed(error.localizedDescription))
         }

@@ -37,6 +37,7 @@ struct CookModeView: View {
 
     @StateObject private var voice = VoiceCommandListener()
     @State private var voiceOn = false
+    @State private var shareItem: ShareItem?
 
     private var factor: Double {
         guard let recipe, let servings, (recipe.servings ?? 1) > 0 else { return 1 }
@@ -62,6 +63,9 @@ struct CookModeView: View {
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
         .background(Theme.surface.ignoresSafeArea())
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: item.activityItems)
+        }
     }
 
     @ViewBuilder
@@ -334,6 +338,19 @@ struct CookModeView: View {
             }
             .frame(maxWidth: 320)
 
+            Button {
+                shareCooked(recipe)
+            } label: {
+                Label("Share this recipe", systemImage: "square.and.arrow.up")
+                    .font(.system(size: 14, weight: .bold))
+                    .frame(maxWidth: 320).frame(height: 48)
+                    .foregroundStyle(Theme.content)
+                    .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Share this recipe")
+
             if !SupabaseManager.isDemo {
                 Menu {
                     Button("Take Photo") { showCameraPicker = true }
@@ -357,13 +374,21 @@ struct CookModeView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(photoState == .done ? Theme.accent : Theme.line))
                 }
                 .disabled(photoState == .uploading || photoState == .done)
+                .accessibilityLabel("Share a photo of your plate")
             }
 
             Button("Back to Discover") { dismiss() }
                 .font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted)
+                .accessibilityLabel("Back to Discover")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+    }
+
+    private func shareCooked(_ recipe: Recipe) {
+        Haptics.success()
+        let payload = RecipeShare.build(recipe: recipe, servings: servings ?? recipe.servings ?? 2)
+        shareItem = ShareItem(text: payload.text, url: payload.url, image: RecipeShare.cardImage(recipe: recipe))
     }
 
     private func recordCookIfNeeded(recipe: Recipe) {

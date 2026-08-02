@@ -2,6 +2,7 @@ import { supabase, isDemo } from "./supabase";
 import { demoStore, demoGenerate, demoImport } from "./demo";
 import { shoppingLocal } from "./shoppingLocal";
 import { sortByTrending } from "./trending";
+import { getCachedRecipe, setCachedFeed, setCachedRecipe } from "./cache";
 import type {
   AppNotification,
   Comment,
@@ -23,7 +24,7 @@ export async function fetchFeed(sort: FeedSort): Promise<Recipe[]> {
     if (sort === "new") return list.sort((a, b) => b.created_at.localeCompare(a.created_at));
     return sortByTrending(list);
   }
-  let query = supabase!.from("recipes").select(RECIPE_SELECT).limit(50);
+  let query = supabase!.from("recipes").select(RECIPE_SELECT).limit(80);
   // "hot" fetches the newest window and ranks it with the time-decayed
   // trending score client-side (cheap at feed scale, no DB function needed).
   query =
@@ -33,18 +34,29 @@ export async function fetchFeed(sort: FeedSort): Promise<Recipe[]> {
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as Recipe[];
-  return sort === "hot" ? sortByTrending(rows) : rows;
+  const result = sort === "hot" ? sortByTrending(rows) : rows;
+  setCachedFeed({ sort, rows: result });
+  return result;
 }
 
 export async function fetchRecipe(id: string): Promise<Recipe | null> {
   if (isDemo) return demoStore.getRecipe(id) ?? null;
-  const { data, error } = await supabase!
-    .from("recipes")
-    .select(RECIPE_SELECT)
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  return data as Recipe | null;
+  try {
+    const { data, error } = await supabase!
+      .from("recipes")
+      .select(RECIPE_SELECT)
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    const recipe = data as Recipe | null;
+    if (recipe) setCachedRecipe(recipe);
+    return recipe;
+  } catch (e) {
+    // Offline fallback: last successfully opened recipe.
+    const cached = getCachedRecipe<Recipe>(id);
+    if (cached) return cached;
+    throw e;
+  }
 }
 
 /** Map of recipe_id → the current user's vote. */
@@ -175,6 +187,48 @@ export async function deleteComment(userId: string, commentId: string): Promise<
     .delete()
     .eq("user_id", userId)
     .eq("id", commentId);
+  if (error) throw error;
+}
+
+/** Flag a comment for review (moderation). Idempotent per reporter. */
+export async function reportComment(
+  userId: string,
+  commentId: string,
+  reason: string,
+): Promise<void> {
+  const clean = reason.trim().slice(0, 500);
+  if (clean.length < 3) throw new Error("Please add a short reason.");
+  if (isDemo) return;
+  const { error } = await supabase!.from("content_reports").upsert(
+    {
+      reporter_id: userId,
+      target_type: "comment",
+      target_id: commentId,
+      reason: clean,
+    },
+    { onConflict: "reporter_id,target_type,target_id" },
+  );
+  if (error) throw error;
+}
+
+/** Flag a recipe for review. */
+export async function reportRecipe(
+  userId: string,
+  recipeId: string,
+  reason: string,
+): Promise<void> {
+  const clean = reason.trim().slice(0, 500);
+  if (clean.length < 3) throw new Error("Please add a short reason.");
+  if (isDemo) return;
+  const { error } = await supabase!.from("content_reports").upsert(
+    {
+      reporter_id: userId,
+      target_type: "recipe",
+      target_id: recipeId,
+      reason: clean,
+    },
+    { onConflict: "reporter_id,target_type,target_id" },
+  );
   if (error) throw error;
 }
 
