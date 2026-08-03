@@ -155,7 +155,9 @@ final class VoiceCommandListener: ObservableObject {
     }
 
     private func matches(_ heard: String, anyOf words: [String]) -> Bool {
-        words.contains { heard.contains($0) }
+        // Whole-word tokens only — avoids "undone"/"overdone" matching "done".
+        let tokens = Set(heard.split { !$0.isLetter }.map(String.init))
+        return words.contains { tokens.contains($0) }
     }
 
     private func restart() {

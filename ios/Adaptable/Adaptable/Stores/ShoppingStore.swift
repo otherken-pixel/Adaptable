@@ -9,12 +9,17 @@ final class ShoppingStore: ObservableObject {
 
     private var loadedForProfileId: String?
     private var offlineQueue: [OfflineOp] = []
-    private let queueKey = "adaptable.shopping.offlineQueue.v1"
+    /// Legacy unscoped key — removed on load so it cannot be replayed for the wrong user.
+    private let legacyQueueKey = "adaptable.shopping.offlineQueue.v1"
 
     private enum OfflineOp: Codable {
         case toggle(id: String, checked: Bool)
         case remove(id: String)
         case clearChecked
+    }
+
+    private func queueKey(for userId: String) -> String {
+        "\(legacyQueueKey).\(userId)"
     }
 
     var uncheckedCount: Int { items.filter { !$0.checked }.count }
@@ -23,9 +28,13 @@ final class ShoppingStore: ObservableObject {
         guard let profile else {
             items = []
             loadedForProfileId = nil
+            offlineQueue = []
+            pendingSync = 0
             return
         }
-        loadQueue()
+        // Drop legacy unscoped queue so a prior account's ops cannot flush for this user.
+        UserDefaults.standard.removeObject(forKey: legacyQueueKey)
+        loadQueue(for: profile.id)
         guard loadedForProfileId != profile.id else {
             await flushQueue(userId: profile.id)
             return
@@ -155,11 +164,13 @@ final class ShoppingStore: ObservableObject {
     private func enqueue(_ op: OfflineOp) {
         offlineQueue.append(op)
         pendingSync = offlineQueue.count
-        persistQueue()
+        if let userId = loadedForProfileId {
+            persistQueue(for: userId)
+        }
     }
 
-    private func loadQueue() {
-        guard let data = UserDefaults.standard.data(forKey: queueKey),
+    private func loadQueue(for userId: String) {
+        guard let data = UserDefaults.standard.data(forKey: queueKey(for: userId)),
               let ops = try? JSONDecoder().decode([OfflineOp].self, from: data)
         else {
             offlineQueue = []
@@ -170,9 +181,12 @@ final class ShoppingStore: ObservableObject {
         pendingSync = ops.count
     }
 
-    private func persistQueue() {
-        if let data = try? JSONEncoder().encode(offlineQueue) {
-            UserDefaults.standard.set(data, forKey: queueKey)
+    private func persistQueue(for userId: String) {
+        let key = queueKey(for: userId)
+        if offlineQueue.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else if let data = try? JSONEncoder().encode(offlineQueue) {
+            UserDefaults.standard.set(data, forKey: key)
         }
         pendingSync = offlineQueue.count
     }
@@ -195,7 +209,7 @@ final class ShoppingStore: ObservableObject {
             }
         }
         offlineQueue = remaining
-        persistQueue()
+        persistQueue(for: userId)
         if remaining.count < pendingSync || remaining.isEmpty {
             items = (try? await API.fetchShoppingItems(userId: userId)) ?? items
         }
