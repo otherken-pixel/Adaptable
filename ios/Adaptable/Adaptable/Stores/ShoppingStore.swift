@@ -110,7 +110,7 @@ final class ShoppingStore: ObservableObject {
         }
         Haptics.selection()
         if !NetworkMonitor.shared.isOnline {
-            enqueue(.toggle(id: id, checked: next))
+            enqueue(.toggle(id: id, checked: next), userId: userId)
             return
         }
         Task {
@@ -130,7 +130,7 @@ final class ShoppingStore: ObservableObject {
         let removed = items.first { $0.id == id }
         items.removeAll { $0.id == id }
         if !NetworkMonitor.shared.isOnline {
-            enqueue(.remove(id: id))
+            enqueue(.remove(id: id), userId: userId)
             return
         }
         Task {
@@ -147,7 +147,7 @@ final class ShoppingStore: ObservableObject {
         guard !removed.isEmpty else { return }
         items = items.filter { !$0.checked }
         if !NetworkMonitor.shared.isOnline {
-            enqueue(.clearChecked)
+            enqueue(.clearChecked, userId: userId)
             return
         }
         Task {
@@ -161,12 +161,16 @@ final class ShoppingStore: ObservableObject {
 
     // MARK: - Offline queue
 
-    private func enqueue(_ op: OfflineOp) {
+    private func enqueue(_ op: OfflineOp, userId: String) {
+        // Persist under the caller-provided user. If profile switched before
+        // `load` updated `loadedForProfileId`, swap in that user's queue first
+        // so we don't write the previous account's in-memory ops to the new key.
+        if loadedForProfileId != userId {
+            loadQueue(for: userId)
+        }
         offlineQueue.append(op)
         pendingSync = offlineQueue.count
-        if let userId = loadedForProfileId {
-            persistQueue(for: userId)
-        }
+        persistQueue(for: userId)
     }
 
     private func loadQueue(for userId: String) {
