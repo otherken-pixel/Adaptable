@@ -109,8 +109,81 @@ struct Recipe: Codable, Equatable, Identifiable {
     var comment_count: Int?
     var created_at: String?
     var author: ProfileLite?
+    /// Canonical staple-stripped tokens. Inferred client-side when missing.
+    var ingredient_keys: [String]? = nil
+    var primary_method: String? = nil
+    var base_protein: String? = nil
+    var meal_slot: String? = nil
+    var active_prep_minutes: Int? = nil
+    var equipment: [String]? = nil
 
     var totalMinutes: Int { (prep_time_minutes ?? 0) + (cook_time_minutes ?? 0) }
+}
+
+enum BundleKind: String, Codable, Equatable {
+    case sharedBase = "shared_base"
+    case concurrent
+}
+
+struct MealPrepBundle: Codable, Equatable, Identifiable {
+    var id: String
+    var kind: BundleKind
+    var recipes: [Recipe]
+    var headline: String
+    var reason: String
+    var shared_ingredients: [String]
+    var session_minutes: Int
+    var active_minutes: Int
+    var avg_calories: Int?
+    var generated_ids: [String]
+    var missing_count: Int
+    var leftover_focus: [String]
+
+    var isComplete: Bool { missing_count == 0 && recipes.count >= 2 }
+
+    init(
+        id: String,
+        kind: BundleKind,
+        recipes: [Recipe],
+        headline: String,
+        reason: String,
+        shared_ingredients: [String],
+        session_minutes: Int,
+        active_minutes: Int,
+        avg_calories: Int?,
+        generated_ids: [String],
+        missing_count: Int,
+        leftover_focus: [String]
+    ) {
+        self.id = id
+        self.kind = kind
+        self.recipes = recipes
+        self.headline = headline
+        self.reason = reason
+        self.shared_ingredients = shared_ingredients
+        self.session_minutes = session_minutes
+        self.active_minutes = active_minutes
+        self.avg_calories = avg_calories
+        self.generated_ids = generated_ids
+        self.missing_count = missing_count
+        self.leftover_focus = leftover_focus
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(BundleKind.self, forKey: .kind)
+        recipes = try c.decode([Recipe].self, forKey: .recipes)
+        headline = try c.decode(String.self, forKey: .headline)
+        reason = try c.decode(String.self, forKey: .reason)
+        shared_ingredients = try c.decodeIfPresent([String].self, forKey: .shared_ingredients) ?? []
+        session_minutes = try c.decodeIfPresent(Int.self, forKey: .session_minutes) ?? 0
+        active_minutes = try c.decodeIfPresent(Int.self, forKey: .active_minutes) ?? 0
+        avg_calories = try c.decodeIfPresent(Int.self, forKey: .avg_calories)
+        generated_ids = try c.decodeIfPresent([String].self, forKey: .generated_ids) ?? []
+        missing_count = try c.decodeIfPresent(Int.self, forKey: .missing_count) ?? 0
+        leftover_focus = try c.decodeIfPresent([String].self, forKey: .leftover_focus) ?? []
+    }
 }
 
 // MARK: - Comment

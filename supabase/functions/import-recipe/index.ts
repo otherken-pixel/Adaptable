@@ -16,6 +16,10 @@ import {
   findAllergyViolations,
 } from "../_shared/safety.ts";
 import { generateAndUploadCover } from "../_shared/coverImage.ts";
+import {
+  insertRecipeRow,
+  recipeInsertPayload,
+} from "../_shared/mealPrep.ts";
 
 /** Soft daily cap on imports per user (UTC day). Free but not infinite. */
 const DAILY_IMPORT_LIMIT = 40;
@@ -248,32 +252,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { data: row, error: insertError } = await supabase
-      .from("recipes")
-      .insert({
-        author_id: user.id,
-        title: String(recipe.title).slice(0, 140),
-        description: recipe.description ?? "",
-        emoji: recipe.emoji ?? "🍽️",
-        cuisine: recipe.cuisine ?? "Fusion",
-        difficulty: ["Easy", "Medium", "Hard"].includes(recipe.difficulty)
-          ? recipe.difficulty
-          : "Easy",
-        prep_time_minutes: clampInt(recipe.prep_time_minutes, 0, 24 * 60, 0),
-        cook_time_minutes: clampInt(recipe.cook_time_minutes, 0, 24 * 60, 0),
-        servings: clampInt(recipe.servings, 1, 24, 2),
-        calories: nullableInt(recipe.calories),
-        protein_g: nullableInt(recipe.protein_g),
-        carbs_g: nullableInt(recipe.carbs_g),
-        fat_g: nullableInt(recipe.fat_g),
-        tags: Array.isArray(recipe.tags) ? recipe.tags.map(String).slice(0, 6) : [],
-        ingredients: recipe.ingredients ?? [],
-        steps: recipe.steps ?? [],
-        source_prompt: "",
-        source_url: sourceUrl,
-      })
-      .select("*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)")
-      .single();
+    const { data: row, error: insertError } = await insertRecipeRow(
+      supabase,
+      recipeInsertPayload({
+        authorId: user.id,
+        recipe,
+        sourcePrompt: "",
+        sourceUrl,
+      }),
+      "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)",
+    );
 
     if (insertError) {
       console.error("Insert error", insertError);

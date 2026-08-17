@@ -14,6 +14,10 @@ import {
   findAllergyViolations,
 } from "../_shared/safety.ts";
 import { generateAndUploadCover } from "../_shared/coverImage.ts";
+import {
+  insertRecipeRow,
+  recipeInsertPayload,
+} from "../_shared/mealPrep.ts";
 
 /** Soft daily cap on AI generations per user (UTC day). */
 const DAILY_GENERATE_LIMIT = 25;
@@ -60,6 +64,50 @@ const recipeSchema = {
       type: "ARRAY",
       items: { type: "STRING" },
       description: "3-5 short tags",
+    },
+    primary_method: {
+      type: "STRING",
+      enum: [
+        "oven",
+        "stovetop",
+        "sheet_pan",
+        "air_fryer",
+        "slow_cooker",
+        "grill",
+        "no_cook",
+        "instant_pot",
+        "mixed",
+      ],
+      description: "Dominant cooking method",
+    },
+    base_protein: {
+      type: "STRING",
+      enum: [
+        "chicken",
+        "beef",
+        "pork",
+        "turkey",
+        "fish",
+        "shrimp",
+        "tofu",
+        "beans",
+        "eggs",
+        "lamb",
+        "none",
+      ],
+    },
+    meal_slot: {
+      type: "STRING",
+      enum: ["breakfast", "lunch", "dinner", "snack", "dessert", "any"],
+    },
+    active_prep_minutes: {
+      type: "INTEGER",
+      description: "Hands-on minutes only (exclude unattended roast/simmer)",
+    },
+    equipment: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "Appliances this recipe occupies (oven, skillet, sheet_pan, air_fryer…)",
     },
     ingredients: {
       type: "ARRAY",
@@ -266,35 +314,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { data: row, error: insertError } = await supabase
-      .from("recipes")
-      .insert({
-        author_id: user.id,
-        title: String(recipe.title).slice(0, 140),
-        description: recipe.description ?? "",
-        emoji: recipe.emoji ?? "🍽️",
-        cuisine: recipe.cuisine ?? "Fusion",
-        difficulty: ["Easy", "Medium", "Hard"].includes(recipe.difficulty)
-          ? recipe.difficulty
-          : "Easy",
-        prep_time_minutes: clampInt(recipe.prep_time_minutes, 0, 24 * 60, 0),
-        cook_time_minutes: clampInt(recipe.cook_time_minutes, 0, 24 * 60, 0),
-        servings: requestedServings ?? clampInt(recipe.servings, 1, 24, 2),
-        calories: nullableInt(recipe.calories),
-        protein_g: nullableInt(recipe.protein_g),
-        carbs_g: nullableInt(recipe.carbs_g),
-        fat_g: nullableInt(recipe.fat_g),
-        tags: Array.isArray(recipe.tags)
-          ? recipe.tags.map(String).slice(0, 6)
-          : [],
-        ingredients: recipe.ingredients ?? [],
-        steps: recipe.steps ?? [],
-        source_prompt: prompt,
-      })
-      .select(
-        "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)",
-      )
-      .single();
+    const { data: row, error: insertError } = await insertRecipeRow(
+      supabase,
+      recipeInsertPayload({
+        authorId: user.id,
+        recipe,
+        sourcePrompt: prompt,
+        servings: requestedServings ?? undefined,
+      }),
+      "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)",
+    );
 
     if (!insertError && row?.id) {
       // Best-effort AI dish photo — never block recipe creation.

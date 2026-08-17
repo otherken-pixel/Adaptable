@@ -415,6 +415,49 @@ enum API {
         }
     }
 
+    /// Saved recipes first, then Hot Discover — the candidate pool for bundles.
+    static func fetchBundlePool(userId: String) async throws -> [Recipe] {
+        async let saved = fetchSavedRecipes(userId: userId)
+        async let feed = fetchFeed(sort: .hot)
+        let s = (try? await saved) ?? []
+        let f = (try? await feed) ?? []
+        var seen = Set<String>()
+        var out: [Recipe] = []
+        for r in s + f where seen.insert(r.id).inserted { out.append(r) }
+        return out
+    }
+
+    /// Generate the missing meal(s) that complete a 2–3 recipe prep bundle.
+    static func completeBundle(
+        seedIds: [String],
+        kind: BundleKind,
+        targetSize: Int = 3
+    ) async throws -> MealPrepBundle {
+        if SupabaseManager.isDemo {
+            return await DemoStore.shared.completeBundle(seedIds: seedIds, kind: kind, targetSize: targetSize)
+        }
+        struct Body: Encodable {
+            let seed_recipe_ids: [String]
+            let kind: String
+            let target_size: Int
+        }
+        struct Envelope: Decodable { let bundle: MealPrepBundle }
+        do {
+            let envelope: Envelope = try await SupabaseManager.client.functions.invoke(
+                "complete-bundle",
+                options: FunctionInvokeOptions(
+                    body: Body(seed_recipe_ids: seedIds, kind: kind.rawValue, target_size: targetSize)
+                )
+            )
+            return envelope.bundle
+        } catch let FunctionsError.httpError(code, data) {
+            let message = (try? JSONDecoder().decode(EdgeErrorBody.self, from: data))?.error
+            throw AppError(message ?? "Couldn't complete that bundle (\(code)).")
+        } catch {
+            throw error
+        }
+    }
+
     // MARK: - Account deletion
 
     static func deleteAccount() async throws {
