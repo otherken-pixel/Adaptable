@@ -13,39 +13,69 @@
 		E00000000000000000000022 /* AdaptableShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = S00000000000000000000001 /* AdaptableShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		E00000000000000000000012 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 900AC808045C317E008743AE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = W00000000000000000000020;
+			remoteInfo = AdaptableWidgets;
+		};
+		E00000000000000000000013 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 900AC808045C317E008743AE /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = S00000000000000000000020;
+			remoteInfo = AdaptableShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		E00000000000000000000001 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E00000000000000000000021 /* AdaptableWidgets.appex in Embed Foundation Extensions */,
+				E00000000000000000000022 /* AdaptableShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		3A59389BF828AEC81EE44731 /* Adaptable Cooking.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Adaptable Cooking.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		6A06AFC9A34A7562D4E1BE34 /* Adaptable.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Adaptable.entitlements; sourceTree = "<group>"; };
 		C2A23FC8515912AF1CDD1DF6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C3C086C565DB021B2F7BE5A0 /* seed-recipes.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = "seed-recipes.json"; path = "../../shared/seed-recipes.json"; sourceTree = "<group>"; };
 		F5D6396A8FECE6711F81FA80 /* Config.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
-		W00000000000000000000001 /* AdaptableWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AdaptableWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		S00000000000000000000001 /* AdaptableShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AdaptableShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		W00000000000000000000001 /* AdaptableWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AdaptableWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		4260E8BA1B772421F90CB656 /* Adaptable */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Adaptable; sourceTree = "<group>"; };
-		W00000000000000000000010 /* Widgets */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (W00000000000000000000011 /* Exceptions */); explicitFileTypes = {}; explicitFolders = (); path = Widgets; sourceTree = "<group>"; };
-		S00000000000000000000010 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (S00000000000000000000011 /* Exceptions */); explicitFileTypes = {}; explicitFolders = (); path = ShareExtension; sourceTree = "<group>"; };
-
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		W00000000000000000000011 /* Exceptions */ = {
+		S00000000000000000000011 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
-				AdaptableWidgets.entitlements,
-			);
-			target = W00000000000000000000020 /* AdaptableWidgets */;
-		};
-		S00000000000000000000011 /* Exceptions */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-				AdaptableShare.entitlements,
 			);
 			target = S00000000000000000000020 /* AdaptableShare */;
 		};
+		W00000000000000000000011 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = W00000000000000000000020 /* AdaptableWidgets */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		4260E8BA1B772421F90CB656 /* Adaptable */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Adaptable; sourceTree = "<group>"; };
+		S00000000000000000000010 /* ShareExtension */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (S00000000000000000000011 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = ShareExtension; sourceTree = "<group>"; };
+		W00000000000000000000010 /* Widgets */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (W00000000000000000000011 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = Widgets; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,6 +84,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				1A00000000000000000021AA /* Supabase in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		S00000000000000000000040 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		W00000000000000000000040 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,26 +173,6 @@
 			productReference = 3A59389BF828AEC81EE44731 /* Adaptable Cooking.app */;
 			productType = "com.apple.product-type.application";
 		};
-		W00000000000000000000020 /* AdaptableWidgets */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = W00000000000000000000052 /* Build configuration list for PBXNativeTarget "AdaptableWidgets" */;
-			buildPhases = (
-				W00000000000000000000041 /* Sources */,
-				W00000000000000000000040 /* Frameworks */,
-				W00000000000000000000042 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				W00000000000000000000010 /* Widgets */,
-			);
-			name = AdaptableWidgets;
-			productName = AdaptableWidgets;
-			productReference = W00000000000000000000001 /* AdaptableWidgets.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 		S00000000000000000000020 /* AdaptableShare */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = S00000000000000000000052 /* Build configuration list for PBXNativeTarget "AdaptableShare" */;
@@ -169,52 +193,27 @@
 			productReference = S00000000000000000000001 /* AdaptableShare.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-/* End PBXNativeTarget section */
-
-/* Begin PBXContainerItemProxy section */
-		E00000000000000000000012 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 900AC808045C317E008743AE /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = W00000000000000000000020;
-			remoteInfo = AdaptableWidgets;
-		};
-		E00000000000000000000013 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 900AC808045C317E008743AE /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = S00000000000000000000020;
-			remoteInfo = AdaptableShare;
-		};
-/* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		E00000000000000000000001 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				E00000000000000000000021 /* AdaptableWidgets.appex in Embed Foundation Extensions */,
-				E00000000000000000000022 /* AdaptableShare.appex in Embed Foundation Extensions */,
+		W00000000000000000000020 /* AdaptableWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = W00000000000000000000052 /* Build configuration list for PBXNativeTarget "AdaptableWidgets" */;
+			buildPhases = (
+				W00000000000000000000041 /* Sources */,
+				W00000000000000000000040 /* Frameworks */,
+				W00000000000000000000042 /* Resources */,
 			);
-			name = "Embed Foundation Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				W00000000000000000000010 /* Widgets */,
+			);
+			name = AdaptableWidgets;
+			productName = AdaptableWidgets;
+			productReference = W00000000000000000000001 /* AdaptableWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
-/* End PBXCopyFilesBuildPhase section */
-
-/* Begin PBXTargetDependency section */
-		E00000000000000000000002 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = W00000000000000000000020 /* AdaptableWidgets */;
-			targetProxy = E00000000000000000000012 /* PBXContainerItemProxy */;
-		};
-		E00000000000000000000003 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = S00000000000000000000020 /* AdaptableShare */;
-			targetProxy = E00000000000000000000013 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
+/* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
 		900AC808045C317E008743AE /* Project object */ = {
@@ -262,17 +261,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		121F368430A15A31FC70431A /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
+		S00000000000000000000042 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		W00000000000000000000041 /* Sources */ = {
+		W00000000000000000000042 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		121F368430A15A31FC70431A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -286,37 +292,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		W00000000000000000000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXResourcesBuildPhase extras */
-		W00000000000000000000042 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+/* Begin PBXTargetDependency section */
+		E00000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = W00000000000000000000020 /* AdaptableWidgets */;
+			targetProxy = E00000000000000000000012 /* PBXContainerItemProxy */;
 		};
-		S00000000000000000000042 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
+		E00000000000000000000003 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = S00000000000000000000020 /* AdaptableShare */;
+			targetProxy = E00000000000000000000013 /* PBXContainerItemProxy */;
 		};
-		W00000000000000000000040 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		S00000000000000000000040 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		2428970D033C12BFCCF6ED22 /* Release */ = {
@@ -328,7 +324,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Support/AdaptableRelease.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -359,7 +355,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = Support/AdaptableDebug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -504,58 +500,6 @@
 			};
 			name = Release;
 		};
-		W00000000000000000000050 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Widgets/AdaptableWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
-				DEVELOPMENT_TEAM = ZWXG4354ZC;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Widgets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Adaptable;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app.widgets;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		W00000000000000000000051 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Widgets/AdaptableWidgets.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
-				DEVELOPMENT_TEAM = ZWXG4354ZC;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Widgets/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Adaptable;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app.widgets;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 		S00000000000000000000050 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -608,6 +552,58 @@
 			};
 			name = Release;
 		};
+		W00000000000000000000050 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Widgets/AdaptableWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = ZWXG4354ZC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Adaptable;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		W00000000000000000000051 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Widgets/AdaptableWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 13;
+				DEVELOPMENT_TEAM = ZWXG4354ZC;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Adaptable;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.adaptable.app.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -620,11 +616,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		W00000000000000000000052 /* Build configuration list for PBXNativeTarget "AdaptableWidgets" */ = {
+		D5CEE6393E6B9F96878A7585 /* Build configuration list for PBXProject "Adaptable" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				W00000000000000000000050 /* Debug */,
-				W00000000000000000000051 /* Release */,
+				9DC11C068181C914CA5DAFD4 /* Debug */,
+				A00C221B0C49B2517CAF5A80 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -638,11 +634,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		D5CEE6393E6B9F96878A7585 /* Build configuration list for PBXProject "Adaptable" */ = {
+		W00000000000000000000052 /* Build configuration list for PBXNativeTarget "AdaptableWidgets" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				9DC11C068181C914CA5DAFD4 /* Debug */,
-				A00C221B0C49B2517CAF5A80 /* Release */,
+				W00000000000000000000050 /* Debug */,
+				W00000000000000000000051 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

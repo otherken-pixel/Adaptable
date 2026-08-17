@@ -85,7 +85,12 @@ struct CookbookView: View {
         } else {
             LazyVStack(spacing: 16) {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { i, r in
-                    RecipeCardView(recipe: r, index: i)
+                    Button {
+                        deepLinks.openCookbookRecipe(r.id)
+                    } label: {
+                        RecipeCardView(recipe: r, index: i, asLink: false)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -150,7 +155,12 @@ struct CookbookView: View {
                             Text(dayLabel(iso)).font(.system(size: 15, weight: .heavy))
                             VStack(spacing: 10) {
                                 ForEach(entries) { entry in
-                                    PlanRow(entry: entry, onServingsChange: { delta in changeServings(entry, delta: delta) }, onRemove: { remove(entry) })
+                                    PlanRow(
+                                    entry: entry,
+                                    onOpen: { deepLinks.openCookbookRecipe(entry.recipe_id) },
+                                    onServingsChange: { delta in changeServings(entry, delta: delta) },
+                                    onRemove: { remove(entry) }
+                                )
                                 }
                             }
                         }
@@ -217,6 +227,7 @@ struct CookbookView: View {
                             bundle: bundle,
                             isCompleting: completingId == bundle.id,
                             justAdded: addedBundleId == bundle.id,
+                            onOpenRecipe: { deepLinks.openCookbookRecipe($0) },
                             onAddToWeek: { Task { await addBundleToWeek(bundle) } },
                             onComplete: { Task { await complete(bundle) } }
                         )
@@ -383,12 +394,13 @@ struct CookbookView: View {
 
 private struct PlanRow: View {
     let entry: MealPlanEntry
+    var onOpen: () -> Void
     var onServingsChange: (Int) -> Void
     var onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            NavigationLink(value: Route.recipe(id: entry.recipe_id)) {
+            Button(action: onOpen) {
                 ZStack {
                     Gradients.cover(for: entry.recipe_id)
                     Text(entry.recipe?.emoji ?? "🍽️").font(.system(size: 22))
@@ -396,7 +408,8 @@ private struct PlanRow: View {
                 .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            NavigationLink(value: Route.recipe(id: entry.recipe_id)) {
+            .buttonStyle(.plain)
+            Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.recipe?.title ?? "Recipe").font(.system(size: 14, weight: .bold)).lineLimit(1).foregroundStyle(Theme.content)
                     if let r = entry.recipe {
@@ -404,6 +417,7 @@ private struct PlanRow: View {
                     }
                 }
             }
+            .buttonStyle(.plain)
             Spacer()
             HStack(spacing: 2) {
                 Button { onServingsChange(-1) } label: {

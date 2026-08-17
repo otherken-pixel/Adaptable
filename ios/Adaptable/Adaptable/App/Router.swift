@@ -13,6 +13,18 @@ enum AppTab: Hashable {
     case discover, cookbook, create, groceries, profile
 }
 
+struct CookSession: Identifiable, Equatable {
+    let id: UUID
+    let recipeId: String
+    let servings: Int?
+
+    init(recipeId: String, servings: Int?) {
+        self.id = UUID()
+        self.recipeId = recipeId
+        self.servings = servings
+    }
+}
+
 /// Cross-cutting navigation events: push taps, remix deep links, and
 /// feed refresh signals after create/import success.
 @MainActor
@@ -24,6 +36,8 @@ final class DeepLinkCenter: ObservableObject {
     @Published var pendingImportURL: String?
     @Published var pendingImportText: String?
     @Published var pendingCookRecipeId: String?
+    @Published var cookbookRecipeId: String?
+    @Published var cookSession: CookSession?
     /// Bump to force Discover (and similar lists) to reload.
     @Published private(set) var feedRefreshToken = UUID()
 
@@ -52,9 +66,13 @@ final class DeepLinkCenter: ObservableObject {
         activeTab = .create
     }
 
-    func openCook(_ recipeId: String) {
-        pendingCookRecipeId = recipeId
-        activeTab = .cookbook
+    func openCook(_ recipeId: String, servings: Int? = nil) {
+        pendingCookRecipeId = nil
+        cookSession = CookSession(recipeId: recipeId, servings: servings)
+    }
+
+    func openCookbookRecipe(_ id: String) {
+        cookbookRecipeId = id
     }
 }
 

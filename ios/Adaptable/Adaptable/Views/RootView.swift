@@ -147,10 +147,21 @@ struct MainTabView: View {
     @State private var profilePath = NavigationPath()
     @State private var showOnboarding = false
     @State private var lastPushedRecipeId: String?
-    @State private var lastPushedCookId: String?
+
+    private var tabSelection: Binding<AppTab> {
+        Binding(
+            get: { deepLinks.activeTab },
+            set: { new in
+                if new == deepLinks.activeTab, new == .cookbook {
+                    cookbookPath = NavigationPath()
+                }
+                deepLinks.activeTab = new
+            }
+        )
+    }
 
     var body: some View {
-        TabView(selection: $deepLinks.activeTab) {
+        TabView(selection: tabSelection) {
             NavigationStack(path: $discoverPath) {
                 FeedView()
                     .navigationDestination(for: Route.self, destination: routeDestination)
@@ -190,20 +201,23 @@ struct MainTabView: View {
         .tint(Theme.accent)
         // Consume deep links that arrived before this tab shell mounted
         // (e.g. Universal Link while signed out, then auth completes).
-        .task { consumePendingRecipeIfNeeded(); consumePendingCookIfNeeded() }
+        .task { consumePendingRecipeIfNeeded() }
         .onChange(of: deepLinks.pendingRecipeId) { _, id in
             guard id != nil else { return }
             consumePendingRecipeIfNeeded()
         }
-        .onChange(of: deepLinks.pendingCookRecipeId) { _, id in
-            guard id != nil else { return }
-            consumePendingCookIfNeeded()
+        .onChange(of: deepLinks.cookbookRecipeId) { _, id in
+            guard let id else { return }
+            cookbookPath.append(Route.recipe(id: id))
+            deepLinks.cookbookRecipeId = nil
         }
         .onChange(of: deepLinks.activeTab) { _, tab in
-            // Returning to Discover after Create should pick up new recipes.
             if tab == .discover {
                 deepLinks.requestFeedRefresh()
             }
+        }
+        .fullScreenCover(item: $deepLinks.cookSession) { session in
+            CookModeView(recipeId: session.recipeId, servings: session.servings)
         }
         .onChange(of: authStore.profile?.id) { _, _ in
             // After sign-in, open any recipe that was pending from a shared link.
@@ -231,15 +245,6 @@ struct MainTabView: View {
         if lastPushedRecipeId == id, !discoverPath.isEmpty { return }
         lastPushedRecipeId = id
         discoverPath.append(Route.recipe(id: id))
-    }
-
-    private func consumePendingCookIfNeeded() {
-        guard let id = deepLinks.pendingCookRecipeId else { return }
-        deepLinks.pendingCookRecipeId = nil
-        deepLinks.activeTab = .cookbook
-        if lastPushedCookId == id, !cookbookPath.isEmpty { return }
-        lastPushedCookId = id
-        cookbookPath.append(Route.cookMode(id: id, servings: nil))
     }
 
     private func maybeShowOnboarding() {

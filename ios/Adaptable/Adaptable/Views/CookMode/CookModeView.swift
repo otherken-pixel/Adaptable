@@ -19,6 +19,7 @@ struct CookModeView: View {
     let servings: Int?
 
     @EnvironmentObject private var authStore: AuthStore
+    @EnvironmentObject private var deepLinks: DeepLinkCenter
     @Environment(\.dismiss) private var dismiss
 
     @State private var recipe: Recipe?
@@ -457,11 +458,16 @@ struct CookModeView: View {
                         .tracking(1.1)
                         .foregroundStyle(Theme.accent)
                     ForEach(leftoverBundle.recipes.filter { $0.id != recipe.id }) { r in
-                        NavigationLink(value: Route.recipe(id: r.id)) {
+                        Button {
+                            let id = r.id
+                            dismiss()
+                            deepLinks.openCookbookRecipe(id)
+                        } label: {
                             Text("\(r.emoji ?? "🍽️") \(r.title ?? "Leftover meal")")
                                 .font(.system(size: 14, weight: .bold))
                                 .foregroundStyle(Theme.content)
                         }
+                        .buttonStyle(.plain)
                     }
                     Text(leftoverBundle.headline)
                         .font(.system(size: 12))

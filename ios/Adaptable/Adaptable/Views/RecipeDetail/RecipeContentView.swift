@@ -149,7 +149,9 @@ struct RecipeContentView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
-            NavigationLink(value: Route.cookMode(id: recipe.id, servings: servings)) {
+            Button {
+                deepLinks.openCook(recipe.id, servings: servings)
+            } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "fork.knife")
                     Text("Start Cooking").font(.system(size: 16, weight: .heavy))

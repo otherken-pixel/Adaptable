@@ -6,6 +6,7 @@ struct MealPrepBundleCard: View {
     let bundle: MealPrepBundle
     var isCompleting: Bool = false
     var justAdded: Bool = false
+    var onOpenRecipe: (String) -> Void = { _ in }
     var onAddToWeek: () -> Void
     var onComplete: () -> Void
 
@@ -28,7 +29,7 @@ struct MealPrepBundleCard: View {
                 coverStack
                 VStack(alignment: .leading, spacing: 3) {
                     ForEach(bundle.recipes.prefix(3)) { recipe in
-                        NavigationLink(value: Route.recipe(id: recipe.id)) {
+                        Button { onOpenRecipe(recipe.id) } label: {
                             HStack(spacing: 6) {
                                 Text(recipe.title ?? "Recipe")
                                     .font(.system(size: 13, weight: .semibold))
@@ -44,6 +45,7 @@ struct MealPrepBundleCard: View {
                                 }
                             }
                         }
+                        .buttonStyle(.plain)
                     }
                     if bundle.missing_count > 0 {
                         Text("+ \(bundle.missing_count) to generate")
@@ -107,7 +109,7 @@ struct MealPrepBundleCard: View {
     private var coverStack: some View {
         HStack(spacing: -14) {
             ForEach(Array(bundle.recipes.prefix(3).enumerated()), id: \.element.id) { i, recipe in
-                NavigationLink(value: Route.recipe(id: recipe.id)) {
+                Button { onOpenRecipe(recipe.id) } label: {
                     RecipeCoverView(
                         recipeId: recipe.id,
                         emoji: recipe.emoji,
@@ -124,6 +126,7 @@ struct MealPrepBundleCard: View {
                     )
                     .zIndex(Double(3 - i))
                 }
+                .buttonStyle(.plain)
             }
             if bundle.missing_count > 0 {
                 ZStack {

@@ -4,10 +4,24 @@ import SwiftUI
 struct RecipeCardView: View {
     let recipe: Recipe
     var index: Int = 0
+    /// Discover/Profile can use the implicit link. Cookbook must not —
+    /// appearing/disappearing links auto-push a recipe when switching Planner.
+    var asLink: Bool = true
 
     var body: some View {
-        NavigationLink(value: Route.recipe(id: recipe.id)) {
-            VStack(alignment: .leading, spacing: 0) {
+        Group {
+            if asLink {
+                NavigationLink(value: Route.recipe(id: recipe.id)) { card }
+            } else {
+                card
+            }
+        }
+        .buttonStyle(.plain)
+        .fadeUpAppear(index: index)
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 0) {
                 ZStack(alignment: .topTrailing) {
                     RecipeCoverView(
                         recipeId: recipe.id,
@@ -71,9 +85,6 @@ struct RecipeCardView: View {
             .clipShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
             .shadow(color: .black.opacity(0.05), radius: 16, y: 2)
-        }
-        .buttonStyle(.plain)
-        .fadeUpAppear(index: index)
     }
 }
 

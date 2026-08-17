@@ -13,13 +13,14 @@ struct RecipeDetailView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                header
+        VStack(spacing: 0) {
+            header
+                .padding(.horizontal, 16)
+            ScrollView {
                 content
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 32)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 32)
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
