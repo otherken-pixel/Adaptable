@@ -38,6 +38,9 @@ struct AdaptableApp: App {
                     Task {
                         await notificationsStore.resubscribeIfNeeded()
                     }
+                    if let pending = KitchenSnapshot.consumePendingImport() {
+                        deepLinks.openImport(url: pending.url, text: pending.text)
+                    }
                 }
         }
     }
@@ -46,6 +49,31 @@ struct AdaptableApp: App {
         // Universal Links / custom-scheme recipe deep links
         if let recipeId = SiteConfig.recipeId(from: url) {
             deepLinks.openRecipe(recipeId)
+            return
+        }
+
+        if url.scheme == "com.adaptable.app", url.host == "cook" {
+            let command = url.pathComponents.dropFirst().first ?? url.path
+            if command == "next" || url.path.contains("next") {
+                NotificationCenter.default.post(name: .cookCommand, object: "next")
+            } else if command == "timer" || url.path.contains("timer") {
+                NotificationCenter.default.post(name: .cookCommand, object: "timer")
+            } else if let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "id" })?.value {
+                deepLinks.openCook(id)
+            }
+            return
+        }
+        if url.scheme == "com.adaptable.app", url.host == "import" {
+            if let pending = KitchenSnapshot.consumePendingImport() {
+                deepLinks.openImport(url: pending.url, text: pending.text)
+            }
+            return
+        }
+        if url.scheme == "com.adaptable.app", url.host == "recipe",
+           let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?.first(where: { $0.name == "id" })?.value {
+            deepLinks.openRecipe(id)
             return
         }
 

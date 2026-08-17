@@ -72,6 +72,8 @@ struct ShoppingListView: View {
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
+        .refreshable { await shoppingStore.load(for: authStore.profile) }
+        .task { await shoppingStore.load(for: authStore.profile) }
         .alert("Reminders access needed", isPresented: $showRemindersDenied) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {

@@ -92,12 +92,16 @@ struct GenerateView: View {
             }
             deepLinks.remixRecipeId = nil
         }
+        .onChange(of: deepLinks.pendingImportURL) { _, url in
+            consumePendingImport()
+        }
+        .onAppear { consumePendingImport() }
         .onChange(of: photosPickerItem) { _, item in
             guard let item else { return }
             Task {
                 if let raw = try? await item.loadTransferable(type: Data.self),
                    let data = ImageCompressor.jpegData(from: raw) {
-                    await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import")
+                    await handleCapturedImage(data)
                 }
             }
         }
@@ -105,7 +109,7 @@ struct GenerateView: View {
             CameraPicker { image in
                 showCameraPicker = false
                 if let data = ImageCompressor.jpegData(from: image) {
-                    Task { await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import") }
+                    Task { await handleCapturedImage(data) }
                 }
             }
             .ignoresSafeArea()
@@ -299,8 +303,22 @@ struct GenerateView: View {
     private var pantryContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("What's in the fridge? 🧺").font(.system(size: 20, weight: .heavy))
-            Text("Pick at least two ingredients and the AI builds the best possible dish around them — no store run required.")
+            Text("Pick at least two ingredients — or snap the fridge — and the AI builds around what you already have.")
                 .font(.system(size: 14)).foregroundStyle(Theme.muted)
+
+            Button {
+                showCameraPicker = true
+            } label: {
+                HStack {
+                    Image(systemName: "camera.fill").foregroundStyle(Theme.accent)
+                    Text("Snap the fridge").font(.system(size: 14, weight: .bold))
+                }
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .foregroundStyle(Theme.content)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+            }
+            .buttonStyle(.pressable)
 
             if !pantry.isEmpty {
                 FlowLayout(spacing: 8) {
@@ -493,12 +511,49 @@ struct GenerateView: View {
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result
             phase = .done
+            if let prefs = authStore.profile?.preferences {
+                var next = prefs
+                if remixSource != nil { next = TasteMemory.recordRemix(prompt: p, prefs: next) }
+                if mode == .pantry { next = TasteMemory.recordPantry(pantry, prefs: next) }
+                try? await authStore.updatePreferences(next)
+            }
             deepLinks.requestFeedRefresh()
         } catch {
             print("[GenerateView] Failed to generate recipe: \(error)")
             errorMessage = AppError.friendlyMessage(for: error)
             phase = .error
         }
+    }
+
+    private func consumePendingImport() {
+        let url = deepLinks.pendingImportURL
+        let text = deepLinks.pendingImportText
+        deepLinks.pendingImportURL = nil
+        deepLinks.pendingImportText = nil
+        if let url, !url.isEmpty {
+            mode = .importMode
+            importUrl = url
+            Task { await runImport(ImportSource(url: url), label: url) }
+        } else if let text, !text.isEmpty {
+            mode = .importMode
+            importText = text
+            Task { await runImport(ImportSource(text: text), label: "Shared recipe") }
+        }
+    }
+
+    private func handleCapturedImage(_ data: Data) async {
+        if mode == .pantry {
+            do {
+                let found = try await API.readFridge(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg")
+                for item in found { addPantryItem(item) }
+                Haptics.success()
+            } catch {
+                errorMessage = AppError.friendlyMessage(for: error)
+                phase = .error
+            }
+            return
+        }
+        await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import")
     }
 
     private func runImport(_ source: ImportSource, label: String) async {

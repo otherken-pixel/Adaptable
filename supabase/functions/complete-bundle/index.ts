@@ -280,6 +280,10 @@ Deno.serve(async (req) => {
       );
       if (insertError || !row) {
         console.error("complete-bundle insert failed", insertError);
+        const ids = inserted.map((r) => r.id).filter(Boolean);
+        if (ids.length > 0) {
+          await supabase.from("recipes").delete().in("id", ids);
+        }
         return json(
           { error: "Could not save the generated meal — please try again." },
           500,
@@ -315,6 +319,21 @@ Deno.serve(async (req) => {
         }
       }),
     );
+
+    const parentId = seeds[0]?.id ?? inserted[0]?.id;
+    const focusKeys = leftoverFocus([...seeds, ...inserted]).slice(0, 3);
+    if (parentId) {
+      for (const child of inserted) {
+        if (child.id === parentId) continue;
+        const { error: linErr } = await supabase.from("recipe_lineage").insert({
+          user_id: user.id,
+          parent_recipe_id: parentId,
+          child_recipe_id: child.id,
+          leftover_focus: focusKeys,
+        });
+        if (linErr) console.error("lineage insert skipped", linErr);
+      }
+    }
 
     const recipes = [...seeds, ...inserted];
     const times = sessionMinutes(recipes);

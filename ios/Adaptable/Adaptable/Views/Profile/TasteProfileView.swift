@@ -173,7 +173,13 @@ struct TasteProfileView: View {
         guard !saving else { return }
         saving = true
         defer { saving = false }
-        let prefs = Preferences(diets: selectedDiets, allergies: selectedAllergies, dislikes: dislikes, household_size: household, spice: spice, skill: skill)
+        var prefs = authStore.profile?.preferences ?? .empty
+        prefs.diets = selectedDiets
+        prefs.allergies = selectedAllergies
+        prefs.dislikes = dislikes
+        prefs.household_size = household
+        prefs.spice = spice
+        prefs.skill = skill
         do {
             try await authStore.updatePreferences(prefs)
             saved = true

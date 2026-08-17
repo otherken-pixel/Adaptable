@@ -22,6 +22,7 @@ struct CookModeView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var recipe: Recipe?
+    @State private var loadError: String?
     @State private var idx = 0
     @State private var gathered: Set<Int> = []
     @State private var sheetOpen = false
@@ -38,6 +39,25 @@ struct CookModeView: View {
     @StateObject private var voice = VoiceCommandListener()
     @State private var voiceOn = false
     @State private var shareItem: ShareItem?
+    @State private var leftoverBusy = false
+    @State private var leftoverError: String?
+    @State private var leftoverBundle: MealPrepBundle?
+    @State private var adaptOpen = false
+    @State private var adaptMissing = ""
+    @State private var adaptBusy = false
+    @State private var adaptError: String?
+    @State private var adaptedSteps: [Int: String] = [:]
+    @State private var liveActivityStarted = false
+
+    private func loadRecipe() async {
+        loadError = nil
+        do {
+            recipe = try await API.fetchRecipe(id: recipeId)
+            if recipe == nil { loadError = "This recipe is gone." }
+        } catch {
+            loadError = AppError.friendlyMessage(for: error)
+        }
+    }
 
     private var factor: Double {
         guard let recipe, let servings, (recipe.servings ?? 1) > 0 else { return 1 }
@@ -48,17 +68,31 @@ struct CookModeView: View {
         Group {
             if let recipe {
                 content(recipe)
+            } else if let loadError {
+                Theme.surface.ignoresSafeArea().overlay {
+                    EmptyStateView(emoji: "📡", title: "Couldn't load this recipe", message: loadError) {
+                        VStack(spacing: 10) {
+                            PillButton(title: "Retry") { Task { await loadRecipe() } }
+                            PillButton(title: "Close") { dismiss() }
+                        }
+                    }
+                }
             } else {
                 Theme.surface.ignoresSafeArea().overlay(ProgressView())
             }
         }
-        .task {
-            recipe = try? await API.fetchRecipe(id: recipeId)
-        }
+        .task { await loadRecipe() }
         .onAppear { CookModeManager.startCookMode() }
         .onDisappear {
             voice.stop()
             CookModeManager.stopCookMode()
+            CookLiveActivityController.end()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .cookCommand)) { note in
+            guard let command = note.object as? String, let recipe else { return }
+            let total = (recipe.steps ?? []).count
+            if command == "next" { idx = min(idx + 1, total + 1) }
+            if command == "timer" { startTimer(step: idx, total: total, recipe: recipe) }
         }
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
@@ -109,9 +143,14 @@ struct CookModeView: View {
             if isDone { ConfettiView().allowsHitTesting(false) }
         }
         .sheet(isPresented: $sheetOpen) { ingredientsSheet(recipe: recipe) }
+        .sheet(isPresented: $adaptOpen) { adaptSheet(recipe: recipe) }
         .task(id: timers.count) { await tickTimers() }
         .onChange(of: idx) { _, newValue in
             if recipe.steps?.isEmpty == false, newValue == total + 1 { recordCookIfNeeded(recipe: recipe) }
+            pushLiveActivity(recipe: recipe, total: total)
+        }
+        .onAppear {
+            pushLiveActivity(recipe: recipe, total: total)
         }
         .onAppear {
             voice.onNext = { idx = min(idx + 1, total + 1) }
@@ -244,7 +283,16 @@ struct CookModeView: View {
 
         return VStack(alignment: .leading, spacing: 16) {
             Text("STEP \(idx) OF \(total)").font(.system(size: 12, weight: .heavy)).tracking(1.2).foregroundStyle(Theme.accent)
-            Text(step.instruction).font(.system(size: 24, weight: .bold))
+            Text(adaptedSteps[idx] ?? step.instruction).font(.system(size: 24, weight: .bold))
+
+            Button {
+                adaptOpen = true
+            } label: {
+                Label("I'm out of something — adapt this step", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+            }
+            .buttonStyle(.pressable)
 
             if let tip = step.tip {
                 HStack(alignment: .top, spacing: 8) {
@@ -306,6 +354,7 @@ struct CookModeView: View {
         Alarm.scheduleTimerNotification(seconds: seconds, step: step)
         Haptics.light()
         now = Date()
+        pushLiveActivity(recipe: recipe, total: total)
     }
 
     private func tickTimers() async {
@@ -379,6 +428,8 @@ struct CookModeView: View {
                 .accessibilityLabel("Share a photo of your plate")
             }
 
+            leftoverBlock(recipe)
+
             Button("Back to Discover") { dismiss() }
                 .font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.muted)
                 .accessibilityLabel("Back to Discover")
@@ -397,10 +448,161 @@ struct CookModeView: View {
         }
     }
 
+    private func leftoverBlock(_ recipe: Recipe) -> some View {
+        VStack(spacing: 10) {
+            if let leftoverBundle {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("TOMORROW FROM LEFTOVERS")
+                        .font(.system(size: 11, weight: .heavy))
+                        .tracking(1.1)
+                        .foregroundStyle(Theme.accent)
+                    ForEach(leftoverBundle.recipes.filter { $0.id != recipe.id }) { r in
+                        NavigationLink(value: Route.recipe(id: r.id)) {
+                            Text("\(r.emoji ?? "🍽️") \(r.title ?? "Leftover meal")")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundStyle(Theme.content)
+                        }
+                    }
+                    Text(leftoverBundle.headline)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(14)
+                .frame(maxWidth: 320, alignment: .leading)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Button {
+                    Task { await generateLeftover(from: recipe) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if leftoverBusy { ProgressView().tint(.white) }
+                        else { Image(systemName: "sparkles") }
+                        Text(leftoverBusy ? "Writing tomorrow's meal…" : leftoverCta(recipe))
+                            .font(.system(size: 14, weight: .heavy))
+                    }
+                    .frame(maxWidth: 320).frame(height: 48)
+                    .foregroundStyle(.white)
+                    .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+                .disabled(leftoverBusy)
+            }
+            if let leftoverError {
+                Text(leftoverError).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.down)
+            }
+        }
+    }
+
+    private func leftoverCta(_ recipe: Recipe) -> String {
+        if let focus = MealPrepBundles.leftoverFocus([recipe]).first {
+            return "Generate tomorrow from leftover \(focus)"
+        }
+        return "Generate tomorrow from these leftovers"
+    }
+
+    private func generateLeftover(from recipe: Recipe) async {
+        leftoverBusy = true
+        leftoverError = nil
+        do {
+            let bundle = try await API.completeBundle(seedIds: [recipe.id], kind: .sharedBase, targetSize: 2)
+            leftoverBundle = bundle
+            if let userId = authStore.profile?.id {
+                let tomorrow = Format.localISODate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+                let servings = authStore.profile?.preferences?.household_size ?? recipe.servings ?? 2
+                let focus = bundle.leftover_focus.first
+                for child in bundle.recipes where child.id != recipe.id {
+                    try? await API.addMealPlan(
+                        userId: userId,
+                        recipeId: child.id,
+                        planDate: tomorrow,
+                        servings: servings,
+                        leftoverOf: recipe.id,
+                        leftoverFocus: focus
+                    )
+                }
+            }
+            if let prefs = authStore.profile?.preferences {
+                try? await authStore.updatePreferences(TasteMemory.recordLeftover(focus: bundle.leftover_focus, prefs: prefs))
+            }
+            Haptics.success()
+        } catch {
+            leftoverError = AppError.friendlyMessage(for: error)
+        }
+        leftoverBusy = false
+    }
+
+    private func adaptSheet(recipe: Recipe) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Capsule().fill(Theme.line).frame(width: 40, height: 5).frame(maxWidth: .infinity)
+            Text("Adapt this step").font(.system(size: 18, weight: .heavy))
+            Text("What did you run out of? We'll rewrite the step in place — the recipe stays yours.")
+                .font(.system(size: 14)).foregroundStyle(Theme.muted)
+            TextField("e.g. heavy cream", text: $adaptMissing)
+                .padding(12)
+                .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            if let adaptError {
+                Text(adaptError).font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.down)
+            }
+            Button {
+                Task { await runAdapt(recipe: recipe) }
+            } label: {
+                HStack {
+                    if adaptBusy { ProgressView().tint(.white) }
+                    Text(adaptBusy ? "Adapting…" : "Rewrite this step").font(.system(size: 15, weight: .heavy))
+                }
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .foregroundStyle(.white)
+                .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .disabled(adaptBusy || adaptMissing.trimmingCharacters(in: .whitespaces).count < 2)
+        }
+        .padding(20)
+        .presentationDetents([.height(280)])
+    }
+
+    private func runAdapt(recipe: Recipe) async {
+        adaptBusy = true
+        adaptError = nil
+        do {
+            var draft = recipe
+            if let rewritten = adaptedSteps[idx], var steps = draft.steps, let i = steps.firstIndex(where: { $0.step == idx }) {
+                steps[i].instruction = rewritten
+                draft.steps = steps
+            }
+            let result = try await API.adaptStep(recipe: draft, step: idx, missing: adaptMissing)
+            adaptedSteps[idx] = result.instruction
+            adaptOpen = false
+            adaptMissing = ""
+            adaptError = nil
+            Haptics.success()
+        } catch {
+            adaptError = AppError.friendlyMessage(for: error)
+        }
+        adaptBusy = false
+    }
+
+    private func pushLiveActivity(recipe: Recipe, total: Int) {
+        let label: String
+        if idx == 0 { label = "Mise en place" }
+        else if idx > total { label = "Done" }
+        else { label = "Step \(idx) of \(total)" }
+        let timer = timers.first(where: { $0.step == idx && $0.endsAt > Date() })?.endsAt
+        if liveActivityStarted {
+            CookLiveActivityController.update(stepLabel: label, step: idx, total: total, timerEndsAt: timer)
+        } else if CookLiveActivityController.start(recipe: recipe, stepLabel: label, step: idx, total: total, timerEndsAt: timer) != nil {
+            liveActivityStarted = true
+        }
+    }
+
     private func recordCookIfNeeded(recipe: Recipe) {
         guard !cookRecorded, let userId = authStore.profile?.id else { return }
         cookRecorded = true
-        Task { try? await API.recordCook(userId: userId, recipeId: recipe.id) }
+        Task {
+            try? await API.recordCook(userId: userId, recipeId: recipe.id)
+            if let prefs = authStore.profile?.preferences {
+                try? await authStore.updatePreferences(TasteMemory.recordCook(recipe, prefs: prefs))
+            }
+        }
     }
 
     private func uploadPhoto(_ data: Data, recipe: Recipe) async {

@@ -6,6 +6,20 @@ import Foundation
 
 // MARK: - Preferences / Profile
 
+struct LearnedTaste: Codable, Equatable {
+    var cuisines: [String: Int] = [:]
+    var proteins: [String: Int] = [:]
+    var staples: [String] = []
+    var spice_delta: Int = 0
+
+    init(cuisines: [String: Int] = [:], proteins: [String: Int] = [:], staples: [String] = [], spice_delta: Int = 0) {
+        self.cuisines = cuisines
+        self.proteins = proteins
+        self.staples = staples
+        self.spice_delta = spice_delta
+    }
+}
+
 struct Preferences: Codable, Equatable {
     var diets: [String]?
     var allergies: [String]?
@@ -13,6 +27,7 @@ struct Preferences: Codable, Equatable {
     var household_size: Int?
     var spice: String?
     var skill: String?
+    var learned: LearnedTaste?
 
     init(
         diets: [String]? = nil,
@@ -20,7 +35,8 @@ struct Preferences: Codable, Equatable {
         dislikes: [String]? = nil,
         household_size: Int? = nil,
         spice: String? = nil,
-        skill: String? = nil
+        skill: String? = nil,
+        learned: LearnedTaste? = nil
     ) {
         self.diets = diets
         self.allergies = allergies
@@ -28,6 +44,7 @@ struct Preferences: Codable, Equatable {
         self.household_size = household_size
         self.spice = spice
         self.skill = skill
+        self.learned = learned
     }
 
     static let empty = Preferences()
@@ -52,9 +69,33 @@ struct Profile: Codable, Equatable, Identifiable {
     var username: String?
     var avatar_url: String?
     var preferences: Preferences?
+    var household_id: String? = nil
     var created_at: String?
 
     var lite: ProfileLite { ProfileLite(id: id, username: username, avatar_url: avatar_url) }
+}
+
+struct Household: Codable, Equatable, Identifiable {
+    var id: String
+    var name: String
+    var invite_code: String
+    var created_at: String?
+}
+
+struct HouseholdMember: Codable, Equatable {
+    var household_id: String
+    var user_id: String
+    var role: String
+    var username: String?
+}
+
+struct RecipeLineage: Codable, Equatable, Identifiable {
+    var id: String
+    var user_id: String
+    var parent_recipe_id: String
+    var child_recipe_id: String
+    var leftover_focus: [String]
+    var created_at: String
 }
 
 // MARK: - Recipe
@@ -215,6 +256,8 @@ struct MealPlanEntry: Codable, Equatable, Identifiable {
     var plan_date: String
     var servings: Int
     var created_at: String
+    var leftover_of: String? = nil
+    var leftover_focus: String? = nil
     var recipe: Recipe?
 }
 

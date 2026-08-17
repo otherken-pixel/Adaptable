@@ -37,15 +37,18 @@ final class DemoStore {
         var plans: [MealPlanEntry]
         var preferences: Preferences
         var follows: [String]
+        var lineage: [RecipeLineage] = []
+        var household: Household? = nil
+        var householdMembers: [HouseholdMember] = []
     }
 
     private var state: State
     private var listeners: [(UUID, () -> Void)] = []
     private var genCount = 0
-    private let key = "adaptable.demo.v2"
+    private let key = "adaptable.demo.v3"
 
     private init() {
-        if let raw = UserDefaults.standard.data(forKey: "adaptable.demo.v2"),
+        if let raw = UserDefaults.standard.data(forKey: "adaptable.demo.v3"),
            let decoded = try? JSONDecoder().decode(State.self, from: raw) {
             state = decoded
         } else {
@@ -171,7 +174,13 @@ final class DemoStore {
     }
 
     @discardableResult
-    func addPlan(_ recipeId: String, planDate: String, servings: Int) -> MealPlanEntry {
+    func addPlan(
+        _ recipeId: String,
+        planDate: String,
+        servings: Int,
+        leftoverOf: String? = nil,
+        leftoverFocus: String? = nil
+    ) -> MealPlanEntry {
         let entry = MealPlanEntry(
             id: "p-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 1000...9999))",
             user_id: DemoStore.demoUser.id,
@@ -179,6 +188,8 @@ final class DemoStore {
             plan_date: planDate,
             servings: servings,
             created_at: ISO8601DateFormatter().string(from: Date()),
+            leftover_of: leftoverOf,
+            leftover_focus: leftoverFocus,
             recipe: nil
         )
         state.plans.append(entry)
@@ -198,6 +209,61 @@ final class DemoStore {
     func removePlan(_ id: String) {
         state.plans.removeAll { $0.id == id }
         persist()
+    }
+
+    func updatePlanDate(_ id: String, planDate: String) {
+        state.plans = state.plans.map {
+            var p = $0
+            if p.id == id { p.plan_date = planDate }
+            return p
+        }
+        persist()
+    }
+
+    func addLineage(parentId: String, childId: String, focus: [String]) {
+        state.lineage.append(RecipeLineage(
+            id: "lin-\(Int(Date().timeIntervalSince1970 * 1000))",
+            user_id: DemoStore.demoUser.id,
+            parent_recipe_id: parentId,
+            child_recipe_id: childId,
+            leftover_focus: focus,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        ))
+        persist()
+    }
+
+    func lineage(for userId: String) -> [RecipeLineage] {
+        state.lineage.filter { $0.user_id == userId }
+    }
+
+    func createHousehold(name: String) -> Household {
+        leaveHousehold()
+        let code = String((0..<6).map { _ in "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".randomElement()! })
+        let house = Household(id: "hh-demo", name: name, invite_code: code, created_at: ISO8601DateFormatter().string(from: Date()))
+        state.household = house
+        state.householdMembers = [
+            HouseholdMember(household_id: house.id, user_id: DemoStore.demoUser.id, role: "owner", username: DemoStore.demoUser.username)
+        ]
+        persist()
+        return house
+    }
+
+    func joinHousehold(code: String) throws -> Household {
+        guard let house = state.household, house.invite_code.uppercased() == code.uppercased() else {
+            throw AppError("No kitchen found for that code.")
+        }
+        return house
+    }
+
+    func leaveHousehold() {
+        state.household = nil
+        state.householdMembers = []
+        persist()
+    }
+
+    func currentHousehold() -> (Household, [HouseholdMember])? {
+        guard let house = state.household else { return nil }
+        return (house, state.householdMembers)
     }
 
     // MARK: - Preferences
@@ -356,6 +422,11 @@ final class DemoStore {
             recipes.append(made)
         }
 
+        if let parent = seeds.first {
+            for child in generated {
+                addLineage(parentId: parent.id, childId: child.id, focus: MealPrepBundles.leftoverFocus(recipes))
+            }
+        }
         return MealPrepBundles.assemble(
             kind: kind,
             recipes: recipes,

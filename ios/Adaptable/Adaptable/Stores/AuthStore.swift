@@ -22,7 +22,7 @@ final class AuthStore: ObservableObject {
                 id: DemoStore.demoUser.id,
                 username: DemoStore.demoUser.username,
                 avatar_url: nil,
-                preferences: nil,
+                preferences: DemoStore.shared.getPreferences(),
                 created_at: DemoStore.demoUser.created_at
             )
             hasSession = true

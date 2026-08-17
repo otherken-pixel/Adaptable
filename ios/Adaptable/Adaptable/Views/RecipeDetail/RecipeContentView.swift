@@ -208,12 +208,16 @@ struct RecipeContentView: View {
 
     private func planFor(_ iso: String, label: String) {
         guard let userId = authStore.profile?.id else { return }
-        Task { try? await API.addMealPlan(userId: userId, recipeId: recipe.id, planDate: iso, servings: servings) }
         planOpen = false
-        planned = label
         Task {
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            planned = nil
+            do {
+                try await API.addMealPlan(userId: userId, recipeId: recipe.id, planDate: iso, servings: servings)
+                planned = label
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                planned = nil
+            } catch {
+                planned = nil
+            }
         }
     }
 
@@ -304,9 +308,9 @@ struct RecipeContentView: View {
 
     private func addToGroceries() {
         guard !addedToList, let userId = authStore.profile?.id else { return }
-        shoppingStore.addRecipe(recipe, scaleFactor: factor, userId: userId)
         addedToList = true
         Task {
+            await shoppingStore.addRecipe(recipe, scaleFactor: factor, userId: userId)
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             addedToList = false
         }

@@ -470,7 +470,7 @@ function clampInt(
 
 function nullableInt(value: unknown): number | null {
   const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return null;
+  if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(n);
 }
 

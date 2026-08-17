@@ -37,6 +37,7 @@ struct CookbookView: View {
         .task { await loadSaved() }
         .task { await loadPlans() }
         .task { await loadBundles() }
+        .task { await engagement.load(for: authStore.profile) }
         .onChange(of: engagement.savedIds) { _, _ in
             Task { await loadSaved(); await loadBundles() }
         }
@@ -112,6 +113,14 @@ struct CookbookView: View {
     private var plannerContent: some View {
         VStack(alignment: .leading, spacing: 28) {
             prepBundlesSection
+
+            if let plans {
+                WeekCanvasView(
+                    plans: plans.filter { $0.plan_date >= Format.localISODate() },
+                    onMove: { entry, iso in Task { await move(entry, to: iso) } },
+                    onSelectDay: { _ in }
+                )
+            }
 
             if grouped == nil {
                 FeedSkeleton()
@@ -262,15 +271,30 @@ struct CookbookView: View {
         guard let userId = authStore.profile?.id else { return }
         let household = authStore.profile?.preferences?.household_size
         let sameDay = bundle.kind == .concurrent
+        let parentId = bundle.recipes.first?.id
+        let focus = bundle.leftover_focus.first
         for (i, recipe) in bundle.recipes.enumerated() {
             let date = Calendar.current.date(byAdding: .day, value: sameDay ? 0 : i, to: Date()) ?? Date()
             let servings = household ?? recipe.servings ?? 2
-            try? await API.addMealPlan(
-                userId: userId,
-                recipeId: recipe.id,
-                planDate: Format.localISODate(date),
-                servings: servings
-            )
+            let isLeftover = bundle.kind == .sharedBase && i > 0 && parentId != recipe.id
+            do {
+                try await API.addMealPlan(
+                    userId: userId,
+                    recipeId: recipe.id,
+                    planDate: Format.localISODate(date),
+                    servings: servings,
+                    leftoverOf: isLeftover ? parentId : nil,
+                    leftoverFocus: isLeftover ? focus : nil
+                )
+            } catch {
+                bundleError = AppError.friendlyMessage(for: error)
+                return
+            }
+        }
+        await shoppingStore.addBundle(bundle, userId: userId, householdSize: household)
+        weekAdded = true
+        if let prefs = authStore.profile?.preferences {
+            try? await authStore.updatePreferences(TasteMemory.recordLeftover(focus: bundle.leftover_focus, prefs: prefs))
         }
         addedBundleId = bundle.id
         Haptics.success()
@@ -294,6 +318,18 @@ struct CookbookView: View {
     private func loadPlans() async {
         guard let userId = authStore.profile?.id else { return }
         plans = (try? await API.fetchMealPlans(userId: userId)) ?? []
+        KitchenSnapshot.refresh(from: plans ?? [])
+    }
+
+    private func move(_ entry: MealPlanEntry, to iso: String) async {
+        guard let userId = authStore.profile?.id else { return }
+        plans = plans?.map {
+            var p = $0
+            if p.id == entry.id { p.plan_date = iso }
+            return p
+        }
+        try? await API.updateMealPlanDate(userId: userId, id: entry.id, planDate: iso)
+        KitchenSnapshot.refresh(from: plans ?? [])
     }
 
     private func changeServings(_ entry: MealPlanEntry, delta: Int) {
@@ -322,14 +358,23 @@ struct CookbookView: View {
 
     private func addWeekToGroceries() {
         guard let grouped, !weekAdded, let userId = authStore.profile?.id else { return }
-        for (_, entries) in grouped {
-            for entry in entries {
-                guard let recipe = entry.recipe else { continue }
-                shoppingStore.addRecipe(recipe, scaleFactor: Double(entry.servings) / Double(recipe.servings ?? 1), userId: userId)
-            }
-        }
         weekAdded = true
         Task {
+            for (_, entries) in grouped {
+                for entry in entries {
+                    guard let recipe = entry.recipe else { continue }
+                    var skip = Set<String>()
+                    if let focus = entry.leftover_focus, !focus.isEmpty {
+                        skip.insert(MealPrepBundles.normalizeIngredient(focus))
+                    }
+                    await shoppingStore.addRecipe(
+                        recipe,
+                        scaleFactor: Double(entry.servings) / Double(max(recipe.servings ?? 1, 1)),
+                        userId: userId,
+                        skipKeys: skip
+                    )
+                }
+            }
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             weekAdded = false
         }

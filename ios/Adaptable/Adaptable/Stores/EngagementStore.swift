@@ -21,15 +21,21 @@ final class EngagementStore: ObservableObject {
             loadedForProfileId = nil
             return
         }
-        guard loadedForProfileId != profile.id else { return }
-        loadedForProfileId = profile.id
-        async let v = try? API.fetchMyVotes(userId: profile.id)
-        async let s = try? API.fetchMySaveIds(userId: profile.id)
-        async let f = try? API.fetchFollowees(userId: profile.id)
-        let (votesResult, savesResult, followsResult) = await (v, s, f)
-        votes = votesResult ?? [:]
-        savedIds = Set(savesResult ?? [])
-        followedIds = Set(followsResult ?? [])
+        do {
+            async let v = API.fetchMyVotes(userId: profile.id)
+            async let s = API.fetchMySaveIds(userId: profile.id)
+            async let f = API.fetchFollowees(userId: profile.id)
+            let (votesResult, savesResult, followsResult) = try await (v, s, f)
+            votes = votesResult
+            savedIds = Set(savesResult)
+            followedIds = Set(followsResult)
+            voteDelta = [:]
+            loadedForProfileId = profile.id
+        } catch {
+            // Leave loadedForProfileId unset on first failure so the next
+            // load() (pull-to-refresh / tab appear) can retry.
+            lastActionError = AppError.friendlyMessage(for: error)
+        }
     }
 
     func netUpvotes(recipeId: String, base: Int) -> Int {

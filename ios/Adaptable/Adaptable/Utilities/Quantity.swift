@@ -93,6 +93,67 @@ enum Quantity {
         return f.isEmpty ? String(Int(w)) : "\(Int(w)) \(f)"
     }
 
+    /// Add two free-text quantities when the first number's unit is compatible.
+    /// "1 cup" + "½ cup" → "1 ½ cup". Falls back to `"a + b"` when units clash.
+    static func add(_ existing: String, _ incoming: String) -> String {
+        let a = existing.trimmingCharacters(in: .whitespacesAndNewlines)
+        let b = incoming.trimmingCharacters(in: .whitespacesAndNewlines)
+        if a.isEmpty { return b }
+        if b.isEmpty || a.compare(b, options: .caseInsensitive) == .orderedSame { return a }
+
+        guard let pa = parseMeasured(a), let pb = parseMeasured(b) else {
+            return "\(a) + \(b)"
+        }
+        let ua = canonicalUnit(pa.unit)
+        let ub = canonicalUnit(pb.unit)
+        if ua.isEmpty || ub.isEmpty || ua != ub {
+            return "\(a) + \(b)"
+        }
+        let sum = formatNumber(pa.value + pb.value)
+        let unit = pa.unit.isEmpty ? "" : " \(pa.unit)"
+        let rest = pa.rest.isEmpty ? "" : " \(pa.rest)"
+        return "\(sum)\(unit)\(rest)"
+    }
+
+    private struct Measured {
+        let value: Double
+        let unit: String
+        let rest: String
+    }
+
+    private static func parseMeasured(_ raw: String) -> Measured? {
+        let range = NSRange(raw.startIndex..., in: raw)
+        guard let match = numberRegex.firstMatch(in: raw, range: range),
+              let matchRange = Range(match.range, in: raw),
+              let value = parseNumeric(String(raw[matchRange])) else { return nil }
+        let after = raw[matchRange.upperBound...]
+            .trimmingCharacters(in: .whitespaces)
+        let parts = after.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+        let unit = parts.first.map(String.init) ?? ""
+        let rest = parts.count > 1 ? String(parts[1]) : ""
+        return Measured(value: value, unit: unit, rest: rest)
+    }
+
+    private static func canonicalUnit(_ unit: String) -> String {
+        switch unit.lowercased()
+            .replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: "s$", with: "", options: .regularExpression)
+        {
+        case "cup", "c": return "cup"
+        case "tbsp", "tablespoon", "tbs": return "tbsp"
+        case "tsp", "teaspoon": return "tsp"
+        case "g", "gram": return "g"
+        case "kg", "kilogram": return "kg"
+        case "oz", "ounce": return "oz"
+        case "lb", "pound": return "lb"
+        case "ml", "milliliter", "millilitre": return "ml"
+        case "l", "liter", "litre": return "l"
+        case "clove": return "clove"
+        case "can": return "can"
+        default: return unit.lowercased()
+        }
+    }
+
     /// Scale the first number found in a quantity string by `factor`.
     static func scale(_ quantity: String, factor: Double) -> String {
         if abs(factor - 1) < 1e-9 { return quantity }

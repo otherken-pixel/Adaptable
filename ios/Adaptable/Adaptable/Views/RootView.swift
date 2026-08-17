@@ -146,6 +146,8 @@ struct MainTabView: View {
     @State private var groceriesPath = NavigationPath()
     @State private var profilePath = NavigationPath()
     @State private var showOnboarding = false
+    @State private var lastPushedRecipeId: String?
+    @State private var lastPushedCookId: String?
 
     var body: some View {
         TabView(selection: $deepLinks.activeTab) {
@@ -188,10 +190,14 @@ struct MainTabView: View {
         .tint(Theme.accent)
         // Consume deep links that arrived before this tab shell mounted
         // (e.g. Universal Link while signed out, then auth completes).
-        .task { consumePendingRecipeIfNeeded() }
+        .task { consumePendingRecipeIfNeeded(); consumePendingCookIfNeeded() }
         .onChange(of: deepLinks.pendingRecipeId) { _, id in
             guard id != nil else { return }
             consumePendingRecipeIfNeeded()
+        }
+        .onChange(of: deepLinks.pendingCookRecipeId) { _, id in
+            guard id != nil else { return }
+            consumePendingCookIfNeeded()
         }
         .onChange(of: deepLinks.activeTab) { _, tab in
             // Returning to Discover after Create should pick up new recipes.
@@ -220,10 +226,20 @@ struct MainTabView: View {
 
     private func consumePendingRecipeIfNeeded() {
         guard let id = deepLinks.pendingRecipeId else { return }
-        deepLinks.activeTab = .discover
-        // Avoid stacking duplicate pushes of the same recipe.
-        discoverPath.append(Route.recipe(id: id))
         deepLinks.pendingRecipeId = nil
+        deepLinks.activeTab = .discover
+        if lastPushedRecipeId == id, !discoverPath.isEmpty { return }
+        lastPushedRecipeId = id
+        discoverPath.append(Route.recipe(id: id))
+    }
+
+    private func consumePendingCookIfNeeded() {
+        guard let id = deepLinks.pendingCookRecipeId else { return }
+        deepLinks.pendingCookRecipeId = nil
+        deepLinks.activeTab = .cookbook
+        if lastPushedCookId == id, !cookbookPath.isEmpty { return }
+        lastPushedCookId = id
+        cookbookPath.append(Route.cookMode(id: id, servings: nil))
     }
 
     private func maybeShowOnboarding() {
