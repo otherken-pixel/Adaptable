@@ -211,6 +211,11 @@ struct MainTabView: View {
             cookbookPath.append(Route.recipe(id: id))
             deepLinks.cookbookRecipeId = nil
         }
+        .onChange(of: deepLinks.createRecipeId) { _, id in
+            guard let id else { return }
+            createPath.append(Route.recipe(id: id))
+            deepLinks.createRecipeId = nil
+        }
         .onChange(of: deepLinks.activeTab) { _, tab in
             if tab == .discover {
                 deepLinks.requestFeedRefresh()

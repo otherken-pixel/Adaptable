@@ -395,28 +395,46 @@ final class DemoStore {
         return recipe
     }
 
-    func completeBundle(seedIds: [String], kind: BundleKind, targetSize: Int) async -> MealPrepBundle {
+    func completeBundle(
+        seedIds: [String],
+        kind: BundleKind,
+        targetSize: Int,
+        slots: [String] = [],
+        prepWindow _: String? = nil,
+        base: String? = nil,
+        servings: Int? = nil
+    ) async -> MealPrepBundle {
         try? await Task.sleep(nanoseconds: UInt64((2.2 + Double.random(in: 0...0.8)) * 1_000_000_000))
         let seeds = seedIds.compactMap { getRecipe($0) }
         var recipes = seeds
         var generated: [Recipe] = []
-        let missing = max(0, targetSize - recipes.count)
+        let missing = max(0, min(5, targetSize) - recipes.count)
+        let requested = (base ?? "").lowercased()
         let focus = MealPrepBundles.leftoverFocus(recipes).first
-            ?? (prefsDietFocus() ?? "chicken")
+            ?? (requested.isEmpty || requested == "chef" ? (prefsDietFocus() ?? "chicken") : requested)
 
         let unused = state.recipes.filter { r in
             !recipes.contains(where: { $0.id == r.id })
                 && MealPrepBundles.ingredientKeys(r).contains(focus)
         }
 
+        let slotOrder = ["dinner", "lunch", "breakfast"].filter { slots.contains($0) }
+        let resolvedSlots = slotOrder.isEmpty ? ["dinner", "lunch"] : slotOrder
         for i in 0..<missing {
-            if let match = unused.first(where: { cand in
+            if seeds.isEmpty == false,
+               let match = unused.first(where: { cand in
                 !recipes.contains(where: { $0.id == cand.id })
             }) {
                 recipes.append(match)
                 continue
             }
-            let made = leftoverTemplate(focus: focus, index: i, avoidTitles: recipes.compactMap(\.title))
+            let slot = resolvedSlots[i % resolvedSlots.count]
+            let made: Recipe
+            if seeds.isEmpty, i == 0 {
+                made = batchAnchorTemplate(focus: focus, servings: servings ?? 4, slot: slot)
+            } else {
+                made = leftoverTemplate(focus: focus, index: i, avoidTitles: recipes.compactMap(\.title), servings: servings ?? 4, slot: slot)
+            }
             addRecipe(made)
             generated.append(made)
             recipes.append(made)
@@ -443,7 +461,7 @@ final class DemoStore {
         return nil
     }
 
-    private func leftoverTemplate(focus: String, index: Int, avoidTitles: [String]) -> Recipe {
+    private func leftoverTemplate(focus: String, index: Int, avoidTitles: [String], servings: Int = 4, slot: String = "dinner") -> Recipe {
         let titleFocus = focus.capitalized
         let variants: [(String, String, String, [Ingredient], [RecipeStep], String)] = [
             (
@@ -500,6 +518,42 @@ final class DemoStore {
                 ],
                 "stovetop"
             ),
+            (
+                "\(titleFocus) Grain Bowl",
+                "Leftover \(focus) over a warm grain, crunchy veg and a sharp dressing. Desk-lunch energy.",
+                "🥗",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "2 cups", note: "from this week's prep"),
+                    Ingredient(item: "Cooked quinoa or rice", quantity: "2 cups", note: "warmed"),
+                    Ingredient(item: "Cucumber", quantity: "1", note: "sliced"),
+                    Ingredient(item: "Cherry tomatoes", quantity: "1 cup", note: "halved"),
+                    Ingredient(item: "Lemon + olive oil", quantity: "1 + 2 tbsp", note: nil),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Warm the leftover \(focus) and grain separately — don't recook the \(focus).", tip: nil),
+                    RecipeStep(step: 2, instruction: "Whisk lemon, olive oil and a pinch of salt.", tip: nil),
+                    RecipeStep(step: 3, instruction: "Bowl it up: grain, leftover \(focus), veg, dressing.", tip: nil),
+                ],
+                "no_cook"
+            ),
+            (
+                "\(titleFocus) Broth Soup",
+                "A 15-minute pot: leftover \(focus), greens and a bright squeeze of lemon.",
+                "🍲",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "2 cups", note: "from this week's prep"),
+                    Ingredient(item: "Chicken or veg broth", quantity: "4 cups", note: nil),
+                    Ingredient(item: "Baby spinach", quantity: "3 cups", note: nil),
+                    Ingredient(item: "Garlic", quantity: "2 cloves", note: "sliced"),
+                    Ingredient(item: "Lemon", quantity: "½", note: "juiced"),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Simmer broth and garlic 5 minutes.", tip: nil),
+                    RecipeStep(step: 2, instruction: "Add leftover \(focus) just to heat through, then wilt the spinach.", tip: "Off the heat as soon as it's hot."),
+                    RecipeStep(step: 3, instruction: "Finish with lemon and black pepper.", tip: nil),
+                ],
+                "stovetop"
+            ),
         ]
         let pick = variants.first(where: { !avoidTitles.contains($0.0) }) ?? variants[index % variants.count]
         return Recipe(
@@ -512,7 +566,7 @@ final class DemoStore {
             difficulty: .easy,
             prep_time_minutes: 8,
             cook_time_minutes: 10,
-            servings: 4,
+            servings: servings,
             calories: 430,
             protein_g: 28,
             carbs_g: 38,
@@ -529,7 +583,50 @@ final class DemoStore {
             author: DemoStore.demoUser.lite,
             primary_method: pick.5,
             base_protein: MealPrepBundles.batchable.contains(focus) ? focus : "none",
-            meal_slot: index == 0 ? "dinner" : "breakfast"
+            meal_slot: slot
+        )
+    }
+
+    private func batchAnchorTemplate(focus: String, servings: Int, slot: String) -> Recipe {
+        let titleFocus = focus.capitalized
+        return Recipe(
+            id: "gen-bundle-\(Int(Date().timeIntervalSince1970 * 1000))-anchor",
+            author_id: DemoStore.demoUser.id,
+            title: "Sunday \(titleFocus) Tray",
+            description: "The batch-cook: a sheet of \(focus) you eat all week. Generous seasoning, extra portions.",
+            emoji: "🍽️",
+            cuisine: "Meal-prep",
+            difficulty: .easy,
+            prep_time_minutes: 15,
+            cook_time_minutes: 35,
+            servings: servings,
+            calories: 480,
+            protein_g: 38,
+            carbs_g: 18,
+            fat_g: 22,
+            tags: ["Meal-prep", "High-protein", "Sheet-pan"],
+            ingredients: [
+                Ingredient(item: focus.capitalized, quantity: "1.2 kg (2½ lb)", note: "enough for leftovers"),
+                Ingredient(item: "Olive oil", quantity: "3 tbsp", note: nil),
+                Ingredient(item: "Garlic", quantity: "4 cloves", note: "smashed"),
+                Ingredient(item: "Lemon", quantity: "1", note: "wedged"),
+                Ingredient(item: "Salt + pepper", quantity: "to taste", note: nil),
+            ],
+            steps: [
+                RecipeStep(step: 1, instruction: "Heat the oven to 220°C / 425°F. Toss the \(focus) with oil, garlic, salt and pepper.", tip: "Cook extra — this is the week's base."),
+                RecipeStep(step: 2, instruction: "Roast 30–35 minutes until browned and cooked through. Rest 5 minutes.", tip: nil),
+                RecipeStep(step: 3, instruction: "Serve a portion tonight. Cool the rest and fridge it for leftover meals.", tip: nil),
+            ],
+            source_prompt: "prep-bundle batch \(focus)",
+            source_url: nil,
+            net_upvotes: 0,
+            cook_count: 0,
+            comment_count: 0,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            author: DemoStore.demoUser.lite,
+            primary_method: "sheet_pan",
+            base_protein: MealPrepBundles.batchable.contains(focus) ? focus : "none",
+            meal_slot: slot
         )
     }
 

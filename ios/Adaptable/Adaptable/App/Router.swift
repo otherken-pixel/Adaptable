@@ -37,6 +37,8 @@ final class DeepLinkCenter: ObservableObject {
     @Published var pendingImportText: String?
     @Published var pendingCookRecipeId: String?
     @Published var cookbookRecipeId: String?
+    @Published var createRecipeId: String?
+    @Published var pendingPrep = false
     @Published var cookSession: CookSession?
     /// Bump to force Discover (and similar lists) to reload.
     @Published private(set) var feedRefreshToken = UUID()
@@ -73,6 +75,15 @@ final class DeepLinkCenter: ObservableObject {
 
     func openCookbookRecipe(_ id: String) {
         cookbookRecipeId = id
+    }
+
+    func openCreateRecipe(_ id: String) {
+        createRecipeId = id
+    }
+
+    func openPrep() {
+        pendingPrep = true
+        activeTab = .create
     }
 }
 

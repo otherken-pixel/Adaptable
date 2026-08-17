@@ -1,8 +1,8 @@
 // Supabase Edge Function: complete-bundle
 //
-// Generates the missing meal(s) that turn 0–2 seed recipes into a
-// 2–3 meal prep bundle. Inserts the new recipes as the calling user
-// (same daily cap as generate-recipe) and returns the assembled bundle.
+// Generates the missing meal(s) that turn 0–N seed recipes into a
+// 2–5 meal leftover-style prep bundle. Inserts the new recipes as the
+// calling user (same daily cap as generate-recipe) and returns the bundle.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
@@ -156,16 +156,37 @@ Deno.serve(async (req) => {
       return json({ error: "Invalid request body." }, 400);
     }
 
+    const rawSize = Number(body.target_size);
+    const targetSize =
+      Number.isInteger(rawSize) && rawSize >= 2 && rawSize <= 5 ? rawSize : 3;
     const seedIds = Array.isArray(body.seed_recipe_ids)
-      ? body.seed_recipe_ids.map(String).filter(Boolean).slice(0, 2)
+      ? body.seed_recipe_ids.map(String).filter(Boolean).slice(0, Math.max(0, targetSize - 1))
       : [];
     const kind =
       body.kind === "concurrent" || body.kind === "shared_base"
         ? body.kind
-        : seedIds.length === 0
-          ? "shared_base"
-          : "shared_base";
-    const targetSize = body.target_size === 2 ? 2 : 3;
+        : "shared_base";
+
+    const SLOT_ORDER: MealSlot[] = ["dinner", "lunch", "breakfast"];
+    const requestedSlots = Array.isArray(body.slots)
+      ? body.slots.map((s: unknown) => String(s).toLowerCase())
+      : [];
+    const slotOrder: MealSlot[] = SLOT_ORDER.filter((s) =>
+      requestedSlots.length === 0 ? true : requestedSlots.includes(s),
+    );
+    const windowRaw = String(body.prep_window ?? "60");
+    const prepWindow = windowRaw === "30" || windowRaw === "120" ? windowRaw : "60";
+    const requestedBase = typeof body.base === "string"
+      ? body.base.toLowerCase().trim()
+      : "";
+    const baseKey = ["chicken", "salmon", "tofu", "beans", "eggs", "chef"].includes(requestedBase)
+      ? requestedBase
+      : "chef";
+    const servingsRaw = Number(body.servings);
+    const servings =
+      Number.isInteger(servingsRaw) && servingsRaw >= 1 && servingsRaw <= 12
+        ? servingsRaw
+        : null;
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -234,14 +255,16 @@ Deno.serve(async (req) => {
     const focus = leftoverFocus(seeds);
     const focusLabel = focus.length > 0
       ? formatList(focus.slice(0, 2))
-      : defaultFocusFromPrefs(prefs);
+      : baseKey === "chef"
+        ? defaultFocusFromPrefs(prefs)
+        : baseKey;
     const usedMethods = seeds.map((s) => inferCookingMethod(s));
     const usedSlots = new Set(seeds.map((s) => inferMealSlot(s)));
     const usedTitles = seeds.map((s) => String(s.title ?? "Untitled"));
 
     const generatedDrafts: any[] = [];
     for (let i = 0; i < missing; i++) {
-      const slotHint = nextSlot(usedSlots);
+      const slotHint = nextSlot(usedSlots, slotOrder);
       const methodHint = complementaryMethod(usedMethods);
       const extra = buildPrompt({
         kind,
@@ -252,6 +275,9 @@ Deno.serve(async (req) => {
         prefsText,
         allergies,
         fromScratch: seeds.length === 0 && generatedDrafts.length === 0,
+        prepWindow,
+        servings,
+        remaining: missing - i - 1,
       });
 
       const draft = await generateComplement(geminiKey, extra, allergies);
@@ -265,7 +291,7 @@ Deno.serve(async (req) => {
 
     const sourcePrompt = seeds.length > 0
       ? `prep-bundle leftover ${focusLabel} from ${usedTitles.join(" + ")}`
-      : `prep-bundle ${kind} around ${focusLabel}`;
+      : `prep-bundle ${kind} around ${focusLabel} (${targetSize} meals, ${prepWindow} min)`;
 
     const inserted: any[] = [];
     for (const draft of generatedDrafts) {
@@ -416,9 +442,11 @@ function defaultFocusFromPrefs(prefs: any): string {
   return "chicken";
 }
 
-function nextSlot(used: Set<MealSlot>): MealSlot {
-  const order: MealSlot[] = ["dinner", "breakfast", "lunch"];
-  return order.find((s) => !used.has(s)) ?? "dinner";
+function nextSlot(used: Set<MealSlot>, order: MealSlot[]): MealSlot {
+  const seq: MealSlot[] = order.length > 0 ? order : ["dinner", "lunch", "breakfast"];
+  const unused = seq.find((s) => !used.has(s));
+  if (unused) return unused;
+  return seq[used.size % seq.length];
 }
 
 function complementaryMethod(used: CookingMethod[]): CookingMethod {
@@ -473,27 +501,44 @@ function buildPrompt(opts: {
   prefsText: string;
   allergies: string[];
   fromScratch: boolean;
+  prepWindow: string;
+  servings: number | null;
+  remaining: number;
 }): string {
   const existing = opts.seeds.map(summarizeRecipe).join(" ");
+  const leftoverCount = opts.remaining;
   const leftoverRule = opts.fromScratch
     ? `This is the ${opts.seeds.length === 0 ? "batch-cook anchor" : "leftover"} meal in a ${opts.kind} prep bundle around ${opts.focusLabel}. ` +
       (opts.seeds.length === 0
-        ? `Cook a generous batch of ${opts.focusLabel} so leftovers can become two more meals.`
+        ? `Cook a generous batch of ${opts.focusLabel} so leftovers can become ${leftoverCount > 0 ? leftoverCount : "more"} distinct meals.`
         : `CRITICAL: use leftover cooked ${opts.focusLabel} as a primary ingredient — do not start that ingredient raw. Steps must say "use the leftover ${opts.focusLabel}".`)
     : `CRITICAL: this meal must use leftover cooked ${opts.focusLabel} as a primary ingredient. ` +
       `Do not start that ingredient raw or give it a long cook. ` +
       `Steps must say "use the leftover ${opts.focusLabel} from earlier this week".`;
 
+  const windowRule = opts.prepWindow === "30"
+    ? "The entire prep session including the batch cook must fit in about 30 minutes. Keep the anchor simple (one pan or one pot)."
+    : opts.prepWindow === "120"
+      ? "This is a Sunday session — up to about 2 hours for the batch cook. Make a generous, flavorful base so leftover meals stay interesting."
+      : "The cook has about an hour for the batch-cook session. Leftover meals should then come together in about 15–20 minutes.";
+
   const kindRule = opts.kind === "concurrent"
     ? `It must cook at the same time as the other meals using method "${opts.methodHint}" so equipment does not clash.`
-    : `Once the leftover ${opts.focusLabel} is ready, this meal should come together in about 20 minutes. Prefer meal slot "${opts.slotHint}".`;
+    : `This meal is specifically for ${opts.slotHint}. Once the leftover ${opts.focusLabel} is ready, leftover meals should come together in about 20 minutes.`;
+
+  const servingsRule = opts.servings
+    ? ` Write the recipe for ${opts.servings} servings.`
+    : "";
 
   return (
     `Create one complete, realistic, delicious recipe. ${opts.prefsText}` +
     (existing ? `The cook already has: ${existing} ` : "") +
     leftoverRule +
     " " +
+    windowRule +
+    " " +
     kindRule +
+    servingsRule +
     " Do not repeat an existing title or the same cuisine+dish shape. " +
     "Quantities must use both metric and imperial where sensible. " +
     "At least 4 ingredients and 3 steps. " +

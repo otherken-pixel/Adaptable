@@ -467,26 +467,45 @@ enum API {
         return out
     }
 
-    /// Generate the missing meal(s) that complete a 2–3 recipe prep bundle.
+    /// Generate the missing meal(s) that complete a 2–5 recipe leftover prep bundle.
     static func completeBundle(
         seedIds: [String],
         kind: BundleKind,
-        targetSize: Int = 3
+        targetSize: Int = 3,
+        slots: [String] = [],
+        prepWindow: String? = nil,
+        base: String? = nil,
+        servings: Int? = nil
     ) async throws -> MealPrepBundle {
         if SupabaseManager.isDemo {
-            return await DemoStore.shared.completeBundle(seedIds: seedIds, kind: kind, targetSize: targetSize)
+            return await DemoStore.shared.completeBundle(
+                seedIds: seedIds, kind: kind, targetSize: targetSize,
+                slots: slots, prepWindow: prepWindow, base: base, servings: servings
+            )
         }
         struct Body: Encodable {
             let seed_recipe_ids: [String]
             let kind: String
             let target_size: Int
+            let slots: [String]
+            let prep_window: String?
+            let base: String?
+            let servings: Int?
         }
         struct Envelope: Decodable { let bundle: MealPrepBundle }
         do {
             let envelope: Envelope = try await SupabaseManager.client.functions.invoke(
                 "complete-bundle",
                 options: FunctionInvokeOptions(
-                    body: Body(seed_recipe_ids: seedIds, kind: kind.rawValue, target_size: targetSize)
+                    body: Body(
+                        seed_recipe_ids: seedIds,
+                        kind: kind.rawValue,
+                        target_size: targetSize,
+                        slots: slots,
+                        prep_window: prepWindow,
+                        base: base,
+                        servings: servings
+                    )
                 )
             )
             return envelope.bundle

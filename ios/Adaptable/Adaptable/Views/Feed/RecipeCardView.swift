@@ -5,7 +5,7 @@ struct RecipeCardView: View {
     let recipe: Recipe
     var index: Int = 0
     /// Discover/Profile can use the implicit link. Cookbook must not —
-    /// appearing/disappearing links auto-push a recipe when switching Planner.
+    /// appearing/disappearing links auto-push a recipe when the parent list changes.
     var asLink: Bool = true
 
     var body: some View {

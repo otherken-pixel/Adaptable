@@ -1,33 +1,22 @@
 import SwiftUI
 
-private enum CookbookTab { case saved, planner }
-
-/// Saved recipes + meal planner + prep-bundle suggestions.
-/// Planner "Prep this week" is native-first (web Cookbook stays as-is).
+/// Saved recipes plus this week's canvas. Prep interview lives on Create.
 struct CookbookView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var engagement: EngagementStore
     @EnvironmentObject private var shoppingStore: ShoppingStore
     @EnvironmentObject private var deepLinks: DeepLinkCenter
 
-    @State private var tab: CookbookTab = .saved
     @State private var recipes: [Recipe]?
     @State private var plans: [MealPlanEntry]?
     @State private var weekAdded = false
-    @State private var bundles: [MealPrepBundle]?
-    @State private var completingId: String?
-    @State private var buildingFromScratch = false
-    @State private var addedBundleId: String?
-    @State private var bundleError: String?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                switch tab {
-                case .saved: savedContent
-                case .planner: plannerContent
-                }
+                weekSection
+                savedSection
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
@@ -36,33 +25,19 @@ struct CookbookView: View {
         .navigationBarHidden(true)
         .task { await loadSaved() }
         .task { await loadPlans() }
-        .task { await loadBundles() }
         .task { await engagement.load(for: authStore.profile) }
         .onChange(of: engagement.savedIds) { _, _ in
-            Task { await loadSaved(); await loadBundles() }
+            Task { await loadSaved() }
+        }
+        .onChange(of: deepLinks.activeTab) { _, tab in
+            if tab == .cookbook { Task { await loadPlans() } }
         }
     }
 
     private var header: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("YOUR KITCHEN").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
-                Text("Cookbook").font(.system(size: 32, weight: .heavy))
-            }
-            Spacer()
-            HStack(spacing: 2) {
-                ForEach([(CookbookTab.saved, "Saved"), (.planner, "Planner")], id: \.1) { t, label in
-                    Button { tab = t } label: {
-                        Text(label).font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(tab == t ? Theme.content : Theme.muted)
-                            .padding(.horizontal, 14).padding(.vertical, 7)
-                            .background(tab == t ? Theme.raised : .clear, in: Capsule())
-                    }
-                    .buttonStyle(.pressable)
-                }
-            }
-            .padding(4)
-            .background(Theme.sunken, in: Capsule())
+        VStack(alignment: .leading, spacing: 2) {
+            Text("YOUR KITCHEN").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
+            Text("Cookbook").font(.system(size: 32, weight: .heavy))
         }
         .padding(.top, 16)
         .padding(.bottom, 16)
@@ -101,7 +76,18 @@ struct CookbookView: View {
         recipes = (try? await API.fetchSavedRecipes(userId: userId)) ?? []
     }
 
-    // MARK: - Planner
+    private var savedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("SAVED")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.2)
+                .foregroundStyle(Theme.accent)
+                .padding(.top, 28)
+            savedContent
+        }
+    }
+
+    // MARK: - Week
 
     private var grouped: [(String, [MealPlanEntry])]? {
         guard let plans else { return nil }
@@ -115,204 +101,56 @@ struct CookbookView: View {
     private var upcomingCount: Int { grouped?.reduce(0) { $0 + $1.1.count } ?? 0 }
 
     @ViewBuilder
-    private var plannerContent: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            prepBundlesSection
+    private var weekSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            WeekCanvasView(
+                plans: (plans ?? []).filter { $0.plan_date >= Format.localISODate() },
+                onMove: { entry, iso in Task { await move(entry, to: iso) } },
+                onSelectDay: { _ in }
+            )
 
-            if let plans {
-                WeekCanvasView(
-                    plans: plans.filter { $0.plan_date >= Format.localISODate() },
-                    onMove: { entry, iso in Task { await move(entry, to: iso) } },
-                    onSelectDay: { _ in }
-                )
-            }
-
-            if grouped == nil {
+            if plans == nil {
                 FeedSkeleton()
             } else if upcomingCount == 0 {
-                EmptyStateView(emoji: "🗓️", title: "Nothing planned yet", message: "Add a prep bundle above, or open any recipe and tap the calendar button.") {
-                    PillButton(title: "Find something delicious") { deepLinks.activeTab = .discover }
+                EmptyStateView(
+                    emoji: "🗓️",
+                    title: "Nothing planned yet",
+                    message: "Build leftover-friendly meals that share a base — then drop them on the week."
+                ) {
+                    PillButton(title: "Build this week's prep") { deepLinks.openPrep() }
                 }
-                .padding(.vertical, 12)
+                .padding(.vertical, 8)
             } else {
-                VStack(alignment: .leading, spacing: 20) {
-                    Button {
-                        addWeekToGroceries()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: weekAdded ? "checkmark" : "basket.fill")
-                            Text(weekAdded ? "Everything's on the grocery list" : "Add \(upcomingCount) planned \(upcomingCount == 1 ? "meal" : "meals") to Groceries")
-                                .font(.system(size: 15, weight: .heavy))
-                        }
-                        .frame(maxWidth: .infinity).frame(height: 52)
-                        .foregroundStyle(weekAdded ? Theme.accent : Theme.surface)
-                        .background(weekAdded ? AnyShapeStyle(Theme.accentSoft) : AnyShapeStyle(Theme.content), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                Button {
+                    addWeekToGroceries()
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: weekAdded ? "checkmark" : "basket.fill")
+                        Text(weekAdded ? "Everything's on the grocery list" : "Add \(upcomingCount) planned \(upcomingCount == 1 ? "meal" : "meals") to Groceries")
+                            .font(.system(size: 15, weight: .heavy))
                     }
-                    .buttonStyle(.pressable)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .foregroundStyle(weekAdded ? Theme.accent : Theme.surface)
+                    .background(weekAdded ? AnyShapeStyle(Theme.accentSoft) : AnyShapeStyle(Theme.content), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
+                .buttonStyle(.pressable)
 
-                    ForEach(grouped!, id: \.0) { iso, entries in
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(dayLabel(iso)).font(.system(size: 15, weight: .heavy))
-                            VStack(spacing: 10) {
-                                ForEach(entries) { entry in
-                                    PlanRow(
+                ForEach(grouped ?? [], id: \.0) { iso, entries in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(dayLabel(iso)).font(.system(size: 15, weight: .heavy))
+                        VStack(spacing: 10) {
+                            ForEach(entries) { entry in
+                                PlanRow(
                                     entry: entry,
                                     onOpen: { deepLinks.openCookbookRecipe(entry.recipe_id) },
                                     onServingsChange: { delta in changeServings(entry, delta: delta) },
                                     onRemove: { remove(entry) }
                                 )
-                                }
                             }
                         }
                     }
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var prepBundlesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("PREP THIS WEEK")
-                        .font(.system(size: 11, weight: .heavy))
-                        .tracking(1.2)
-                        .foregroundStyle(Theme.accent)
-                    Text("2–3 meals that share a base or cook at the same time.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.muted)
-                }
-                Spacer(minLength: 8)
-                Button {
-                    Task { await buildFromScratch() }
-                } label: {
-                    HStack(spacing: 4) {
-                        if buildingFromScratch {
-                            ProgressView().scaleEffect(0.7)
-                        } else {
-                            Image(systemName: "sparkles")
-                        }
-                        Text(buildingFromScratch ? "Building…" : "Build me one")
-                            .font(.system(size: 12, weight: .bold))
-                    }
-                    .foregroundStyle(Theme.accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Theme.accentSoft, in: Capsule())
-                }
-                .buttonStyle(.pressable)
-                .disabled(buildingFromScratch || completingId != nil)
-            }
-
-            if let bundleError {
-                Text(bundleError)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.down)
-            }
-
-            if bundles == nil {
-                VStack(spacing: 12) {
-                    RecipeCardSkeleton()
-                    RecipeCardSkeleton()
-                }
-            } else if let bundles, bundles.isEmpty {
-                Text("Save a couple of recipes — or tap Build me one and we’ll generate a leftover-friendly trio around your taste profile.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.muted)
-            } else if let bundles {
-                VStack(spacing: 14) {
-                    ForEach(bundles) { bundle in
-                        MealPrepBundleCard(
-                            bundle: bundle,
-                            isCompleting: completingId == bundle.id,
-                            justAdded: addedBundleId == bundle.id,
-                            onOpenRecipe: { deepLinks.openCookbookRecipe($0) },
-                            onAddToWeek: { Task { await addBundleToWeek(bundle) } },
-                            onComplete: { Task { await complete(bundle) } }
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private func loadBundles() async {
-        guard let userId = authStore.profile?.id else { return }
-        let pool = (try? await API.fetchBundlePool(userId: userId)) ?? []
-        let prefs = authStore.profile?.preferences ?? .empty
-        bundles = MealPrepBundles.select(pool: pool, prefs: prefs)
-    }
-
-    private func complete(_ bundle: MealPrepBundle) async {
-        completingId = bundle.id
-        bundleError = nil
-        do {
-            let done = try await API.completeBundle(seedIds: bundle.recipes.map(\.id), kind: bundle.kind)
-            if let idx = bundles?.firstIndex(where: { $0.id == bundle.id }) {
-                bundles?[idx] = done
-            } else {
-                bundles?.insert(done, at: 0)
-            }
-            deepLinks.requestFeedRefresh()
-            Haptics.success()
-        } catch {
-            bundleError = AppError.friendlyMessage(for: error)
-            Haptics.warning()
-        }
-        completingId = nil
-    }
-
-    private func buildFromScratch() async {
-        buildingFromScratch = true
-        bundleError = nil
-        do {
-            let done = try await API.completeBundle(seedIds: [], kind: .sharedBase)
-            bundles = [done] + (bundles ?? []).filter { $0.id != done.id }
-            deepLinks.requestFeedRefresh()
-            Haptics.success()
-        } catch {
-            bundleError = AppError.friendlyMessage(for: error)
-            Haptics.warning()
-        }
-        buildingFromScratch = false
-    }
-
-    private func addBundleToWeek(_ bundle: MealPrepBundle) async {
-        guard let userId = authStore.profile?.id else { return }
-        let household = authStore.profile?.preferences?.household_size
-        let sameDay = bundle.kind == .concurrent
-        let parentId = bundle.recipes.first?.id
-        let focus = bundle.leftover_focus.first
-        for (i, recipe) in bundle.recipes.enumerated() {
-            let date = Calendar.current.date(byAdding: .day, value: sameDay ? 0 : i, to: Date()) ?? Date()
-            let servings = household ?? recipe.servings ?? 2
-            let isLeftover = bundle.kind == .sharedBase && i > 0 && parentId != recipe.id
-            do {
-                try await API.addMealPlan(
-                    userId: userId,
-                    recipeId: recipe.id,
-                    planDate: Format.localISODate(date),
-                    servings: servings,
-                    leftoverOf: isLeftover ? parentId : nil,
-                    leftoverFocus: isLeftover ? focus : nil
-                )
-            } catch {
-                bundleError = AppError.friendlyMessage(for: error)
-                return
-            }
-        }
-        await shoppingStore.addBundle(bundle, userId: userId, householdSize: household)
-        weekAdded = true
-        if let prefs = authStore.profile?.preferences {
-            try? await authStore.updatePreferences(TasteMemory.recordLeftover(focus: bundle.leftover_focus, prefs: prefs))
-        }
-        addedBundleId = bundle.id
-        Haptics.success()
-        await loadPlans()
-        Task {
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            if addedBundleId == bundle.id { addedBundleId = nil }
         }
     }
 

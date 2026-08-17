@@ -35,7 +35,7 @@ struct RecipeContentView: View {
             }
             actionButtons
             if let planned {
-                Text("Planned for \(planned) (\(servings) servings) — see it in Cookbook → Planner")
+                Text("Planned for \(planned) (\(servings) servings) — see it in Cookbook")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.accent)
                     .frame(maxWidth: .infinity)

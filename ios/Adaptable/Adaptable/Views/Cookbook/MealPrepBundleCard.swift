@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One suggested 2–3 meal prep bundle. Shows why the meals are grouped
+/// One leftover-style prep bundle (2–5 meals). Shows why the meals are grouped
 /// and either adds them to the week or generates the missing piece.
 struct MealPrepBundleCard: View {
     let bundle: MealPrepBundle
@@ -28,7 +28,7 @@ struct MealPrepBundleCard: View {
             HStack(alignment: .center, spacing: 12) {
                 coverStack
                 VStack(alignment: .leading, spacing: 3) {
-                    ForEach(bundle.recipes.prefix(3)) { recipe in
+                    ForEach(bundle.recipes) { recipe in
                         Button { onOpenRecipe(recipe.id) } label: {
                             HStack(spacing: 6) {
                                 Text(recipe.title ?? "Recipe")
@@ -108,7 +108,7 @@ struct MealPrepBundleCard: View {
 
     private var coverStack: some View {
         HStack(spacing: -14) {
-            ForEach(Array(bundle.recipes.prefix(3).enumerated()), id: \.element.id) { i, recipe in
+            ForEach(Array(bundle.recipes.prefix(5).enumerated()), id: \.element.id) { i, recipe in
                 Button { onOpenRecipe(recipe.id) } label: {
                     RecipeCoverView(
                         recipeId: recipe.id,
