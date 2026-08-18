@@ -10,6 +10,10 @@ enum CookLiveActivityController {
         Activity<CookActivityAttributes>.activities.first?.content.state.stepIndex
     }
 
+    static var currentTimerEndsAt: Date? {
+        Activity<CookActivityAttributes>.activities.first?.content.state.timerEndsAt
+    }
+
     @discardableResult
     static func start(recipe: Recipe, stepLabel: String, step: Int, total: Int, timerEndsAt: Date?) -> String? {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }

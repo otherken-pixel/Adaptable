@@ -64,6 +64,13 @@ struct CookModeView: View {
             let total = (recipe.steps ?? []).count
             idx = min(max(restored, 0), total + 1)
             liveActivityStarted = true
+            if let endsAt = CookLiveActivityController.currentTimerEndsAt, endsAt > Date(),
+               idx >= 1, idx <= total, let steps = recipe.steps, idx - 1 < steps.count {
+                let seconds = DurationParser.extractTimerSeconds(steps[idx - 1].instruction)
+                    ?? max(1, Int(endsAt.timeIntervalSinceNow.rounded()))
+                timers = [RunningTimer(step: idx, endsAt: endsAt, totalSeconds: seconds, rang: false)]
+                now = Date()
+            }
         }
         applyCookCommand(deepLinks.pendingCookCommand)
     }
