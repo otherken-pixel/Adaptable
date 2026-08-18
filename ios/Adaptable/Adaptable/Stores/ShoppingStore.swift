@@ -35,40 +35,58 @@ final class ShoppingStore: ObservableObject {
         // Drop legacy unscoped queue so a prior account's ops cannot flush for this user.
         UserDefaults.standard.removeObject(forKey: legacyQueueKey)
         loadQueue(for: profile.id)
-        guard loadedForProfileId != profile.id else {
+        if loadedForProfileId == profile.id {
             await flushQueue(userId: profile.id)
             return
         }
-        loadedForProfileId = profile.id
-        items = (try? await API.fetchShoppingItems(userId: profile.id)) ?? []
+        do {
+            items = try await API.fetchShoppingItems(userId: profile.id)
+            loadedForProfileId = profile.id
+        } catch {
+            // Don't mark loaded — a failed fetch used to look like an empty
+            // list forever because the next load() bailed out.
+        }
         await flushQueue(userId: profile.id)
     }
 
-    func addRecipe(_ recipe: Recipe, scaleFactor: Double, userId: String) {
-        var existing = Dictionary(
-            uniqueKeysWithValues: items
-                .filter { !$0.checked }
-                .map { (GroceryMerge.normalizeKey($0.item), $0) }
-        )
+    func addRecipe(
+        _ recipe: Recipe,
+        scaleFactor: Double,
+        userId: String,
+        skipKeys: Set<String> = []
+    ) async {
+        var existing: [String: ShoppingItem] = [:]
+        for item in items where !item.checked {
+            let key = GroceryMerge.normalizeKey(item.item)
+            if existing[key] == nil { existing[key] = item }
+        }
 
         var rows: [(recipeId: String?, recipeTitle: String, item: String, quantity: String)] = []
+        var mergedIds: [(id: String, quantity: String)] = []
         for ing in recipe.ingredients ?? [] {
+            if skipKeys.contains(GroceryMerge.batchKey(ing.item)) { continue }
             let key = GroceryMerge.normalizeKey(ing.item)
             let qty = Quantity.scale(ing.quantity, factor: scaleFactor)
             if let hit = existing[key] {
+                let merged = GroceryMerge.mergeQuantities(existing: hit.quantity, incoming: qty)
                 items = items.map {
                     guard $0.id == hit.id else { return $0 }
                     var copy = $0
-                    copy.quantity = GroceryMerge.mergeQuantities(existing: $0.quantity, incoming: qty)
+                    copy.quantity = merged
                     return copy
                 }
-                // refresh map entry after merge
+                if !hit.id.hasPrefix("tmp-") {
+                    mergedIds.append((hit.id, merged))
+                }
                 if let updated = items.first(where: { $0.id == hit.id }) {
                     existing[key] = updated
                 }
             } else {
                 rows.append((recipe.id, recipe.title ?? "", ing.item, qty))
             }
+        }
+        for pair in mergedIds {
+            try? await API.updateShoppingItemQuantity(userId: userId, id: pair.id, quantity: pair.quantity)
         }
         guard !rows.isEmpty else {
             Haptics.success()
@@ -90,13 +108,21 @@ final class ShoppingStore: ObservableObject {
         items = temp + items
         Haptics.success()
 
-        Task {
-            do {
-                let created = try await API.addShoppingItems(userId: userId, rows: rows)
-                items = created + items.filter { item in !temp.contains { $0.id == item.id } }
-            } catch {
-                items = items.filter { item in !temp.contains { $0.id == item.id } }
-            }
+        do {
+            let created = try await API.addShoppingItems(userId: userId, rows: rows)
+            items = created + items.filter { item in !temp.contains { $0.id == item.id } }
+        } catch {
+            items = items.filter { item in !temp.contains { $0.id == item.id } }
+        }
+    }
+
+    /// Add a bundle: leftover children skip the shared base (already on the list from the parent).
+    func addBundle(_ bundle: MealPrepBundle, userId: String, householdSize: Int?) async {
+        let skip = Set(bundle.leftover_focus.map { MealPrepBundles.normalizeIngredient($0) })
+        for (index, recipe) in bundle.recipes.enumerated() {
+            let scale = Double(householdSize ?? recipe.servings ?? 2) / Double(max(recipe.servings ?? 1, 1))
+            // First meal is the batch-cook; later meals reuse that base.
+            await addRecipe(recipe, scaleFactor: scale, userId: userId, skipKeys: index == 0 ? [] : skip)
         }
     }
 

@@ -19,12 +19,13 @@ enum FeedFilter {
         search: String,
         chip: Chip,
         dietTags: [String],
-        followedAuthorIds: Set<String>
+        followedAuthorIds: Set<String>,
+        preferences: Preferences? = nil
     ) -> [Recipe] {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let diets = dietTags.map { $0.lowercased() }
 
-        return recipes.filter { r in
+        let filtered = recipes.filter { r in
             if !q.isEmpty {
                 let haystack = (
                     [r.title ?? "", r.description ?? "", r.cuisine ?? ""] + (r.tags ?? [])
@@ -47,7 +48,7 @@ enum FeedFilter {
                 if let protein = r.protein_g, protein >= min { return true }
                 return (r.tags ?? []).contains { $0.lowercased() == "high-protein" }
             case .forYou:
-                guard !diets.isEmpty else { return false }
+                if diets.isEmpty { return true }
                 return (r.tags ?? []).contains { diets.contains($0.lowercased()) }
             case .following:
                 guard let authorId = r.author_id, !authorId.isEmpty else { return false }
@@ -56,5 +57,10 @@ enum FeedFilter {
                 return (r.tags ?? []).contains { $0.lowercased() == label.lowercased() }
             }
         }
+
+        if case .forYou = chip, let preferences {
+            return TasteMemory.rank(filtered, prefs: preferences)
+        }
+        return filtered
     }
 }

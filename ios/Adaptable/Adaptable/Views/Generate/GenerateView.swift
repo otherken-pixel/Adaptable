@@ -1,8 +1,20 @@
 import SwiftUI
 import PhotosUI
 
-private enum CreateMode: Equatable { case describe, pantry, importMode }
+private enum CreateMode: Equatable { case describe, pantry, importMode, prep }
 private enum Phase: Equatable { case idle, loading, done, error }
+private enum PrepWindow: String, CaseIterable {
+    case quick = "30"
+    case hour = "60"
+    case sunday = "120"
+    var label: String {
+        switch self {
+        case .quick: return "30 min"
+        case .hour: return "~1 hour"
+        case .sunday: return "Sunday 2 hours"
+        }
+    }
+}
 
 private let suggestions = [
     "High-protein vegan dinner in 20 minutes 💪",
@@ -33,6 +45,7 @@ private let loadingLines = [
 struct GenerateView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var deepLinks: DeepLinkCenter
+    @EnvironmentObject private var shoppingStore: ShoppingStore
 
     @State private var prompt = ""
     @State private var phase: Phase = .idle
@@ -57,6 +70,14 @@ struct GenerateView: View {
     @State private var showPhotoPicker = false
     @State private var photosPickerItem: PhotosPickerItem?
 
+    @State private var prepCount = 3
+    @State private var prepSlots: Set<String> = ["dinner", "lunch"]
+    @State private var prepWindow: PrepWindow = .hour
+    @State private var prepBase = "chef"
+    @State private var prepBundle: MealPrepBundle?
+    @State private var addedPrep = false
+    @State private var prepError: String?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -74,7 +95,9 @@ struct GenerateView: View {
         .background(Theme.surface)
         .navigationBarHidden(true)
         .safeAreaInset(edge: .bottom) {
-            if (phase == .idle || phase == .error), (mode == .describe || remixSource != nil || phase == .error) {
+            if (phase == .idle || phase == .error),
+               mode != .prep,
+               (mode == .describe || remixSource != nil || phase == .error) {
                 composer
             }
         }
@@ -94,12 +117,32 @@ struct GenerateView: View {
             }
             deepLinks.remixRecipeId = nil
         }
+        .onChange(of: deepLinks.pendingImportURL) { _, url in
+            consumePendingImport()
+        }
+        .onChange(of: deepLinks.pendingImportText) { _, _ in
+            consumePendingImport()
+        }
+        .onAppear {
+            consumePendingImport()
+            consumePendingPrep()
+        }
+        .onChange(of: deepLinks.pendingPrep) { _, on in
+            guard on else { return }
+            consumePendingPrep()
+        }
+        .onChange(of: prepCount) { _, n in
+            if n >= 3 { prepSlots.insert("lunch") }
+        }
+        .onChange(of: mode) { _, m in
+            if m == .prep { sanitizePrepBase() }
+        }
         .onChange(of: photosPickerItem) { _, item in
             guard let item else { return }
             Task {
                 if let raw = try? await item.loadTransferable(type: Data.self),
                    let data = ImageCompressor.jpegData(from: raw) {
-                    await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import")
+                    await handleCapturedImage(data)
                 }
             }
         }
@@ -107,7 +150,7 @@ struct GenerateView: View {
             CameraPicker { image in
                 showCameraPicker = false
                 if let data = ImageCompressor.jpegData(from: image) {
-                    Task { await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import") }
+                    Task { await handleCapturedImage(data) }
                 }
             }
             .ignoresSafeArea()
@@ -148,7 +191,7 @@ struct GenerateView: View {
                 if mode == .describe { describeHero }
             }
 
-            if !(remixSource == nil && mode == .importMode) {
+            if remixSource != nil || mode == .describe || mode == .pantry {
                 partySizeRow
             }
 
@@ -172,18 +215,24 @@ struct GenerateView: View {
 
             if remixSource == nil && mode == .importMode { importContent }
             if remixSource == nil && mode == .pantry { pantryContent }
+            if remixSource == nil && mode == .prep { prepContent }
         }
     }
 
     private var modeToggle: some View {
         HStack(spacing: 2) {
-            ForEach([(CreateMode.describe, "Describe", "wand.and.stars"), (.pantry, "Fridge", "refrigerator"), (.importMode, "Import", "link")], id: \.1) { m, label, icon in
+            ForEach([
+                (CreateMode.describe, "Describe", "wand.and.stars"),
+                (.pantry, "Fridge", "refrigerator"),
+                (.importMode, "Import", "link"),
+                (.prep, "Prep", "square.stack.3d.up"),
+            ], id: \.1) { m, label, icon in
                 Button { mode = m } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: icon).font(.system(size: 12))
-                        Text(label).font(.system(size: 13, weight: .bold))
+                    HStack(spacing: 5) {
+                        Image(systemName: icon).font(.system(size: 11))
+                        Text(label).font(.system(size: 12, weight: .bold))
                     }
-                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .padding(.horizontal, 10).padding(.vertical, 8)
                     .foregroundStyle(mode == m ? Theme.content : Theme.muted)
                     .background(mode == m ? Theme.raised : .clear, in: Capsule())
                 }
@@ -301,8 +350,22 @@ struct GenerateView: View {
     private var pantryContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("What's in the fridge? 🧺").font(.system(size: 20, weight: .heavy))
-            Text("Pick at least two ingredients and the AI builds the best possible dish around them — no store run required.")
+            Text("Pick at least two ingredients — or snap the fridge — and the AI builds around what you already have.")
                 .font(.system(size: 14)).foregroundStyle(Theme.muted)
+
+            Button {
+                showCameraPicker = true
+            } label: {
+                HStack {
+                    Image(systemName: "camera.fill").foregroundStyle(Theme.accent)
+                    Text("Snap the fridge").font(.system(size: 14, weight: .bold))
+                }
+                .frame(maxWidth: .infinity).frame(height: 48)
+                .foregroundStyle(Theme.content)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+            }
+            .buttonStyle(.pressable)
 
             if !pantry.isEmpty {
                 FlowLayout(spacing: 8) {
@@ -381,7 +444,10 @@ struct GenerateView: View {
                     .frame(width: 80, height: 80)
                     .overlay(Image(systemName: "sparkles").font(.system(size: 30)).foregroundStyle(.white))
                 Text(loadingLines[lineIdx]).font(.system(size: 15, weight: .bold)).id(lineIdx)
-                Text("\u{201C}\(prompt)\u{201D}").font(.system(size: 12)).foregroundStyle(Theme.faint).lineLimit(1).frame(maxWidth: 240)
+                Text(mode == .prep
+                     ? "\(prepCount) leftover-friendly meals"
+                     : "\u{201C}\(prompt)\u{201D}")
+                    .font(.system(size: 12)).foregroundStyle(Theme.faint).lineLimit(1).frame(maxWidth: 240)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
@@ -412,7 +478,9 @@ struct GenerateView: View {
             Text(errorMessage).font(.system(size: 14)).foregroundStyle(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 280)
             PillButton(title: "Try again") {
                 Task {
-                    if let src = lastImportSource { await runImport(src, label: prompt) } else { await submit() }
+                    if mode == .prep { await buildPrep() }
+                    else if let src = lastImportSource { await runImport(src, label: prompt) }
+                    else { await submit() }
                 }
             }
         }
@@ -425,11 +493,19 @@ struct GenerateView: View {
     private var doneContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("✨ Fresh out of the AI kitchen — it's live on the feed")
+                Text(prepBundle != nil
+                     ? "✨ \(prepBundle!.recipes.count) leftover-friendly meals — live on the feed"
+                     : "✨ Fresh out of the AI kitchen — it's live on the feed")
                     .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accent)
                 Spacer()
                 Button {
-                    phase = .idle; recipe = nil; prompt = ""; remixSource = nil
+                    phase = .idle
+                    recipe = nil
+                    prompt = ""
+                    remixSource = nil
+                    prepBundle = nil
+                    addedPrep = false
+                    prepError = nil
                 } label: {
                     Label("New", systemImage: "arrow.counterclockwise").font(.system(size: 12, weight: .bold))
                         .padding(.horizontal, 12).padding(.vertical, 6)
@@ -439,7 +515,160 @@ struct GenerateView: View {
             .padding(14)
             .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-            if let recipe { RecipeContentView(recipe: recipe) }
+            if let prepBundle {
+                prepResult(prepBundle)
+            } else if let recipe {
+                RecipeContentView(recipe: recipe)
+            }
+        }
+    }
+
+    // MARK: - Prep mode
+
+    private var prepContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Prep complementary meals").font(.system(size: 20, weight: .heavy))
+                Text("A few chips — then we generate leftover-friendly meals that share a base. Diets and allergies come from your Taste Profile.")
+                    .font(.system(size: 14)).foregroundStyle(Theme.muted)
+            }
+
+            prepQuestion("How many meals?")
+            HStack(spacing: 8) {
+                ForEach([2, 3, 4, 5], id: \.self) { n in
+                    prepChip(title: "\(n)", selected: prepCount == n) { prepCount = n }
+                }
+            }
+
+            prepQuestion("Which slots?", subtitle: "We’ll spread the meals across these.")
+            HStack(spacing: 8) {
+                ForEach([("breakfast", "Breakfast"), ("lunch", "Lunch"), ("dinner", "Dinner")], id: \.0) { id, label in
+                    prepChip(title: label, selected: prepSlots.contains(id)) {
+                        if prepSlots.contains(id) {
+                            if prepSlots.count > 1 { prepSlots.remove(id) }
+                        } else {
+                            prepSlots.insert(id)
+                        }
+                    }
+                }
+            }
+
+            prepQuestion("How long do you want to prep?")
+            FlowLayout(spacing: 8) {
+                ForEach(PrepWindow.allCases, id: \.rawValue) { window in
+                    prepChip(title: window.label, selected: prepWindow == window) { prepWindow = window }
+                }
+            }
+
+            prepQuestion("Shared base", subtitle: "Cook once, eat it several ways.")
+            FlowLayout(spacing: 8) {
+                ForEach(allowedPrepBases, id: \.id) { option in
+                    prepChip(title: option.label, selected: prepBase == option.id) { prepBase = option.id }
+                }
+            }
+
+            partySizeRow
+
+            Button {
+                Task { await buildPrep() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                    Text("Build my \(prepCount) meals").font(.system(size: 16, weight: .heavy))
+                }
+                .frame(maxWidth: .infinity).frame(height: 56)
+                .foregroundStyle(.white)
+                .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .buttonStyle(.pressable)
+        }
+    }
+
+    private func prepQuestion(_ title: String, subtitle: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1)
+                .foregroundStyle(Theme.faint)
+            if let subtitle {
+                Text(subtitle).font(.system(size: 13)).foregroundStyle(Theme.muted)
+            }
+        }
+    }
+
+    private func prepChip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .bold))
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                .foregroundStyle(selected ? Theme.surface : Theme.muted)
+                .background(selected ? AnyShapeStyle(Theme.content) : AnyShapeStyle(Theme.raised), in: Capsule())
+                .overlay(Capsule().stroke(Theme.line))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    private struct PrepBaseOption: Identifiable {
+        let id: String
+        let label: String
+    }
+
+    private var allowedPrepBases: [PrepBaseOption] {
+        let diets = (authStore.profile?.preferences?.diets ?? []).map { $0.lowercased() }
+        let allergies = (authStore.profile?.preferences?.allergies ?? []).map { $0.lowercased() }
+        let vegan = diets.contains { $0.contains("vegan") }
+        let vegetarian = vegan || diets.contains { $0.contains("vegetarian") }
+        let pescatarian = diets.contains { $0.contains("pescatarian") }
+        let noFish = allergies.contains { $0.contains("fish") }
+        let noEgg = allergies.contains { $0.contains("egg") }
+        let noSoy = allergies.contains { $0.contains("soy") }
+
+        var options: [PrepBaseOption] = []
+        if !vegetarian && !pescatarian {
+            options.append(.init(id: "chicken", label: "Chicken"))
+        }
+        if !vegetarian && !noFish {
+            options.append(.init(id: "salmon", label: "Salmon"))
+        }
+        if !noSoy {
+            options.append(.init(id: "tofu", label: "Tofu"))
+        }
+        options.append(.init(id: "beans", label: "Beans"))
+        if !vegan && !noEgg {
+            options.append(.init(id: "eggs", label: "Eggs"))
+        }
+        options.append(.init(id: "chef", label: "Chef’s choice"))
+        return options
+    }
+
+    private func prepResult(_ bundle: MealPrepBundle) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let prepError {
+                Text(prepError)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.down)
+            }
+            MealPrepBundleCard(
+                bundle: bundle,
+                justAdded: addedPrep,
+                onOpenRecipe: { deepLinks.openCreateRecipe($0) },
+                onAddToWeek: { Task { await addPrepToWeek(bundle) } },
+                onComplete: {}
+            )
+            if addedPrep {
+                Button {
+                    deepLinks.activeTab = .cookbook
+                } label: {
+                    Text("See this week")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.pressable)
+            }
         }
     }
 
@@ -486,6 +715,7 @@ struct GenerateView: View {
         prompt = p
         phase = .loading
         recipe = nil
+        prepBundle = nil
         do {
             var apiPrompt = p
             if let remixSource {
@@ -495,12 +725,146 @@ struct GenerateView: View {
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result
             phase = .done
+            if let prefs = authStore.profile?.preferences {
+                var next = prefs
+                if remixSource != nil { next = TasteMemory.recordRemix(prompt: p, prefs: next) }
+                if mode == .pantry { next = TasteMemory.recordPantry(pantry, prefs: next) }
+                try? await authStore.updatePreferences(next)
+            }
             deepLinks.requestFeedRefresh()
         } catch {
             print("[GenerateView] Failed to generate recipe: \(error)")
             errorMessage = AppError.friendlyMessage(for: error)
             phase = .error
         }
+    }
+
+    private func sanitizePrepBase() {
+        if !allowedPrepBases.contains(where: { $0.id == prepBase }) {
+            prepBase = "chef"
+        }
+    }
+
+    private func consumePendingPrep() {
+        guard deepLinks.pendingPrep else { return }
+        deepLinks.pendingPrep = false
+        remixSource = nil
+        mode = .prep
+        phase = .idle
+        recipe = nil
+        prompt = ""
+        prepBundle = nil
+        addedPrep = false
+        prepError = nil
+        sanitizePrepBase()
+    }
+
+    private func buildPrep() async {
+        guard phase != .loading else { return }
+        guard authStore.profile != nil else {
+            errorMessage = "You need to be logged in to build a prep."
+            phase = .error
+            return
+        }
+        if !NetworkMonitor.shared.isOnline {
+            errorMessage = "You're offline — connect to build this week's prep."
+            phase = .error
+            return
+        }
+        lastImportSource = nil
+        prompt = "\(prepCount) leftover-friendly meals"
+        phase = .loading
+        recipe = nil
+        prepBundle = nil
+        addedPrep = false
+        prepError = nil
+        let slots = ["dinner", "lunch", "breakfast"].filter { prepSlots.contains($0) }
+        do {
+            let bundle = try await API.completeBundle(
+                seedIds: [],
+                kind: .sharedBase,
+                targetSize: prepCount,
+                slots: slots,
+                prepWindow: prepWindow.rawValue,
+                base: prepBase,
+                servings: serves
+            )
+            prepBundle = bundle
+            phase = .done
+            deepLinks.requestFeedRefresh()
+            Haptics.success()
+        } catch {
+            print("[GenerateView] Failed to build prep: \(error)")
+            errorMessage = AppError.friendlyMessage(for: error)
+            phase = .error
+        }
+    }
+
+    private func addPrepToWeek(_ bundle: MealPrepBundle) async {
+        guard let userId = authStore.profile?.id else { return }
+        prepError = nil
+        let household = authStore.profile?.preferences?.household_size ?? serves
+        let sameDay = bundle.kind == .concurrent
+        let parentId = bundle.recipes.first?.id
+        let focus = bundle.leftover_focus.first
+        for (i, recipe) in bundle.recipes.enumerated() {
+            let date = Calendar.current.date(byAdding: .day, value: sameDay ? 0 : i, to: Date()) ?? Date()
+            let servings = household
+            let isLeftover = bundle.kind == .sharedBase && i > 0 && parentId != recipe.id
+            do {
+                try await API.addMealPlan(
+                    userId: userId,
+                    recipeId: recipe.id,
+                    planDate: Format.localISODate(date),
+                    servings: servings,
+                    leftoverOf: isLeftover ? parentId : nil,
+                    leftoverFocus: isLeftover ? focus : nil
+                )
+            } catch {
+                prepError = AppError.friendlyMessage(for: error)
+                Haptics.warning()
+                return
+            }
+        }
+        await shoppingStore.addBundle(bundle, userId: userId, householdSize: household)
+        if let prefs = authStore.profile?.preferences {
+            try? await authStore.updatePreferences(TasteMemory.recordLeftover(focus: bundle.leftover_focus, prefs: prefs))
+        }
+        let plans = (try? await API.fetchMealPlans(userId: userId)) ?? []
+        KitchenSnapshot.refresh(from: plans)
+        addedPrep = true
+        Haptics.success()
+    }
+
+    private func consumePendingImport() {
+        let url = deepLinks.pendingImportURL
+        let text = deepLinks.pendingImportText
+        deepLinks.pendingImportURL = nil
+        deepLinks.pendingImportText = nil
+        if let url, !url.isEmpty {
+            mode = .importMode
+            importUrl = url
+            Task { await runImport(ImportSource(url: url), label: url) }
+        } else if let text, !text.isEmpty {
+            mode = .importMode
+            importText = text
+            Task { await runImport(ImportSource(text: text), label: "Shared recipe") }
+        }
+    }
+
+    private func handleCapturedImage(_ data: Data) async {
+        if mode == .pantry {
+            do {
+                let found = try await API.readFridge(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg")
+                for item in found { addPantryItem(item) }
+                Haptics.success()
+            } catch {
+                errorMessage = AppError.friendlyMessage(for: error)
+                phase = .error
+            }
+            return
+        }
+        await runImport(ImportSource(imageBase64: data.base64EncodedString(), mimeType: "image/jpeg"), label: "Photo import")
     }
 
     private func runImport(_ source: ImportSource, label: String) async {
@@ -514,6 +878,7 @@ struct GenerateView: View {
         prompt = label
         phase = .loading
         recipe = nil
+        prepBundle = nil
         do {
             let result = try await API.importRecipe(source)
             recipe = result

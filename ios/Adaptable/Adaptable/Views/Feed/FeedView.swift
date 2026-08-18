@@ -73,7 +73,10 @@ struct FeedView: View {
             }
             .background(Theme.surface)
             .navigationBarHidden(true)
-            .refreshable { await load(showSkeleton: false) }
+            .refreshable {
+                await engagement.load(for: authStore.profile, force: true)
+                await load(showSkeleton: false)
+            }
             .task { if recipes == nil { await load() } }
             .onChange(of: sort) { _, _ in
                 Task { await load() }
@@ -105,7 +108,8 @@ struct FeedView: View {
             search: search,
             chip: activeChip.kind.filterChip,
             dietTags: authStore.profile?.preferences?.diets ?? [],
-            followedAuthorIds: engagement.followedIds
+            followedAuthorIds: engagement.followedIds,
+            preferences: authStore.profile?.preferences
         )
     }
 
@@ -252,8 +256,8 @@ struct FeedView: View {
         Group {
             if isForYouEmpty {
                 EmptyStateView(
-                    emoji: "🥗", title: "Nothing matches your diets yet",
-                    message: "No community recipes are tagged \((authStore.profile?.preferences?.diets ?? []).joined(separator: " or ")) right now — generate one and the AI will cook to your taste profile automatically."
+                    emoji: "🥗", title: "Nothing matches your taste yet",
+                    message: "Generate a recipe that fits you — the more you cook and remix, the sharper this filter gets."
                 ) {
                     PillButton(title: "Generate one for my diet") { deepLinks.activeTab = .create }
                 }
@@ -320,7 +324,11 @@ struct FeedView: View {
             .map(\.key)
 
         var list = [Chip(id: "all", label: "All", kind: .all)]
-        if let diets = authStore.profile?.preferences?.diets, !diets.isEmpty {
+        let prefs = authStore.profile?.preferences
+        let hasTaste = !(prefs?.diets ?? []).isEmpty
+            || !(prefs?.learned?.cuisines ?? [:]).isEmpty
+            || !(prefs?.learned?.proteins ?? [:]).isEmpty
+        if hasTaste {
             list.append(Chip(id: "foryou", label: "✨ For you", kind: .forYou))
         }
         if !engagement.followedIds.isEmpty {

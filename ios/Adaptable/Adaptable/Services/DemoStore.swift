@@ -37,15 +37,18 @@ final class DemoStore {
         var plans: [MealPlanEntry]
         var preferences: Preferences
         var follows: [String]
+        var lineage: [RecipeLineage] = []
+        var household: Household? = nil
+        var householdMembers: [HouseholdMember] = []
     }
 
     private var state: State
     private var listeners: [(UUID, () -> Void)] = []
     private var genCount = 0
-    private let key = "adaptable.demo.v2"
+    private let key = "adaptable.demo.v3"
 
     private init() {
-        if let raw = UserDefaults.standard.data(forKey: "adaptable.demo.v2"),
+        if let raw = UserDefaults.standard.data(forKey: "adaptable.demo.v3"),
            let decoded = try? JSONDecoder().decode(State.self, from: raw) {
             state = decoded
         } else {
@@ -171,7 +174,13 @@ final class DemoStore {
     }
 
     @discardableResult
-    func addPlan(_ recipeId: String, planDate: String, servings: Int) -> MealPlanEntry {
+    func addPlan(
+        _ recipeId: String,
+        planDate: String,
+        servings: Int,
+        leftoverOf: String? = nil,
+        leftoverFocus: String? = nil
+    ) -> MealPlanEntry {
         let entry = MealPlanEntry(
             id: "p-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 1000...9999))",
             user_id: DemoStore.demoUser.id,
@@ -179,6 +188,8 @@ final class DemoStore {
             plan_date: planDate,
             servings: servings,
             created_at: ISO8601DateFormatter().string(from: Date()),
+            leftover_of: leftoverOf,
+            leftover_focus: leftoverFocus,
             recipe: nil
         )
         state.plans.append(entry)
@@ -198,6 +209,61 @@ final class DemoStore {
     func removePlan(_ id: String) {
         state.plans.removeAll { $0.id == id }
         persist()
+    }
+
+    func updatePlanDate(_ id: String, planDate: String) {
+        state.plans = state.plans.map {
+            var p = $0
+            if p.id == id { p.plan_date = planDate }
+            return p
+        }
+        persist()
+    }
+
+    func addLineage(parentId: String, childId: String, focus: [String]) {
+        state.lineage.append(RecipeLineage(
+            id: "lin-\(Int(Date().timeIntervalSince1970 * 1000))",
+            user_id: DemoStore.demoUser.id,
+            parent_recipe_id: parentId,
+            child_recipe_id: childId,
+            leftover_focus: focus,
+            created_at: ISO8601DateFormatter().string(from: Date())
+        ))
+        persist()
+    }
+
+    func lineage(for userId: String) -> [RecipeLineage] {
+        state.lineage.filter { $0.user_id == userId }
+    }
+
+    func createHousehold(name: String) -> Household {
+        leaveHousehold()
+        let code = String((0..<6).map { _ in "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".randomElement()! })
+        let house = Household(id: "hh-demo", name: name, invite_code: code, created_at: ISO8601DateFormatter().string(from: Date()))
+        state.household = house
+        state.householdMembers = [
+            HouseholdMember(household_id: house.id, user_id: DemoStore.demoUser.id, role: "owner", username: DemoStore.demoUser.username)
+        ]
+        persist()
+        return house
+    }
+
+    func joinHousehold(code: String) throws -> Household {
+        guard let house = state.household, house.invite_code.uppercased() == code.uppercased() else {
+            throw AppError("No kitchen found for that code.")
+        }
+        return house
+    }
+
+    func leaveHousehold() {
+        state.household = nil
+        state.householdMembers = []
+        persist()
+    }
+
+    func currentHousehold() -> (Household, [HouseholdMember])? {
+        guard let house = state.household else { return nil }
+        return (house, state.householdMembers)
     }
 
     // MARK: - Preferences
@@ -327,6 +393,241 @@ final class DemoStore {
         addRecipe(recipe)
         simulateEngagement(recipeId: recipe.id)
         return recipe
+    }
+
+    func completeBundle(
+        seedIds: [String],
+        kind: BundleKind,
+        targetSize: Int,
+        slots: [String] = [],
+        prepWindow _: String? = nil,
+        base: String? = nil,
+        servings: Int? = nil
+    ) async -> MealPrepBundle {
+        try? await Task.sleep(nanoseconds: UInt64((2.2 + Double.random(in: 0...0.8)) * 1_000_000_000))
+        let seeds = seedIds.compactMap { getRecipe($0) }
+        var recipes = seeds
+        var generated: [Recipe] = []
+        let missing = max(0, min(5, targetSize) - recipes.count)
+        let requested = (base ?? "").lowercased()
+        let focus = MealPrepBundles.leftoverFocus(recipes).first
+            ?? (requested.isEmpty || requested == "chef" ? (prefsDietFocus() ?? "chicken") : requested)
+
+        let unused = state.recipes.filter { r in
+            !recipes.contains(where: { $0.id == r.id })
+                && MealPrepBundles.ingredientKeys(r).contains(focus)
+        }
+
+        let slotOrder = ["dinner", "lunch", "breakfast"].filter { slots.contains($0) }
+        let resolvedSlots = slotOrder.isEmpty ? ["dinner", "lunch"] : slotOrder
+        for i in 0..<missing {
+            if seeds.isEmpty == false,
+               let match = unused.first(where: { cand in
+                !recipes.contains(where: { $0.id == cand.id })
+            }) {
+                recipes.append(match)
+                continue
+            }
+            let slot = resolvedSlots[i % resolvedSlots.count]
+            let made: Recipe
+            if seeds.isEmpty, i == 0 {
+                made = batchAnchorTemplate(focus: focus, servings: servings ?? 4, slot: slot)
+            } else {
+                made = leftoverTemplate(focus: focus, index: i, avoidTitles: recipes.compactMap(\.title), servings: servings ?? 4, slot: slot)
+            }
+            addRecipe(made)
+            generated.append(made)
+            recipes.append(made)
+        }
+
+        if let parent = seeds.first {
+            for child in generated {
+                addLineage(parentId: parent.id, childId: child.id, focus: MealPrepBundles.leftoverFocus(recipes))
+            }
+        }
+        return MealPrepBundles.assemble(
+            kind: kind,
+            recipes: recipes,
+            generatedIds: generated.map(\.id),
+            missingCount: 0
+        )
+    }
+
+    private func prefsDietFocus() -> String? {
+        let diets = (state.preferences.diets ?? []).map { $0.lowercased() }
+        if diets.contains(where: { $0.contains("vegan") }) { return "tofu" }
+        if diets.contains(where: { $0.contains("vegetarian") }) { return "chickpea" }
+        if diets.contains(where: { $0.contains("pescatarian") }) { return "salmon" }
+        return nil
+    }
+
+    private func leftoverTemplate(focus: String, index: Int, avoidTitles: [String], servings: Int = 4, slot: String = "dinner") -> Recipe {
+        let titleFocus = focus.capitalized
+        let variants: [(String, String, String, [Ingredient], [RecipeStep], String)] = [
+            (
+                "Leftover \(titleFocus) Fried Rice",
+                "Day-two magic: leftover \(focus), cold rice and a hot pan. Ten minutes, empty-fridge dinner.",
+                "🍚",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "2 cups", note: "from this week's prep"),
+                    Ingredient(item: "Cooked rice", quantity: "3 cups", note: "cold, day-old"),
+                    Ingredient(item: "Eggs", quantity: "2", note: nil),
+                    Ingredient(item: "Frozen peas + carrots", quantity: "1 cup", note: nil),
+                    Ingredient(item: "Soy sauce + sesame oil", quantity: "2 tbsp + 1 tsp", note: nil),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Scramble the eggs in a hot oiled wok; set aside.", tip: nil),
+                    RecipeStep(step: 2, instruction: "Stir-fry the leftover \(focus) and veg 2 minutes. Add rice and press it into the pan so it crisps.", tip: "Cold rice is the whole trick."),
+                    RecipeStep(step: 3, instruction: "Splash in soy and sesame, fold the eggs back through, and serve.", tip: nil),
+                ],
+                "stovetop"
+            ),
+            (
+                "Leftover \(titleFocus) Tacos",
+                "Warm tortillas, leftover \(focus), a crunchy slaw — the fastest weeknight plate in the house.",
+                "🌮",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "2 cups", note: "from this week's prep"),
+                    Ingredient(item: "Corn tortillas", quantity: "8", note: "warmed"),
+                    Ingredient(item: "Cabbage", quantity: "2 cups", note: "shredded"),
+                    Ingredient(item: "Lime", quantity: "1", note: "wedged"),
+                    Ingredient(item: "Salsa or hot sauce", quantity: "to taste", note: nil),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Toss cabbage with lime juice and a pinch of salt.", tip: nil),
+                    RecipeStep(step: 2, instruction: "Warm the leftover \(focus) in a skillet 2–3 minutes with a splash of salsa.", tip: "Don't recook it — just heat it through."),
+                    RecipeStep(step: 3, instruction: "Pile into tortillas with slaw. Extra lime on the table.", tip: nil),
+                ],
+                "stovetop"
+            ),
+            (
+                "\(titleFocus) Breakfast Hash",
+                "Yesterday's \(focus) meets crispy potatoes and a runny egg. The breakfast that uses the roast.",
+                "🍳",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "1½ cups", note: "from this week's prep"),
+                    Ingredient(item: "Potatoes", quantity: "400 g (2 medium)", note: "diced"),
+                    Ingredient(item: "Eggs", quantity: "4", note: nil),
+                    Ingredient(item: "Bell pepper", quantity: "1", note: "diced"),
+                    Ingredient(item: "Scallions", quantity: "2", note: "sliced"),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Crisp the potatoes in a wide skillet 8 minutes. Add pepper 2 minutes more.", tip: nil),
+                    RecipeStep(step: 2, instruction: "Fold in the leftover \(focus) just to heat. Make four wells and crack in the eggs.", tip: nil),
+                    RecipeStep(step: 3, instruction: "Cover 3 minutes until the whites set. Finish with scallions.", tip: nil),
+                ],
+                "stovetop"
+            ),
+            (
+                "\(titleFocus) Grain Bowl",
+                "Leftover \(focus) over a warm grain, crunchy veg and a sharp dressing. Desk-lunch energy.",
+                "🥗",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "2 cups", note: "from this week's prep"),
+                    Ingredient(item: "Cooked quinoa or rice", quantity: "2 cups", note: "warmed"),
+                    Ingredient(item: "Cucumber", quantity: "1", note: "sliced"),
+                    Ingredient(item: "Cherry tomatoes", quantity: "1 cup", note: "halved"),
+                    Ingredient(item: "Lemon + olive oil", quantity: "1 + 2 tbsp", note: nil),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Warm the leftover \(focus) and grain separately — don't recook the \(focus).", tip: nil),
+                    RecipeStep(step: 2, instruction: "Whisk lemon, olive oil and a pinch of salt.", tip: nil),
+                    RecipeStep(step: 3, instruction: "Bowl it up: grain, leftover \(focus), veg, dressing.", tip: nil),
+                ],
+                "no_cook"
+            ),
+            (
+                "\(titleFocus) Broth Soup",
+                "A 15-minute pot: leftover \(focus), greens and a bright squeeze of lemon.",
+                "🍲",
+                [
+                    Ingredient(item: "Leftover cooked \(focus)", quantity: "2 cups", note: "from this week's prep"),
+                    Ingredient(item: "Chicken or veg broth", quantity: "4 cups", note: nil),
+                    Ingredient(item: "Baby spinach", quantity: "3 cups", note: nil),
+                    Ingredient(item: "Garlic", quantity: "2 cloves", note: "sliced"),
+                    Ingredient(item: "Lemon", quantity: "½", note: "juiced"),
+                ],
+                [
+                    RecipeStep(step: 1, instruction: "Simmer broth and garlic 5 minutes.", tip: nil),
+                    RecipeStep(step: 2, instruction: "Add leftover \(focus) just to heat through, then wilt the spinach.", tip: "Off the heat as soon as it's hot."),
+                    RecipeStep(step: 3, instruction: "Finish with lemon and black pepper.", tip: nil),
+                ],
+                "stovetop"
+            ),
+        ]
+        let pick = variants.first(where: { !avoidTitles.contains($0.0) }) ?? variants[index % variants.count]
+        return Recipe(
+            id: "gen-bundle-\(Int(Date().timeIntervalSince1970 * 1000))-\(index)",
+            author_id: DemoStore.demoUser.id,
+            title: pick.0,
+            description: pick.1,
+            emoji: pick.2,
+            cuisine: "Meal-prep",
+            difficulty: .easy,
+            prep_time_minutes: 8,
+            cook_time_minutes: 10,
+            servings: servings,
+            calories: 430,
+            protein_g: 28,
+            carbs_g: 38,
+            fat_g: 16,
+            tags: ["Meal-prep", "High-protein", "Weeknight"],
+            ingredients: pick.3,
+            steps: pick.4,
+            source_prompt: "prep-bundle leftover \(focus)",
+            source_url: nil,
+            net_upvotes: 0,
+            cook_count: 0,
+            comment_count: 0,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            author: DemoStore.demoUser.lite,
+            primary_method: pick.5,
+            base_protein: MealPrepBundles.batchable.contains(focus) ? focus : "none",
+            meal_slot: slot
+        )
+    }
+
+    private func batchAnchorTemplate(focus: String, servings: Int, slot: String) -> Recipe {
+        let titleFocus = focus.capitalized
+        return Recipe(
+            id: "gen-bundle-\(Int(Date().timeIntervalSince1970 * 1000))-anchor",
+            author_id: DemoStore.demoUser.id,
+            title: "Sunday \(titleFocus) Tray",
+            description: "The batch-cook: a sheet of \(focus) you eat all week. Generous seasoning, extra portions.",
+            emoji: "🍽️",
+            cuisine: "Meal-prep",
+            difficulty: .easy,
+            prep_time_minutes: 15,
+            cook_time_minutes: 35,
+            servings: servings,
+            calories: 480,
+            protein_g: 38,
+            carbs_g: 18,
+            fat_g: 22,
+            tags: ["Meal-prep", "High-protein", "Sheet-pan"],
+            ingredients: [
+                Ingredient(item: focus.capitalized, quantity: "1.2 kg (2½ lb)", note: "enough for leftovers"),
+                Ingredient(item: "Olive oil", quantity: "3 tbsp", note: nil),
+                Ingredient(item: "Garlic", quantity: "4 cloves", note: "smashed"),
+                Ingredient(item: "Lemon", quantity: "1", note: "wedged"),
+                Ingredient(item: "Salt + pepper", quantity: "to taste", note: nil),
+            ],
+            steps: [
+                RecipeStep(step: 1, instruction: "Heat the oven to 220°C / 425°F. Toss the \(focus) with oil, garlic, salt and pepper.", tip: "Cook extra — this is the week's base."),
+                RecipeStep(step: 2, instruction: "Roast 30–35 minutes until browned and cooked through. Rest 5 minutes.", tip: nil),
+                RecipeStep(step: 3, instruction: "Serve a portion tonight. Cool the rest and fridge it for leftover meals.", tip: nil),
+            ],
+            source_prompt: "prep-bundle batch \(focus)",
+            source_url: nil,
+            net_upvotes: 0,
+            cook_count: 0,
+            comment_count: 0,
+            created_at: ISO8601DateFormatter().string(from: Date()),
+            author: DemoStore.demoUser.lite,
+            primary_method: "sheet_pan",
+            base_protein: MealPrepBundles.batchable.contains(focus) ? focus : "none",
+            meal_slot: slot
+        )
     }
 
     func importRecipe(url: String?, hasText: Bool) async -> Recipe {

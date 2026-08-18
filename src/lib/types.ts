@@ -68,6 +68,13 @@ export interface Recipe {
   image_url?: string | null;
   /** Curated Discover pick for empty Following / social states. */
   featured?: boolean;
+  /** Canonical staple-stripped ingredient tokens (meal-prep overlap). */
+  ingredient_keys?: string[];
+  primary_method?: string | null;
+  base_protein?: string | null;
+  meal_slot?: string | null;
+  active_prep_minutes?: number | null;
+  equipment?: string[];
   net_upvotes: number;
   /** Completed Cook Mode sessions — the strongest trending signal. */
   cook_count: number;
