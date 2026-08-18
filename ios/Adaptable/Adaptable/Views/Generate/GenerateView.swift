@@ -86,7 +86,9 @@ struct GenerateView: View {
         }
         .onChange(of: deepLinks.remixRecipeId) { _, id in
             guard let id else { return }
-            phase = .idle; recipe = nil; prompt = ""
+            phase = .idle; recipe = nil
+            prompt = deepLinks.remixPrefill ?? ""
+            deepLinks.remixPrefill = nil
             Task {
                 remixSource = try? await API.fetchRecipe(id: id)
             }

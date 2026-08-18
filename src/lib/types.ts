@@ -32,6 +32,15 @@ export interface RecipeStep {
   step: number;
   instruction: string;
   tip?: string;
+  /** Ingredient `item` names used in this step. */
+  ingredients_used?: string[];
+  /** Every timer in this step, in seconds. */
+  duration_seconds?: number[];
+  /** Heat setting when this step sets it, e.g. "400°F (200°C)". */
+  temperature?: string;
+  equipment?: string[];
+  /** Doneness cue, e.g. "tomatoes burst, feta golden". */
+  look_for?: string;
 }
 
 export interface Recipe {

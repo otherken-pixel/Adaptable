@@ -20,6 +20,8 @@ final class DeepLinkCenter: ObservableObject {
     @Published var activeTab: AppTab = .discover
     @Published var pendingRecipeId: String?
     @Published var remixRecipeId: String?
+    /// Optional prompt applied when Cook Mode hands off to Remix.
+    @Published var remixPrefill: String?
     @Published var feedTagFilter: String?
     /// Bump to force Discover (and similar lists) to reload.
     @Published private(set) var feedRefreshToken = UUID()
@@ -29,7 +31,8 @@ final class DeepLinkCenter: ObservableObject {
         pendingRecipeId = id
     }
 
-    func openRemix(_ recipeId: String) {
+    func openRemix(_ recipeId: String, prompt: String? = nil) {
+        remixPrefill = prompt
         remixRecipeId = recipeId
         activeTab = .create
     }

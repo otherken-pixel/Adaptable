@@ -34,11 +34,11 @@
         { "item": "Scallions + sesame", "quantity": "to finish" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Cook the rice. While it steams, whisk miso, maple, soy and 1 tbsp water into a glossy glaze." },
-        { "step": 2, "instruction": "Toss cucumber ribbons with rice vinegar and a pinch of salt. Set aside to pickle.", "tip": "A pinch of sugar rounds out the pickle." },
-        { "step": 3, "instruction": "Sear salmon skin-side down 4 minutes in a hot pan. Flip, brush thickly with glaze, cook 3 more minutes." },
-        { "step": 4, "instruction": "Broil 90 seconds until the glaze bubbles and caramelizes at the edges.", "tip": "Watch closely — miso goes from bronzed to burnt fast." },
-        { "step": 5, "instruction": "Build bowls: rice, salmon, drained pickles. Shower with scallions and sesame." }
+        { "step": 1, "instruction": "Cook the rice. While it steams, whisk miso, maple, soy and 1 tbsp water into a glossy glaze.", "ingredients_used": ["Sushi rice", "White miso paste", "Maple syrup", "Soy sauce"], "equipment": ["Saucepan", "Mixing bowl"], "look_for": "Glaze is glossy and smooth" },
+        { "step": 2, "instruction": "Toss cucumber ribbons with rice vinegar and a pinch of salt. Set aside to pickle.", "tip": "A pinch of sugar rounds out the pickle.", "ingredients_used": ["Persian cucumber", "Rice vinegar"], "look_for": "Cucumber glistening and lightly pickled" },
+        { "step": 3, "instruction": "Sear salmon skin-side down 4 minutes in a hot pan. Flip, brush thickly with glaze, cook 3 more minutes.", "ingredients_used": ["Salmon fillets"], "duration_seconds": [240, 180], "equipment": ["Skillet"], "look_for": "Skin crisp; glaze clinging to the flesh" },
+        { "step": 4, "instruction": "Broil 90 seconds until the glaze bubbles and caramelizes at the edges.", "tip": "Watch closely — miso goes from bronzed to burnt fast.", "duration_seconds": [90], "equipment": ["Oven"], "look_for": "Glaze bubbling and bronzed at the edges" },
+        { "step": 5, "instruction": "Build bowls: rice, salmon, drained pickles. Shower with scallions and sesame.", "ingredients_used": ["Sushi rice", "Salmon fillets", "Persian cucumber", "Scallions + sesame"] }
       ],
       "source_prompt": "quick high-protein salmon dinner",
       "net_upvotes": 482, "cook_count": 214, "comment_count": 3, "days_ago": 6,
@@ -312,10 +312,10 @@
         { "item": "Sesame seeds", "quantity": "1 tsp", "note": "to finish" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Preheat oven to 425°F (220°C). Whisk honey, soy sauce, garlic and rice vinegar into a glaze." },
-        { "step": 2, "instruction": "Toss broccoli with a little oil and salt on a sheet pan. Roast 8 minutes to get it started." },
-        { "step": 3, "instruction": "Push broccoli aside, add salmon skin-down, brush generously with glaze. Roast 12 minutes until salmon flakes easily.", "tip": "Reserve some glaze unbrushed to drizzle on right before serving." },
-        { "step": 4, "instruction": "Drizzle with the reserved glaze and sesame seeds before serving." }
+        { "step": 1, "instruction": "Preheat oven to 425°F (220°C). Whisk honey, soy sauce, garlic and rice vinegar into a glaze.", "ingredients_used": ["Honey", "Soy sauce", "Garlic", "Rice vinegar"], "temperature": "425°F (220°C)", "equipment": ["Oven", "Mixing bowl"], "look_for": "Glaze smooth and pourable" },
+        { "step": 2, "instruction": "Toss broccoli with a little oil and salt on a sheet pan. Roast 8 minutes to get it started.", "ingredients_used": ["Broccoli florets"], "duration_seconds": [480], "temperature": "425°F (220°C)", "equipment": ["Sheet pan", "Oven"], "look_for": "Broccoli starting to brown at the edges" },
+        { "step": 3, "instruction": "Push broccoli aside, add salmon skin-down, brush generously with glaze. Roast 12 minutes until salmon flakes easily.", "tip": "Reserve some glaze unbrushed to drizzle on right before serving.", "ingredients_used": ["Salmon fillets", "Broccoli florets"], "duration_seconds": [720], "temperature": "425°F (220°C)", "equipment": ["Sheet pan", "Oven"], "look_for": "Salmon flakes easily with a fork" },
+        { "step": 4, "instruction": "Drizzle with the reserved glaze and sesame seeds before serving.", "ingredients_used": ["Honey", "Sesame seeds"] }
       ],
       "source_prompt": "sheet pan honey garlic salmon and broccoli",
       "net_upvotes": 598, "cook_count": 415, "comment_count": 3, "days_ago": 3,
@@ -672,10 +672,10 @@
         { "item": "Cooked rice", "quantity": "3 cups", "note": "for serving" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Toss chicken with lemon zest and juice, oregano, garlic and a glug of olive oil. Marinate 10 minutes." },
-        { "step": 2, "instruction": "Sear chicken in a hot pan 6 minutes per side until charred and cooked through. Rest 5 minutes, then slice.", "tip": "Resting keeps the juices in when you slice it." },
-        { "step": 3, "instruction": "Toss cucumber and tomatoes with a pinch of salt and a splash of olive oil for a quick salad." },
-        { "step": 4, "instruction": "Build bowls: rice, sliced chicken, cucumber-tomato salad, feta, and a dollop of tzatziki or yogurt." }
+        { "step": 1, "instruction": "Toss chicken with lemon zest and juice, oregano, garlic and a glug of olive oil. Marinate 10 minutes.", "ingredients_used": ["Chicken thighs", "Lemon", "Oregano", "Garlic"], "duration_seconds": [600], "look_for": "Chicken evenly coated in marinade" },
+        { "step": 2, "instruction": "Sear chicken in a hot pan 6 minutes per side until charred and cooked through. Rest 5 minutes, then slice.", "tip": "Resting keeps the juices in when you slice it.", "ingredients_used": ["Chicken thighs"], "duration_seconds": [360, 360, 300], "equipment": ["Skillet"], "look_for": "Charred edges, juices run clear; rest before slicing" },
+        { "step": 3, "instruction": "Toss cucumber and tomatoes with a pinch of salt and a splash of olive oil for a quick salad.", "ingredients_used": ["Cucumber", "Cherry tomatoes"], "look_for": "Salad lightly dressed, tomatoes juicy" },
+        { "step": 4, "instruction": "Build bowls: rice, sliced chicken, cucumber-tomato salad, feta, and a dollop of tzatziki or yogurt.", "ingredients_used": ["Cooked rice", "Chicken thighs", "Cucumber", "Cherry tomatoes", "Feta"] }
       ],
       "source_prompt": "greek chicken meal prep bowls",
       "net_upvotes": 456, "cook_count": 389, "comment_count": 3, "days_ago": 27,
@@ -745,10 +745,10 @@
         { "item": "Cornstarch", "quantity": "2 tbsp", "note": "for tofu" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Toss tofu cubes in cornstarch. Pan-fry in oil over medium-high heat 8 minutes, turning, until crisp on all sides." },
-        { "step": 2, "instruction": "Meanwhile, boil noodles according to package directions, about 8 minutes, then drain." },
-        { "step": 3, "instruction": "Whisk peanut butter, soy sauce, lime juice, maple syrup, garlic and ginger with 3-4 tbsp hot water into a smooth sauce.", "tip": "Hot water loosens the peanut butter so the sauce coats evenly instead of clumping." },
-        { "step": 4, "instruction": "Toss noodles with the sauce, then top with crispy tofu." }
+        { "step": 1, "instruction": "Toss tofu cubes in cornstarch. Pan-fry in oil over medium-high heat 8 minutes, turning, until crisp on all sides.", "ingredients_used": ["Extra-firm tofu", "Cornstarch"], "duration_seconds": [480], "equipment": ["Skillet"], "look_for": "Tofu crisp and golden on all sides" },
+        { "step": 2, "instruction": "Meanwhile, boil noodles according to package directions, about 8 minutes, then drain.", "ingredients_used": ["Rice noodles or spaghetti"], "duration_seconds": [480], "equipment": ["Large pot"], "look_for": "Noodles tender, not mushy" },
+        { "step": 3, "instruction": "Whisk peanut butter, soy sauce, lime juice, maple syrup, garlic and ginger with 3-4 tbsp hot water into a smooth sauce.", "tip": "Hot water loosens the peanut butter so the sauce coats evenly instead of clumping.", "ingredients_used": ["Peanut butter", "Soy sauce", "Lime", "Maple syrup", "Garlic + ginger"], "look_for": "Pourable, lump-free sauce" },
+        { "step": 4, "instruction": "Toss noodles with the sauce, then top with crispy tofu.", "ingredients_used": ["Rice noodles or spaghetti", "Peanut butter", "Extra-firm tofu"], "look_for": "Every strand coated, tofu stays crisp on top" }
       ],
       "source_prompt": "crispy tofu peanut noodles vegan",
       "net_upvotes": 289, "cook_count": 198, "comment_count": 3, "days_ago": 5,
@@ -782,10 +782,10 @@
         { "item": "Green onions + sesame seeds", "quantity": "to finish" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Whisk mayo and sriracha into a spicy mayo sauce. Set aside a spoonful for drizzling." },
-        { "step": 2, "instruction": "Toss the tuna cubes with soy sauce, sesame oil and most of the spicy mayo. Let it marinate 10 minutes in the fridge.", "tip": "Buy tuna labeled 'sushi-grade' or 'sashimi-grade' from a trusted fishmonger for eating raw." },
-        { "step": 3, "instruction": "Build bowls with rice, marinated tuna, cucumber and avocado." },
-        { "step": 4, "instruction": "Drizzle with reserved spicy mayo and top with green onions and sesame seeds." }
+        { "step": 1, "instruction": "Whisk mayo and sriracha into a spicy mayo sauce. Set aside a spoonful for drizzling.", "ingredients_used": ["Mayo", "Sriracha"], "equipment": ["Mixing bowl"], "look_for": "Smooth, drizzle-able spicy mayo" },
+        { "step": 2, "instruction": "Toss the tuna cubes with soy sauce, sesame oil and most of the spicy mayo. Let it marinate 10 minutes in the fridge.", "tip": "Buy tuna labeled 'sushi-grade' or 'sashimi-grade' from a trusted fishmonger for eating raw.", "ingredients_used": ["Sushi-grade tuna", "Soy sauce", "Sesame oil", "Mayo", "Sriracha"], "duration_seconds": [600], "look_for": "Tuna evenly coated, slightly glossy" },
+        { "step": 3, "instruction": "Build bowls with rice, marinated tuna, cucumber and avocado.", "ingredients_used": ["Cooked sushi rice", "Sushi-grade tuna", "Cucumber + avocado"] },
+        { "step": 4, "instruction": "Drizzle with reserved spicy mayo and top with green onions and sesame seeds.", "ingredients_used": ["Mayo", "Sriracha", "Green onions + sesame seeds"] }
       ],
       "source_prompt": "spicy tuna poke bowl at home",
       "net_upvotes": 407, "cook_count": 226, "comment_count": 3, "days_ago": 2,
@@ -815,13 +815,14 @@
         { "item": "Garlic", "quantity": "4 cloves", "note": "smashed" },
         { "item": "Chili flakes", "quantity": "½ tsp" },
         { "item": "Penne or fusilli", "quantity": "350 g (12 oz)" },
-        { "item": "Basil", "quantity": "a handful", "note": "torn" }
+        { "item": "Basil", "quantity": "a handful", "note": "torn" },
+        { "item": "Salt", "quantity": "½ tsp", "note": "plus more for pasta water" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Preheat oven to 400°F (200°C). Place tomatoes, garlic and feta in a baking dish, drizzle with oil, chili flakes and salt." },
-        { "step": 2, "instruction": "Bake 25 minutes until tomatoes burst and feta turns golden and soft.", "tip": "Broil the last 2 minutes for extra color on the feta if you like." },
-        { "step": 3, "instruction": "Meanwhile, boil pasta until al dente, about 10 minutes. Reserve ½ cup pasta water." },
-        { "step": 4, "instruction": "Mash the baked feta and tomatoes together right in the dish, loosen with pasta water, then toss with the pasta and basil." }
+        { "step": 1, "instruction": "Preheat oven to 400°F (200°C). Place tomatoes, garlic and feta in a baking dish, drizzle with oil, chili flakes and salt.", "ingredients_used": ["Cherry tomatoes", "Feta", "Garlic", "Olive oil", "Chili flakes", "Salt"], "temperature": "400°F (200°C)", "equipment": ["Oven", "Baking dish"], "look_for": "Tomatoes, garlic and feta coated in oil, oven coming up to temp" },
+        { "step": 2, "instruction": "Bake 25 minutes until tomatoes burst and feta turns golden and soft.", "tip": "Broil the last 2 minutes for extra color on the feta if you like.", "ingredients_used": ["Cherry tomatoes", "Feta", "Garlic", "Olive oil"], "duration_seconds": [1500, 120], "temperature": "400°F (200°C)", "equipment": ["Oven", "Baking dish"], "look_for": "Tomatoes burst and feta golden and soft" },
+        { "step": 3, "instruction": "Meanwhile, boil pasta until al dente, about 10 minutes. Reserve ½ cup pasta water.", "ingredients_used": ["Penne or fusilli", "Salt"], "duration_seconds": [600], "equipment": ["Large pot"], "look_for": "Pasta al dente; ½ cup pasta water reserved" },
+        { "step": 4, "instruction": "Mash the baked feta and tomatoes together right in the dish, loosen with pasta water, then toss with the pasta and basil.", "ingredients_used": ["Feta", "Cherry tomatoes", "Penne or fusilli", "Basil"], "equipment": ["Baking dish"], "look_for": "Sauce coats the pasta, loose not pasty" }
       ],
       "source_prompt": "viral baked feta pasta",
       "net_upvotes": 601, "cook_count": 512, "comment_count": 3, "days_ago": 8,
@@ -852,10 +853,10 @@
         { "item": "Salt + black pepper", "quantity": "to taste" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Pat chicken thighs completely dry — this is the secret to crispy skin. Toss with oil, paprika, garlic powder, salt and pepper.", "tip": "Bone-dry skin is the whole trick to crispiness in an air fryer." },
-        { "step": 2, "instruction": "Arrange skin-side up in the air fryer basket in a single layer, not touching." },
-        { "step": 3, "instruction": "Air-fry at 380°F (195°C) for 20 minutes, until the skin is deeply golden and internal temp hits 165°F (74°C)." },
-        { "step": 4, "instruction": "Rest 5 minutes before serving so the juices redistribute." }
+        { "step": 1, "instruction": "Pat chicken thighs completely dry — this is the secret to crispy skin. Toss with oil, paprika, garlic powder, salt and pepper.", "tip": "Bone-dry skin is the whole trick to crispiness in an air fryer.", "ingredients_used": ["Bone-in, skin-on chicken thighs", "Olive oil", "Smoked paprika", "Garlic powder", "Salt + black pepper"], "look_for": "Skin dry and evenly coated" },
+        { "step": 2, "instruction": "Arrange skin-side up in the air fryer basket in a single layer, not touching.", "ingredients_used": ["Bone-in, skin-on chicken thighs"], "equipment": ["Air fryer"], "look_for": "Single layer, pieces not touching" },
+        { "step": 3, "instruction": "Air-fry at 380°F (195°C) for 20 minutes, until the skin is deeply golden and internal temp hits 165°F (74°C).", "ingredients_used": ["Bone-in, skin-on chicken thighs"], "duration_seconds": [1200], "temperature": "380°F (195°C)", "equipment": ["Air fryer"], "look_for": "Skin deeply golden; internal temperature 165°F (74°C)" },
+        { "step": 4, "instruction": "Rest 5 minutes before serving so the juices redistribute.", "duration_seconds": [300], "look_for": "Juices stay in when you slice" }
       ],
       "source_prompt": "crispy air fryer chicken thighs",
       "net_upvotes": 372, "cook_count": 458, "comment_count": 3, "days_ago": 1,
@@ -1067,10 +1068,10 @@
         { "item": "Vanilla extract", "quantity": "1 tsp" }
       ],
       "steps": [
-        { "step": 1, "instruction": "Preheat oven to 350°F (175°C) and line an 8x8-inch pan with parchment. Whisk melted butter and sugar vigorously for 60 seconds — this helps the shiny top form." },
-        { "step": 2, "instruction": "Whisk in eggs one at a time, then vanilla, beating well after each addition." },
-        { "step": 3, "instruction": "Fold in cocoa powder and flour just until no dry streaks remain — don't overmix. Fold in chocolate chips.", "tip": "Overmixing at this stage is the #1 cause of cakey instead of fudgy brownies." },
-        { "step": 4, "instruction": "Pour into the pan and bake 25 minutes until a toothpick comes out with a few moist crumbs. Cool completely before cutting." }
+        { "step": 1, "instruction": "Preheat oven to 350°F (175°C) and line an 8x8-inch pan with parchment. Whisk melted butter and sugar vigorously for 60 seconds — this helps the shiny top form.", "ingredients_used": ["Butter", "Sugar"], "duration_seconds": [60], "temperature": "350°F (175°C)", "equipment": ["Oven", "8×8-inch pan", "Parchment", "Mixing bowl"], "look_for": "Butter and sugar look pale and slightly thick" },
+        { "step": 2, "instruction": "Whisk in eggs one at a time, then vanilla, beating well after each addition.", "ingredients_used": ["Eggs", "Vanilla extract"], "equipment": ["Mixing bowl"], "look_for": "Batter smooth and shiny" },
+        { "step": 3, "instruction": "Fold in cocoa powder and flour just until no dry streaks remain — don't overmix. Fold in chocolate chips.", "tip": "Overmixing at this stage is the #1 cause of cakey instead of fudgy brownies.", "ingredients_used": ["Cocoa powder", "All-purpose flour", "Chocolate chips"], "look_for": "No dry streaks; batter still thick" },
+        { "step": 4, "instruction": "Pour into the pan and bake 25 minutes until a toothpick comes out with a few moist crumbs. Cool completely before cutting.", "duration_seconds": [1500], "temperature": "350°F (175°C)", "equipment": ["Oven", "8×8-inch pan"], "look_for": "Toothpick with a few moist crumbs, not wet batter" }
       ],
       "source_prompt": "fudgy one bowl brownies",
       "net_upvotes": 478, "cook_count": 356, "comment_count": 3, "days_ago": 10,

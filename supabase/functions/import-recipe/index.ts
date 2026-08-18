@@ -69,6 +69,11 @@ const recipeSchema = {
           step: { type: "INTEGER" },
           instruction: { type: "STRING" },
           tip: { type: "STRING" },
+          ingredients_used: { type: "ARRAY", items: { type: "STRING" } },
+          duration_seconds: { type: "ARRAY", items: { type: "INTEGER" } },
+          temperature: { type: "STRING" },
+          equipment: { type: "ARRAY", items: { type: "STRING" } },
+          look_for: { type: "STRING" },
         },
         required: ["step", "instruction"],
       },
@@ -88,6 +93,7 @@ const IMPORT_INSTRUCTIONS =
   "Write the description in an appetizing but honest tone. 3-5 short tags " +
   '(include "Low-cal" if 500 calories/serving or fewer). ' +
   "Include every ingredient and step you can extract. " +
+  "For each step fill ingredients_used, duration_seconds, temperature, equipment and look_for when the source supports it. " +
   "If the source contains no recipe at all, return a recipe titled exactly " +
   '"NO_RECIPE_FOUND".';
 

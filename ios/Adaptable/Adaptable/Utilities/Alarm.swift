@@ -25,17 +25,25 @@ enum Alarm {
     }
 
     /// Schedule a lock-screen banner when a cook timer ends.
-    static func scheduleTimerNotification(seconds: Int, step: Int) {
+    static func scheduleTimerNotification(
+        seconds: Int,
+        step: Int,
+        label: String? = nil,
+        recipeTitle: String? = nil
+    ) {
         guard seconds > 0 else { return }
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
-            content.title = "Timer done"
-            content.body = step > 0 ? "Step \(step) timer finished — back to cooking!" : "Your cook timer finished."
+            let timerName = label?.isEmpty == false ? label! : "Timer"
+            content.title = recipeTitle.map { "\($0) · \(timerName) done" } ?? "\(timerName) done"
+            content.body = step > 0
+                ? "Step \(step) — \(timerName) finished. Back to cooking!"
+                : "\(timerName) finished."
             content.sound = .default
             let trigger = UNTimeIntervalNotificationTrigger(timeInterval: TimeInterval(seconds), repeats: false)
-            let id = "cook-timer-\(step)-\(Int(Date().timeIntervalSince1970))"
+            let id = "cook-timer-\(step)-\(timerName)-\(Int(Date().timeIntervalSince1970))"
             let req = UNNotificationRequest(identifier: id, content: content, trigger: trigger)
             center.add(req)
         }
