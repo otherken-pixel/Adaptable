@@ -15,15 +15,15 @@ final class EngagementStore: ObservableObject {
 
     private var loadedForProfileId: String?
 
-    func load(for profile: Profile?) async {
+    func load(for profile: Profile?, force: Bool = false) async {
         guard let profile else {
             votes = [:]; savedIds = []; followedIds = []; voteDelta = [:]
             loadedForProfileId = nil
             return
         }
-        // Only set after a successful fetch so failures can retry, but skip
-        // when this profile is already loaded to avoid refetching on every tab.
-        if loadedForProfileId == profile.id { return }
+        // Skip a successful same-profile fetch so tab appears don't refetch.
+        // Pull-to-refresh passes force: true.
+        if !force, loadedForProfileId == profile.id { return }
         do {
             async let v = API.fetchMyVotes(userId: profile.id)
             async let s = API.fetchMySaveIds(userId: profile.id)

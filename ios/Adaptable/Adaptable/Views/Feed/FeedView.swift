@@ -74,7 +74,7 @@ struct FeedView: View {
             .background(Theme.surface)
             .navigationBarHidden(true)
             .refreshable {
-                await engagement.load(for: authStore.profile)
+                await engagement.load(for: authStore.profile, force: true)
                 await load(showSkeleton: false)
             }
             .task { if recipes == nil { await load() } }

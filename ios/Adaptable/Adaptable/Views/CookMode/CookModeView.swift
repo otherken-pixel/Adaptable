@@ -58,6 +58,13 @@ struct CookModeView: View {
         } catch {
             loadError = AppError.friendlyMessage(for: error)
         }
+        if let recipe,
+           CookLiveActivityController.currentRecipeId == recipeId,
+           let restored = CookLiveActivityController.currentStepIndex {
+            let total = (recipe.steps ?? []).count
+            idx = min(max(restored, 0), total + 1)
+            liveActivityStarted = true
+        }
         applyCookCommand(deepLinks.pendingCookCommand)
     }
 
