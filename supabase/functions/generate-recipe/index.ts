@@ -84,6 +84,32 @@ const recipeSchema = {
             type: "STRING",
             description: "Optional pro tip for this step",
           },
+          ingredients_used: {
+            type: "ARRAY",
+            items: { type: "STRING" },
+            description:
+              "Ingredient item names from the ingredients list used in this step",
+          },
+          duration_seconds: {
+            type: "ARRAY",
+            items: { type: "INTEGER" },
+            description:
+              "Every timer in this step in seconds (e.g. sear 4 min + cook 3 min → [240, 180])",
+          },
+          temperature: {
+            type: "STRING",
+            description: 'Heat setting if this step sets it, e.g. "400°F (200°C)"',
+          },
+          equipment: {
+            type: "ARRAY",
+            items: { type: "STRING" },
+            description: "Pan, pot, oven, air fryer, baking dish, etc.",
+          },
+          look_for: {
+            type: "STRING",
+            description:
+              "Doneness cue the cook should look for (tomatoes burst, fish flakes, 165°F)",
+          },
         },
         required: ["step", "instruction"],
       },
@@ -183,6 +209,10 @@ Deno.serve(async (req) => {
       "Respect every dietary constraint, time limit and equipment restriction in the request. " +
       "Quantities must use both metric and imperial where sensible. " +
       "Steps must be specific enough for a beginner to follow. " +
+      "For each step include ingredients_used (names from the ingredients list), " +
+      "duration_seconds for every timer in that step, temperature when heat is set, " +
+      "equipment, and look_for (the doneness cue). Put quantities in the ingredients " +
+      "list, not only in the prose. " +
       "Include at least 4 ingredients and at least 3 steps. " +
       "Estimate calories, protein, carbs and fat per serving. " +
       'If the dish is 500 calories per serving or fewer, include a "Low-cal" tag; ' +

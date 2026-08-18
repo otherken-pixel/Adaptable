@@ -77,6 +77,15 @@ struct RecipeStep: Codable, Equatable, Identifiable {
     var step: Int
     var instruction: String
     var tip: String?
+    /// Ingredient `item` names used in this step (subset of recipe.ingredients).
+    var ingredients_used: [String]? = nil
+    /// Every timer in this step, in seconds (sear 4 min + cook 3 min → [240, 180]).
+    var duration_seconds: [Int]? = nil
+    /// Oven/stovetop/air-fryer setting when the step sets heat, e.g. "400°F (200°C)".
+    var temperature: String? = nil
+    var equipment: [String]? = nil
+    /// Doneness cue the cook should look for, e.g. "tomatoes burst, feta golden".
+    var look_for: String? = nil
 
     var id: Int { step }
 }
@@ -102,8 +111,9 @@ struct Recipe: Codable, Equatable, Identifiable {
     var source_prompt: String?
     var source_url: String?
     /// AI-generated dish photo URL; nil falls back to emoji gradient.
-    var image_url: String?
-    var featured: Bool?
+    var image_url: String? = nil
+    /// Curated Discover pick for empty Following / social states.
+    var featured: Bool? = nil
     var net_upvotes: Int?
     var cook_count: Int?
     var comment_count: Int?

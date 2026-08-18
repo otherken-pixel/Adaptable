@@ -63,11 +63,16 @@ Every screen and feature in the web app has a native counterpart:
 - **Recipe detail** — hero, macro + stat bands, servings scaler
   (fraction-aware quantity scaling), meal-plan day picker, share sheet,
   follow button, comments, community "cooked it" photos.
-- **Cook Mode** — mise en place checklist, one-step-at-a-time flow,
-  per-step timers that keep running across steps with a heads-up strip,
-  voice commands ("next", "back", "ingredients", "start timer") via
-  `SFSpeechRecognizer`, screen wake-lock, confetti finish, cooked-it photo
-  upload, records a "Cooked it" that feeds Trending.
+- **Cook Mode** — mise en place checklist, one-step-at-a-time flow with
+  per-step quantities, action breakdown, doneness cues, and “meanwhile”
+  previews. Multiple timers per step (including oven preheat) keep running
+  across steps; lock-screen banners plus an optional Live Activity keep
+  time when the phone is down. Voice commands (“next”, “back”,
+  “ingredients”, “start timer”), in-step ingredient swaps, screen
+  wake-lock, confetti finish, cooked-it photo upload, records a “Cooked it”
+  that feeds Trending. Regular-width scenes (iPad / large Split View) use
+  a two-column inspector so the extra space shows ingredients and the dish
+  photo instead of empty chrome.
 - **Cookbook** — Saved recipes + Meal Planner tabs; "send the week to
   Groceries" in one tap.
 - **Groceries** — grouped by source recipe, check-off, clear done.
