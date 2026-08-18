@@ -236,15 +236,35 @@ enum StepResolver {
 
     private static func timersFor(step: RecipeStep, haystack: String) -> [ExtractedTimer] {
         let parsed = DurationParser.extractAllTimers(from: haystack)
-        if let structured = step.duration_seconds, !structured.isEmpty {
-            return structured.enumerated().map { i, secs in
-                if parsed.indices.contains(i) {
-                    return ExtractedTimer(seconds: secs, label: parsed[i].label, kind: parsed[i].kind)
-                }
-                return ExtractedTimer(seconds: secs, label: structured.count == 1 ? "Step timer" : "Timer \(i + 1)", kind: .other)
-            }
+        guard let structured = step.duration_seconds, !structured.isEmpty else {
+            return parsed
         }
-        return parsed
+
+        // Pair by duration, not index: "6 minutes per side" is one parsed phrase
+        // but structured data may expand it to two 360s plus a rest.
+        var remaining = parsed
+        var usedCount: [String: Int] = [:]
+        return structured.enumerated().map { i, secs in
+            let matched: ExtractedTimer
+            if let idx = remaining.firstIndex(where: { $0.seconds == secs }) {
+                matched = remaining.remove(at: idx)
+            } else if let reused = parsed.first(where: { $0.seconds == secs }) {
+                matched = reused
+            } else if parsed.count == structured.count, parsed.indices.contains(i) {
+                matched = parsed[i]
+            } else {
+                matched = ExtractedTimer(
+                    seconds: secs,
+                    label: structured.count == 1 ? "Step timer" : "Timer \(i + 1)",
+                    kind: .other
+                )
+            }
+            let key = "\(matched.kind.rawValue)-\(matched.label)-\(secs)"
+            let n = (usedCount[key] ?? 0) + 1
+            usedCount[key] = n
+            let label = n == 1 ? matched.label : "\(matched.label) \(n)"
+            return ExtractedTimer(seconds: secs, label: label, kind: matched.kind)
+        }
     }
 
     // MARK: - Equipment / cues

@@ -133,7 +133,7 @@ struct AdaptStepSheet: View {
             Button {
                 let text = custom.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !text.isEmpty else { return }
-                if let item = selectedItem ?? ingredients.first.map({ originalName($0) }) {
+                if let item = selectedItem {
                     onApply(item, text)
                 } else {
                     onAskAI(text)
@@ -147,7 +147,7 @@ struct AdaptStepSheet: View {
                     .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .buttonStyle(.pressable)
-            .disabled(custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (selectedItem == nil && !ingredients.isEmpty))
 
             Button {
                 let text = custom.trimmingCharacters(in: .whitespacesAndNewlines)
