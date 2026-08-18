@@ -39,17 +39,29 @@ enum CookTimerLiveActivity {
             emoji: emoji.isEmpty ? "🍳" : emoji
         )
 
-        if let existing = Activity<CookTimerAttributes>.activities.first {
+        let activities = Activity<CookTimerAttributes>.activities
+        if let existing = activities.first(where: {
+            $0.attributes.recipeName == attributes.recipeName
+                && $0.attributes.emoji == attributes.emoji
+        }) {
             Task { await existing.update(ActivityContent(state: state, staleDate: soonest.endsAt)) }
+            for other in activities where other.id != existing.id {
+                Task { await other.end(nil, dismissalPolicy: .immediate) }
+            }
         } else {
-            do {
-                _ = try Activity.request(
-                    attributes: attributes,
-                    content: ActivityContent(state: state, staleDate: soonest.endsAt),
-                    pushType: nil
-                )
-            } catch {
-                print("[CookTimerLiveActivity] request failed: \(error)")
+            Task {
+                for activity in Activity<CookTimerAttributes>.activities {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
+                do {
+                    _ = try Activity.request(
+                        attributes: attributes,
+                        content: ActivityContent(state: state, staleDate: soonest.endsAt),
+                        pushType: nil
+                    )
+                } catch {
+                    print("[CookTimerLiveActivity] request failed: \(error)")
+                }
             }
         }
     }
