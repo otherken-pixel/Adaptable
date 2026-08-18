@@ -379,7 +379,7 @@ private extension String {
 
 private extension Optional where Wrapped == [String] {
     var nonEmpty: [String]? {
-        guard let value, !value.isEmpty else { return nil }
+        guard let value = self, !value.isEmpty else { return nil }
         return value
     }
 }
