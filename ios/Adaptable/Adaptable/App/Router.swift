@@ -74,6 +74,7 @@ final class DeepLinkCenter: ObservableObject {
     }
 
     func openCookbookRecipe(_ id: String) {
+        activeTab = .cookbook
         cookbookRecipeId = id
     }
 

@@ -85,7 +85,7 @@ struct CookLiveActivityWidget: Widget {
                 }
                 Spacer()
                 if let end = context.state.timerEndsAt {
-                    Text(timerInterval: Date.now...end, countsDown: true)
+                    Text(timerInterval: Date.now...max(Date.now, end), countsDown: true)
                         .monospacedDigit()
                         .font(.headline)
                 }
@@ -103,7 +103,7 @@ struct CookLiveActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if let end = context.state.timerEndsAt {
-                        Text(timerInterval: Date.now...end, countsDown: true).monospacedDigit()
+                        Text(timerInterval: Date.now...max(Date.now, end), countsDown: true).monospacedDigit()
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -120,7 +120,7 @@ struct CookLiveActivityWidget: Widget {
                 Text(context.attributes.emoji)
             } compactTrailing: {
                 if let end = context.state.timerEndsAt {
-                    Text(timerInterval: Date.now...end, countsDown: true).monospacedDigit().font(.caption2)
+                    Text(timerInterval: Date.now...max(Date.now, end), countsDown: true).monospacedDigit().font(.caption2)
                 } else {
                     Text(context.state.stepLabel).font(.caption2)
                 }
