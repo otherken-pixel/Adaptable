@@ -44,6 +44,15 @@ final class ShoppingLocal {
         return created
     }
 
+    func updateQuantity(_ id: String, quantity: String) {
+        items = items.map {
+            var i = $0
+            if i.id == id { i.quantity = quantity }
+            return i
+        }
+        persist()
+    }
+
     func setChecked(_ id: String, checked: Bool) {
         items = items.map {
             var i = $0

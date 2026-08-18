@@ -45,6 +45,9 @@ struct CookModeView: View {
     @StateObject private var voice = VoiceCommandListener()
     @State private var voiceOn = false
     @State private var shareItem: ShareItem?
+    @State private var leftoverBusy = false
+    @State private var leftoverError: String?
+    @State private var leftoverBundle: MealPrepBundle?
 
     private var factor: Double {
         guard let recipe, let servings, (recipe.servings ?? 1) > 0 else { return 1 }
@@ -65,12 +68,18 @@ struct CookModeView: View {
         }
         .task {
             recipe = try? await API.fetchRecipe(id: recipeId)
+            restoreFromLiveActivityIfNeeded()
+            applyCookCommand(deepLinks.pendingCookCommand)
         }
         .onAppear { CookModeManager.startCookMode() }
         .onDisappear {
             voice.stop()
             CookModeManager.stopCookMode()
             CookTimerLiveActivity.endAll()
+            CookLiveActivityController.end()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .cookCommand)) { note in
+            applyCookCommand(note.object as? String)
         }
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)
@@ -536,12 +545,102 @@ struct CookModeView: View {
                 .accessibilityLabel("Share a photo of your plate")
             }
 
+            leftoverBlock(recipe)
+
             Button("Back to Discover") { dismiss() }
                 .font(.subheadline.weight(.bold)).foregroundStyle(Theme.muted)
                 .accessibilityLabel("Back to Discover")
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+    }
+
+    private func leftoverBlock(_ recipe: Recipe) -> some View {
+        VStack(spacing: 10) {
+            if let leftoverBundle {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("TOMORROW FROM LEFTOVERS")
+                        .font(.caption.weight(.heavy))
+                        .tracking(1.1)
+                        .foregroundStyle(Theme.accent)
+                    ForEach(leftoverBundle.recipes.filter { $0.id != recipe.id }) { r in
+                        Button {
+                            let id = r.id
+                            dismiss()
+                            deepLinks.openCookbookRecipe(id)
+                        } label: {
+                            Text("\(r.emoji ?? "🍽️") \(r.title ?? "Leftover meal")")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(Theme.content)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    Text(leftoverBundle.headline)
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
+                }
+                .padding(14)
+                .frame(maxWidth: 320, alignment: .leading)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            } else {
+                Button {
+                    Task { await generateLeftover(from: recipe) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if leftoverBusy { ProgressView().tint(.white) }
+                        else { Image(systemName: "sparkles") }
+                        Text(leftoverBusy ? "Writing tomorrow's meal…" : leftoverCta(recipe))
+                            .font(.subheadline.weight(.heavy))
+                    }
+                    .frame(maxWidth: 320).frame(height: 48)
+                    .foregroundStyle(.white)
+                    .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+                .disabled(leftoverBusy)
+            }
+            if let leftoverError {
+                Text(leftoverError).font(.caption.weight(.semibold)).foregroundStyle(Theme.down)
+            }
+        }
+    }
+
+    private func leftoverCta(_ recipe: Recipe) -> String {
+        if let focus = MealPrepBundles.leftoverFocus([recipe]).first {
+            return "Generate tomorrow from leftover \(focus)"
+        }
+        return "Generate tomorrow from these leftovers"
+    }
+
+    private func generateLeftover(from recipe: Recipe) async {
+        leftoverBusy = true
+        leftoverError = nil
+        do {
+            let bundle = try await API.completeBundle(seedIds: [recipe.id], kind: .sharedBase, targetSize: 2)
+            leftoverBundle = bundle
+            if let userId = authStore.profile?.id {
+                let tomorrow = Format.localISODate(Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date())
+                let servings = authStore.profile?.preferences?.household_size ?? recipe.servings ?? 2
+                let focus = bundle.leftover_focus.first
+                for child in bundle.recipes where child.id != recipe.id {
+                    try? await API.addMealPlan(
+                        userId: userId,
+                        recipeId: child.id,
+                        planDate: tomorrow,
+                        servings: servings,
+                        leftoverOf: recipe.id,
+                        leftoverFocus: focus
+                    )
+                }
+            }
+            if let prefs = authStore.profile?.preferences {
+                try? await authStore.updatePreferences(TasteMemory.recordLeftover(focus: bundle.leftover_focus, prefs: prefs))
+            }
+            Haptics.success()
+        } catch {
+            leftoverError = AppError.friendlyMessage(for: error)
+        }
+        leftoverBusy = false
     }
 
     private func shareCooked(_ recipe: Recipe) {
@@ -684,6 +783,47 @@ struct CookModeView: View {
         startAllTimers(for: resolved, recipe: recipe)
     }
 
+    private func applyCookCommand(_ command: String?) {
+        guard let command, let recipe else { return }
+        deepLinks.pendingCookCommand = nil
+        let total = (recipe.steps ?? []).count
+        if command == "next" { idx = min(idx + 1, total + 1) }
+        if command == "timer" { startTimersForCurrentStep() }
+    }
+
+    /// Restore step + running timer from the kitchen-loop widget Live Activity
+    /// without replacing Cook Mode's multi-timer `RunningTimer` model.
+    private func restoreFromLiveActivityIfNeeded() {
+        guard let recipe,
+              CookLiveActivityController.currentRecipeId == recipeId,
+              let restored = CookLiveActivityController.currentStepIndex else { return }
+        let total = (recipe.steps ?? []).count
+        idx = min(max(restored, 0), total + 1)
+        guard let endsAt = CookLiveActivityController.currentTimerEndsAt, endsAt > Date(),
+              idx >= 1, idx <= total else { return }
+        let step = (recipe.steps ?? [])[idx - 1]
+        let next = idx < total ? (recipe.steps ?? [])[idx] : nil
+        let resolved = StepResolver.resolve(
+            step: step,
+            number: idx,
+            total: total,
+            recipe: recipe,
+            factor: factor,
+            substitutions: substitutions,
+            nextStep: next
+        )
+        guard let spec = resolved.timers.first else { return }
+        timers = [RunningTimer(
+            specId: timerId(step: idx, spec: spec),
+            step: idx,
+            label: spec.label,
+            endsAt: endsAt,
+            totalSeconds: spec.seconds,
+            rang: false
+        )]
+        now = Date()
+    }
+
     private func tickTimers() async {
         while !timers.isEmpty && !Task.isCancelled {
             try? await Task.sleep(nanoseconds: 400_000_000)
@@ -705,6 +845,25 @@ struct CookModeView: View {
             timers: timers.map { (label: $0.label, endsAt: $0.endsAt, step: $0.step, totalSeconds: $0.totalSeconds) },
             totalSteps: total
         )
+        // Keep the kitchen-loop widget Live Activity in sync without replacing
+        // Cook Mode's multi-timer CookTimerAttributes model.
+        let soonest = timers.filter { $0.endsAt > Date() }.sorted { $0.endsAt < $1.endsAt }.first
+        let stepLabel: String = {
+            if let soonest { return "\(soonest.label) · step \(soonest.step) of \(total)" }
+            if idx >= 1, idx <= total { return "Step \(idx) of \(total)" }
+            return recipe.title ?? "Cooking"
+        }()
+        if CookLiveActivityController.currentRecipeId == recipe.id {
+            CookLiveActivityController.update(stepLabel: stepLabel, step: idx, total: total, timerEndsAt: soonest?.endsAt)
+        } else if soonest != nil {
+            CookLiveActivityController.start(
+                recipe: recipe,
+                stepLabel: stepLabel,
+                step: idx,
+                total: total,
+                timerEndsAt: soonest?.endsAt
+            )
+        }
     }
 
     private func toggleIngredient(_ ing: StepIngredientUse) {

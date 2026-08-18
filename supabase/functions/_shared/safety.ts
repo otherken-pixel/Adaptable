@@ -8,11 +8,11 @@ const ALLERGEN_ALIASES: Record<string, string[]> = {
   peanuts: ["peanut", "peanuts", "groundnut", "ground nut", "arachis"],
   "tree nut": [
     "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
-    "brazil nut", "pine nut", "tree nut",
+    "brazil nut", "pine nut", "tree nut", "nutella", "marzipan",
   ],
   "tree nuts": [
     "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
-    "brazil nut", "pine nut", "tree nut",
+    "brazil nut", "pine nut", "tree nut", "nutella", "marzipan",
   ],
   nut: [
     "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
@@ -24,11 +24,15 @@ const ALLERGEN_ALIASES: Record<string, string[]> = {
   ],
   dairy: [
     "milk", "butter", "cheese", "cream", "yogurt", "yoghurt", "whey", "casein",
-    "lactose", "ghee", "paneer",
+    "lactose", "ghee", "paneer", "mozzarella", "cheddar", "parmesan", "parmigiano",
+    "feta", "ricotta", "brie", "gouda", "gruyere", "halloumi", "mascarpone",
+    "cottage cheese", "sour cream", "creme fraiche", "half and half",
   ],
   milk: [
     "milk", "butter", "cheese", "cream", "yogurt", "yoghurt", "whey", "casein",
-    "lactose", "ghee", "paneer",
+    "lactose", "ghee", "paneer", "mozzarella", "cheddar", "parmesan", "parmigiano",
+    "feta", "ricotta", "brie", "gouda", "gruyere", "halloumi", "mascarpone",
+    "cottage cheese", "sour cream",
   ],
   egg: ["egg", "eggs", "mayonnaise", "aioli", "meringue"],
   eggs: ["egg", "eggs", "mayonnaise", "aioli", "meringue"],
@@ -39,14 +43,14 @@ const ALLERGEN_ALIASES: Record<string, string[]> = {
   wheat: ["wheat", "flour", "breadcrumbs", "bread crumbs", "seitan", "bulgur"],
   shellfish: [
     "shrimp", "prawn", "crab", "lobster", "crawfish", "crayfish", "scallop",
-    "clam", "mussel", "oyster", "shellfish",
+    "clam", "mussel", "oyster", "shellfish", "calamari", "squid",
   ],
   fish: [
     "fish", "salmon", "tuna", "cod", "anchovy", "sardine", "trout", "bass",
     "halibut", "tilapia", "fish sauce",
   ],
   soy: ["soy", "soya", "tofu", "tempeh", "edamame", "miso", "soy sauce", "tamari"],
-  sesame: ["sesame", "tahini", "benne"],
+  sesame: ["sesame", "tahini", "benne", "hummus"],
   mustard: ["mustard"],
 };
 

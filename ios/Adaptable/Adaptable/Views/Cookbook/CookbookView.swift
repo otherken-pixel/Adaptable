@@ -1,16 +1,12 @@
 import SwiftUI
 
-private enum CookbookTab { case saved, planner }
-
-/// Saved recipes + meal planner with "send the week to Groceries" in one
-/// tap. Mirrors `src/pages/CookbookPage.tsx`.
+/// Saved recipes plus this week's canvas. Prep interview lives on Create.
 struct CookbookView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var engagement: EngagementStore
     @EnvironmentObject private var shoppingStore: ShoppingStore
     @EnvironmentObject private var deepLinks: DeepLinkCenter
 
-    @State private var tab: CookbookTab = .saved
     @State private var recipes: [Recipe]?
     @State private var plans: [MealPlanEntry]?
     @State private var weekAdded = false
@@ -19,10 +15,8 @@ struct CookbookView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                switch tab {
-                case .saved: savedContent
-                case .planner: plannerContent
-                }
+                weekSection
+                savedSection
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
@@ -31,29 +25,19 @@ struct CookbookView: View {
         .navigationBarHidden(true)
         .task { await loadSaved() }
         .task { await loadPlans() }
-        .onChange(of: engagement.savedIds) { _, _ in Task { await loadSaved() } }
+        .task { await engagement.load(for: authStore.profile) }
+        .onChange(of: engagement.savedIds) { _, _ in
+            Task { await loadSaved() }
+        }
+        .onChange(of: deepLinks.activeTab) { _, tab in
+            if tab == .cookbook { Task { await loadPlans() } }
+        }
     }
 
     private var header: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("YOUR KITCHEN").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
-                Text("Cookbook").font(.system(size: 32, weight: .heavy))
-            }
-            Spacer()
-            HStack(spacing: 2) {
-                ForEach([(CookbookTab.saved, "Saved"), (.planner, "Planner")], id: \.1) { t, label in
-                    Button { tab = t } label: {
-                        Text(label).font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(tab == t ? Theme.content : Theme.muted)
-                            .padding(.horizontal, 14).padding(.vertical, 7)
-                            .background(tab == t ? Theme.raised : .clear, in: Capsule())
-                    }
-                    .buttonStyle(.pressable)
-                }
-            }
-            .padding(4)
-            .background(Theme.sunken, in: Capsule())
+        VStack(alignment: .leading, spacing: 2) {
+            Text("YOUR KITCHEN").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
+            Text("Cookbook").font(.system(size: 32, weight: .heavy))
         }
         .padding(.top, 16)
         .padding(.bottom, 16)
@@ -76,7 +60,12 @@ struct CookbookView: View {
         } else {
             LazyVStack(spacing: 16) {
                 ForEach(Array(visible.enumerated()), id: \.element.id) { i, r in
-                    RecipeCardView(recipe: r, index: i)
+                    Button {
+                        deepLinks.openCookbookRecipe(r.id)
+                    } label: {
+                        RecipeCardView(recipe: r, index: i, asLink: false)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -87,7 +76,18 @@ struct CookbookView: View {
         recipes = (try? await API.fetchSavedRecipes(userId: userId)) ?? []
     }
 
-    // MARK: - Planner
+    private var savedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("SAVED")
+                .font(.system(size: 11, weight: .heavy))
+                .tracking(1.2)
+                .foregroundStyle(Theme.accent)
+                .padding(.top, 28)
+            savedContent
+        }
+    }
+
+    // MARK: - Week
 
     private var grouped: [(String, [MealPlanEntry])]? {
         guard let plans else { return nil }
@@ -101,15 +101,26 @@ struct CookbookView: View {
     private var upcomingCount: Int { grouped?.reduce(0) { $0 + $1.1.count } ?? 0 }
 
     @ViewBuilder
-    private var plannerContent: some View {
-        if grouped == nil {
-            FeedSkeleton()
-        } else if upcomingCount == 0 {
-            EmptyStateView(emoji: "🗓️", title: "Nothing planned yet", message: "Open any recipe and tap the calendar button to plan your week — then send the whole week to Groceries in one tap.") {
-                PillButton(title: "Find something delicious") { deepLinks.activeTab = .discover }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 20) {
+    private var weekSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            WeekCanvasView(
+                plans: (plans ?? []).filter { $0.plan_date >= Format.localISODate() },
+                onMove: { entry, iso in Task { await move(entry, to: iso) } },
+                onSelectDay: { _ in }
+            )
+
+            if plans == nil {
+                FeedSkeleton()
+            } else if upcomingCount == 0 {
+                EmptyStateView(
+                    emoji: "🗓️",
+                    title: "Nothing planned yet",
+                    message: "Build leftover-friendly meals that share a base — then drop them on the week."
+                ) {
+                    PillButton(title: "Build this week's prep") { deepLinks.openPrep() }
+                }
+                .padding(.vertical, 8)
+            } else {
                 Button {
                     addWeekToGroceries()
                 } label: {
@@ -124,12 +135,17 @@ struct CookbookView: View {
                 }
                 .buttonStyle(.pressable)
 
-                ForEach(grouped!, id: \.0) { iso, entries in
+                ForEach(grouped ?? [], id: \.0) { iso, entries in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(dayLabel(iso)).font(.system(size: 15, weight: .heavy))
                         VStack(spacing: 10) {
                             ForEach(entries) { entry in
-                                PlanRow(entry: entry, onServingsChange: { delta in changeServings(entry, delta: delta) }, onRemove: { remove(entry) })
+                                PlanRow(
+                                    entry: entry,
+                                    onOpen: { deepLinks.openCookbookRecipe(entry.recipe_id) },
+                                    onServingsChange: { delta in changeServings(entry, delta: delta) },
+                                    onRemove: { remove(entry) }
+                                )
                             }
                         }
                     }
@@ -151,6 +167,18 @@ struct CookbookView: View {
     private func loadPlans() async {
         guard let userId = authStore.profile?.id else { return }
         plans = (try? await API.fetchMealPlans(userId: userId)) ?? []
+        KitchenSnapshot.refresh(from: plans ?? [])
+    }
+
+    private func move(_ entry: MealPlanEntry, to iso: String) async {
+        guard let userId = authStore.profile?.id else { return }
+        plans = plans?.map {
+            var p = $0
+            if p.id == entry.id { p.plan_date = iso }
+            return p
+        }
+        try? await API.updateMealPlanDate(userId: userId, id: entry.id, planDate: iso)
+        KitchenSnapshot.refresh(from: plans ?? [])
     }
 
     private func changeServings(_ entry: MealPlanEntry, delta: Int) {
@@ -179,14 +207,23 @@ struct CookbookView: View {
 
     private func addWeekToGroceries() {
         guard let grouped, !weekAdded, let userId = authStore.profile?.id else { return }
-        for (_, entries) in grouped {
-            for entry in entries {
-                guard let recipe = entry.recipe else { continue }
-                shoppingStore.addRecipe(recipe, scaleFactor: Double(entry.servings) / Double(recipe.servings ?? 1), userId: userId)
-            }
-        }
         weekAdded = true
         Task {
+            for (_, entries) in grouped {
+                for entry in entries {
+                    guard let recipe = entry.recipe else { continue }
+                    var skip = Set<String>()
+                    if let focus = entry.leftover_focus, !focus.isEmpty {
+                        skip.insert(MealPrepBundles.normalizeIngredient(focus))
+                    }
+                    await shoppingStore.addRecipe(
+                        recipe,
+                        scaleFactor: Double(entry.servings) / Double(max(recipe.servings ?? 1, 1)),
+                        userId: userId,
+                        skipKeys: skip
+                    )
+                }
+            }
             try? await Task.sleep(nanoseconds: 2_500_000_000)
             weekAdded = false
         }
@@ -195,12 +232,13 @@ struct CookbookView: View {
 
 private struct PlanRow: View {
     let entry: MealPlanEntry
+    var onOpen: () -> Void
     var onServingsChange: (Int) -> Void
     var onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            NavigationLink(value: Route.recipe(id: entry.recipe_id)) {
+            Button(action: onOpen) {
                 ZStack {
                     Gradients.cover(for: entry.recipe_id)
                     Text(entry.recipe?.emoji ?? "🍽️").font(.system(size: 22))
@@ -208,7 +246,8 @@ private struct PlanRow: View {
                 .frame(width: 48, height: 48)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            NavigationLink(value: Route.recipe(id: entry.recipe_id)) {
+            .buttonStyle(.plain)
+            Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.recipe?.title ?? "Recipe").font(.system(size: 14, weight: .bold)).lineLimit(1).foregroundStyle(Theme.content)
                     if let r = entry.recipe {
@@ -216,6 +255,7 @@ private struct PlanRow: View {
                     }
                 }
             }
+            .buttonStyle(.plain)
             Spacer()
             HStack(spacing: 2) {
                 Button { onServingsChange(-1) } label: {

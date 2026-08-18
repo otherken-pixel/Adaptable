@@ -55,6 +55,16 @@ enum Format {
         return String(format: "%04d-%02d-%02d", c.year ?? 1970, c.month ?? 1, c.day ?? 1)
     }
 
+    /// Short English list: "chicken", "chicken & broccoli", "a, b & c".
+    static func list(_ items: [String]) -> String {
+        switch items.count {
+        case 0: return ""
+        case 1: return items[0]
+        case 2: return "\(items[0]) & \(items[1])"
+        default: return items.dropLast().joined(separator: ", ") + " & \(items.last!)"
+        }
+    }
+
     static func compactCount(_ n: Int) -> String {
         if abs(n) >= 1000 {
             let scaled = Double(n) / 1000

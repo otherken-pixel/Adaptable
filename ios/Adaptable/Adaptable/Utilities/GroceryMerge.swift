@@ -12,8 +12,12 @@ enum GroceryMerge {
         let a = existing.trimmingCharacters(in: .whitespacesAndNewlines)
         let b = incoming.trimmingCharacters(in: .whitespacesAndNewlines)
         if a.isEmpty { return b }
-        if b.isEmpty || a == b { return a }
-        if a.lowercased().contains(b.lowercased()) { return a }
-        return "\(a) + \(b)"
+        if b.isEmpty || a.compare(b, options: .caseInsensitive) == .orderedSame { return a }
+        return Quantity.add(a, b)
+    }
+
+    /// Canonical grocery key that collapses "leftover cooked chicken" → "chicken".
+    static func batchKey(_ item: String) -> String {
+        MealPrepBundles.normalizeIngredient(item)
     }
 }

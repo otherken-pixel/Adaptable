@@ -33,6 +33,7 @@ struct ProfileView: View {
                         emptyCreations
                     }
                     tasteProfileLink(profile)
+                    HouseholdCard()
                     pushSection
                     if !authStore.isDemo {
                         signOutButton

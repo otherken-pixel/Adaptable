@@ -250,9 +250,16 @@ enum API {
 
     static func fetchShoppingItems(userId: String) async throws -> [ShoppingItem] {
         if SupabaseManager.isDemo { return await ShoppingLocal.shared.list() }
+        let ids = (try? await householdMemberIds(userId: userId)) ?? [userId]
         return try await db.from("shopping_items")
             .select("id, recipe_id, recipe_title, item, quantity, checked, created_at")
-            .eq("user_id", value: userId).order("created_at", ascending: false).execute().value
+            .in("user_id", values: ids).order("created_at", ascending: false).execute().value
+    }
+
+    static func updateShoppingItemQuantity(userId: String, id: String, quantity: String) async throws {
+        if SupabaseManager.isDemo { return await ShoppingLocal.shared.updateQuantity(id, quantity: quantity) }
+        struct Payload: Encodable { let quantity: String }
+        try await db.from("shopping_items").update(Payload(quantity: quantity)).eq("id", value: id).execute()
     }
 
     static func addShoppingItems(userId: String, rows: [(recipeId: String?, recipeTitle: String, item: String, quantity: String)]) async throws -> [ShoppingItem] {
@@ -272,42 +279,75 @@ enum API {
     static func setShoppingItemChecked(userId: String, id: String, checked: Bool) async throws {
         if SupabaseManager.isDemo { return await ShoppingLocal.shared.setChecked(id, checked: checked) }
         struct Payload: Encodable { let checked: Bool }
-        try await db.from("shopping_items").update(Payload(checked: checked)).eq("user_id", value: userId).eq("id", value: id).execute()
+        try await db.from("shopping_items").update(Payload(checked: checked)).eq("id", value: id).execute()
     }
 
     static func removeShoppingItem(userId: String, id: String) async throws {
         if SupabaseManager.isDemo { return await ShoppingLocal.shared.remove(id) }
-        try await db.from("shopping_items").delete().eq("user_id", value: userId).eq("id", value: id).execute()
+        try await db.from("shopping_items").delete().eq("id", value: id).execute()
     }
 
     static func clearCheckedShoppingItems(userId: String) async throws {
         if SupabaseManager.isDemo { return await ShoppingLocal.shared.clearChecked() }
-        try await db.from("shopping_items").delete().eq("user_id", value: userId).eq("checked", value: true).execute()
+        let ids = (try? await householdMemberIds(userId: userId)) ?? [userId]
+        try await db.from("shopping_items").delete().in("user_id", values: ids).eq("checked", value: true).execute()
     }
 
     // MARK: - Meal planner
 
     static func fetchMealPlans(userId: String) async throws -> [MealPlanEntry] {
         if SupabaseManager.isDemo { return await DemoStore.shared.listPlans() }
+        let ids = (try? await householdMemberIds(userId: userId)) ?? [userId]
         return try await db.from("meal_plans").select("*, recipe:recipes(\(recipeSelect))")
-            .eq("user_id", value: userId).order("plan_date", ascending: true).execute().value
+            .in("user_id", values: ids).order("plan_date", ascending: true).execute().value
     }
 
-    static func addMealPlan(userId: String, recipeId: String, planDate: String, servings: Int) async throws {
-        if SupabaseManager.isDemo { _ = await DemoStore.shared.addPlan(recipeId, planDate: planDate, servings: servings); return }
-        struct Payload: Encodable { let user_id: String; let recipe_id: String; let plan_date: String; let servings: Int }
-        try await db.from("meal_plans").insert(Payload(user_id: userId, recipe_id: recipeId, plan_date: planDate, servings: servings)).execute()
+    static func addMealPlan(
+        userId: String,
+        recipeId: String,
+        planDate: String,
+        servings: Int,
+        leftoverOf: String? = nil,
+        leftoverFocus: String? = nil
+    ) async throws {
+        if SupabaseManager.isDemo {
+            _ = await DemoStore.shared.addPlan(
+                recipeId, planDate: planDate, servings: servings,
+                leftoverOf: leftoverOf, leftoverFocus: leftoverFocus
+            )
+            return
+        }
+        struct Payload: Encodable {
+            let user_id: String
+            let recipe_id: String
+            let plan_date: String
+            let servings: Int
+            let leftover_of: String?
+            let leftover_focus: String?
+        }
+        try await db.from("meal_plans").insert(
+            Payload(
+                user_id: userId, recipe_id: recipeId, plan_date: planDate,
+                servings: servings, leftover_of: leftoverOf, leftover_focus: leftoverFocus
+            )
+        ).execute()
+    }
+
+    static func updateMealPlanDate(userId: String, id: String, planDate: String) async throws {
+        if SupabaseManager.isDemo { return await DemoStore.shared.updatePlanDate(id, planDate: planDate) }
+        struct Payload: Encodable { let plan_date: String }
+        try await db.from("meal_plans").update(Payload(plan_date: planDate)).eq("id", value: id).execute()
     }
 
     static func updateMealPlanServings(userId: String, id: String, servings: Int) async throws {
         if SupabaseManager.isDemo { return await DemoStore.shared.updatePlanServings(id, servings: servings) }
         struct Payload: Encodable { let servings: Int }
-        try await db.from("meal_plans").update(Payload(servings: servings)).eq("user_id", value: userId).eq("id", value: id).execute()
+        try await db.from("meal_plans").update(Payload(servings: servings)).eq("id", value: id).execute()
     }
 
     static func removeMealPlan(userId: String, id: String) async throws {
         if SupabaseManager.isDemo { return await DemoStore.shared.removePlan(id) }
-        try await db.from("meal_plans").delete().eq("user_id", value: userId).eq("id", value: id).execute()
+        try await db.from("meal_plans").delete().eq("id", value: id).execute()
     }
 
     // MARK: - Follows
@@ -413,6 +453,204 @@ enum API {
             try await Task.sleep(nanoseconds: 800_000_000)
             return try await invoke("generate-recipe", body: body)
         }
+    }
+
+    /// Saved recipes first, then Hot Discover — the candidate pool for bundles.
+    static func fetchBundlePool(userId: String) async throws -> [Recipe] {
+        async let saved = fetchSavedRecipes(userId: userId)
+        async let feed = fetchFeed(sort: .hot)
+        let s = (try? await saved) ?? []
+        let f = (try? await feed) ?? []
+        var seen = Set<String>()
+        var out: [Recipe] = []
+        for r in s + f where seen.insert(r.id).inserted { out.append(r) }
+        return out
+    }
+
+    /// Generate the missing meal(s) that complete a 2–5 recipe leftover prep bundle.
+    static func completeBundle(
+        seedIds: [String],
+        kind: BundleKind,
+        targetSize: Int = 3,
+        slots: [String] = [],
+        prepWindow: String? = nil,
+        base: String? = nil,
+        servings: Int? = nil
+    ) async throws -> MealPrepBundle {
+        if SupabaseManager.isDemo {
+            return await DemoStore.shared.completeBundle(
+                seedIds: seedIds, kind: kind, targetSize: targetSize,
+                slots: slots, prepWindow: prepWindow, base: base, servings: servings
+            )
+        }
+        struct Body: Encodable {
+            let seed_recipe_ids: [String]
+            let kind: String
+            let target_size: Int
+            let slots: [String]
+            let prep_window: String?
+            let base: String?
+            let servings: Int?
+        }
+        struct Envelope: Decodable { let bundle: MealPrepBundle }
+        do {
+            let envelope: Envelope = try await SupabaseManager.client.functions.invoke(
+                "complete-bundle",
+                options: FunctionInvokeOptions(
+                    body: Body(
+                        seed_recipe_ids: seedIds,
+                        kind: kind.rawValue,
+                        target_size: targetSize,
+                        slots: slots,
+                        prep_window: prepWindow,
+                        base: base,
+                        servings: servings
+                    )
+                )
+            )
+            return envelope.bundle
+        } catch let FunctionsError.httpError(code, data) {
+            let message = (try? JSONDecoder().decode(EdgeErrorBody.self, from: data))?.error
+            throw AppError(message ?? "Couldn't complete that bundle (\(code)).")
+        } catch {
+            throw error
+        }
+    }
+
+    static func insertLineage(userId: String, parentId: String, childId: String, focus: [String]) async throws {
+        if SupabaseManager.isDemo {
+            await DemoStore.shared.addLineage(parentId: parentId, childId: childId, focus: focus)
+            return
+        }
+        struct Payload: Encodable {
+            let user_id: String
+            let parent_recipe_id: String
+            let child_recipe_id: String
+            let leftover_focus: [String]
+        }
+        try await db.from("recipe_lineage")
+            .insert(Payload(user_id: userId, parent_recipe_id: parentId, child_recipe_id: childId, leftover_focus: focus))
+            .execute()
+    }
+
+    static func fetchLineage(userId: String) async throws -> [RecipeLineage] {
+        if SupabaseManager.isDemo { return await DemoStore.shared.lineage(for: userId) }
+        return try await db.from("recipe_lineage").select("*")
+            .eq("user_id", value: userId).order("created_at", ascending: false).limit(50).execute().value
+    }
+
+    struct AdaptStepResult: Decodable {
+        let instruction: String
+        let tip: String?
+        let substitute: String?
+    }
+
+    static func adaptStep(recipe: Recipe, step: Int, missing: String) async throws -> AdaptStepResult {
+        if SupabaseManager.isDemo {
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            return AdaptStepResult(
+                instruction: "Skip the \(missing) — use a splash of water or stock and keep going. The dish will still work.",
+                tip: "Demo Mode: leftover-friendly swap.",
+                substitute: "stock or water"
+            )
+        }
+        struct Body: Encodable {
+            let recipe_title: String
+            let step: Int
+            let instruction: String
+            let missing: String
+        }
+        struct Envelope: Decodable { let adapt: AdaptStepResult }
+        let instruction = recipe.steps?.first(where: { $0.step == step })?.instruction ?? ""
+        do {
+            let envelope: Envelope = try await SupabaseManager.client.functions.invoke(
+                "adapt-step",
+                options: FunctionInvokeOptions(body: Body(
+                    recipe_title: recipe.title ?? "",
+                    step: step,
+                    instruction: instruction,
+                    missing: missing
+                ))
+            )
+            return envelope.adapt
+        } catch let FunctionsError.httpError(code, data) {
+            let message = (try? JSONDecoder().decode(EdgeErrorBody.self, from: data))?.error
+            throw AppError(message ?? "Couldn't adapt that step (\(code)).")
+        }
+    }
+
+    static func readFridge(imageBase64: String, mimeType: String) async throws -> [String] {
+        if SupabaseManager.isDemo { return ["Eggs", "Leftover chicken", "Spinach", "Cheese"] }
+        struct Body: Encodable { let image_base64: String; let mime_type: String }
+        struct Envelope: Decodable { let ingredients: [String] }
+        do {
+            let envelope: Envelope = try await SupabaseManager.client.functions.invoke(
+                "read-fridge",
+                options: FunctionInvokeOptions(body: Body(image_base64: imageBase64, mime_type: mimeType))
+            )
+            return envelope.ingredients
+        } catch let FunctionsError.httpError(code, data) {
+            let message = (try? JSONDecoder().decode(EdgeErrorBody.self, from: data))?.error
+            throw AppError(message ?? "Couldn't read that fridge photo (\(code)).")
+        }
+    }
+
+    static func householdMemberIds(userId: String) async throws -> [String] {
+        if SupabaseManager.isDemo { return [userId] }
+        struct Row: Decodable { let user_id: String }
+        let mine: [Row] = (try? await db.from("household_members").select("user_id").eq("user_id", value: userId).execute().value) ?? []
+        guard !mine.isEmpty else { return [userId] }
+        let members: [Row] = try await db.from("household_members").select("user_id").execute().value
+        // RLS limits this to the caller's household roster.
+        let ids = Array(Set(members.map(\.user_id)))
+        return ids.isEmpty ? [userId] : ids
+    }
+
+    static func fetchHousehold() async throws -> (Household, [HouseholdMember])? {
+        if SupabaseManager.isDemo { return await DemoStore.shared.currentHousehold() }
+        let houses: [Household] = try await db.from("households").select("*").limit(1).execute().value
+        guard let house = houses.first else { return nil }
+        struct Row: Decodable { let household_id: String; let user_id: String; let role: String }
+        let rows: [Row] = try await db.from("household_members").select("household_id, user_id, role").eq("household_id", value: house.id).execute().value
+        let profiles: [ProfileLite] = (try? await db.from("profiles").select("id, username, avatar_url").in("id", values: rows.map(\.user_id)).execute().value) ?? []
+        let names = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0.username) })
+        let members = rows.map {
+            HouseholdMember(household_id: $0.household_id, user_id: $0.user_id, role: $0.role, username: names[$0.user_id] ?? nil)
+        }
+        return (house, members)
+    }
+
+    static func createHousehold(name: String) async throws -> Household {
+        if SupabaseManager.isDemo { return await DemoStore.shared.createHousehold(name: name) }
+        struct Params: Encodable { let p_name: String }
+        do {
+            try await db.rpc("create_household", params: Params(p_name: name)).execute()
+        } catch {
+            throw AppError("Couldn't start a kitchen — try again.")
+        }
+        guard let pair = try await fetchHousehold() else {
+            throw AppError("Couldn't start a kitchen — try again.")
+        }
+        return pair.0
+    }
+
+    static func joinHousehold(code: String) async throws -> Household {
+        if SupabaseManager.isDemo { return try await DemoStore.shared.joinHousehold(code: code) }
+        struct Params: Encodable { let p_code: String }
+        do {
+            try await db.rpc("join_household", params: Params(p_code: code.uppercased())).execute()
+        } catch {
+            throw AppError("No kitchen found for that code.")
+        }
+        guard let pair = try await fetchHousehold() else {
+            throw AppError("No kitchen found for that code.")
+        }
+        return pair.0
+    }
+
+    static func leaveHousehold(userId: String) async throws {
+        if SupabaseManager.isDemo { return await DemoStore.shared.leaveHousehold() }
+        try await db.rpc("leave_household").execute()
     }
 
     // MARK: - Account deletion

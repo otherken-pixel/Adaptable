@@ -8,6 +8,7 @@ struct OnboardingView: View {
 
     @State private var step = 0
     @State private var busy = false
+    @State private var saveError: String?
     @State private var diets: Set<String> = []
     @State private var allergies: Set<String> = []
     @State private var household = 2
@@ -177,6 +178,13 @@ struct OnboardingView: View {
             .disabled(busy)
             .accessibilityLabel(step >= 4 ? "Generate a recipe" : "Continue onboarding")
 
+            if let saveError {
+                Text(saveError)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.down)
+                    .multilineTextAlignment(.center)
+            }
+
             if step == 0 {
                 Button("Skip onboarding") { finish(save: false) }
                     .font(.system(size: 14, weight: .bold))
@@ -233,6 +241,7 @@ struct OnboardingView: View {
     private func finish(save: Bool) {
         Task {
             busy = true
+            saveError = nil
             if save {
                 var prefs = authStore.profile?.preferences ?? .empty
                 prefs.diets = Array(diets)
@@ -240,7 +249,13 @@ struct OnboardingView: View {
                 prefs.household_size = household
                 prefs.spice = spice
                 prefs.skill = skill
-                try? await authStore.updatePreferences(prefs)
+                do {
+                    try await authStore.updatePreferences(prefs)
+                } catch {
+                    saveError = AppError.friendlyMessage(for: error)
+                    busy = false
+                    return
+                }
             }
             UserDefaults.standard.set(true, forKey: "adaptable.onboarding.v1.done")
             UserDefaults.standard.set(true, forKey: "adaptable.tasteNudge.v1.dismissed")

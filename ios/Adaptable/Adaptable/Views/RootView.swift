@@ -146,9 +146,22 @@ struct MainTabView: View {
     @State private var groceriesPath = NavigationPath()
     @State private var profilePath = NavigationPath()
     @State private var showOnboarding = false
+    @State private var lastPushedRecipeId: String?
+
+    private var tabSelection: Binding<AppTab> {
+        Binding(
+            get: { deepLinks.activeTab },
+            set: { new in
+                if new == deepLinks.activeTab, new == .cookbook {
+                    cookbookPath = NavigationPath()
+                }
+                deepLinks.activeTab = new
+            }
+        )
+    }
 
     var body: some View {
-        TabView(selection: $deepLinks.activeTab) {
+        TabView(selection: tabSelection) {
             NavigationStack(path: $discoverPath) {
                 FeedView()
                     .navigationDestination(for: Route.self, destination: routeDestination)
@@ -193,11 +206,23 @@ struct MainTabView: View {
             guard id != nil else { return }
             consumePendingRecipeIfNeeded()
         }
+        .onChange(of: deepLinks.cookbookRecipeId) { _, id in
+            guard let id else { return }
+            cookbookPath.append(Route.recipe(id: id))
+            deepLinks.cookbookRecipeId = nil
+        }
+        .onChange(of: deepLinks.createRecipeId) { _, id in
+            guard let id else { return }
+            createPath.append(Route.recipe(id: id))
+            deepLinks.createRecipeId = nil
+        }
         .onChange(of: deepLinks.activeTab) { _, tab in
-            // Returning to Discover after Create should pick up new recipes.
             if tab == .discover {
                 deepLinks.requestFeedRefresh()
             }
+        }
+        .fullScreenCover(item: $deepLinks.cookSession) { session in
+            CookModeView(recipeId: session.recipeId, servings: session.servings)
         }
         .onChange(of: authStore.profile?.id) { _, _ in
             // After sign-in, open any recipe that was pending from a shared link.
@@ -220,10 +245,11 @@ struct MainTabView: View {
 
     private func consumePendingRecipeIfNeeded() {
         guard let id = deepLinks.pendingRecipeId else { return }
-        deepLinks.activeTab = .discover
-        // Avoid stacking duplicate pushes of the same recipe.
-        discoverPath.append(Route.recipe(id: id))
         deepLinks.pendingRecipeId = nil
+        deepLinks.activeTab = .discover
+        if lastPushedRecipeId == id, !discoverPath.isEmpty { return }
+        lastPushedRecipeId = id
+        discoverPath.append(Route.recipe(id: id))
     }
 
     private func maybeShowOnboarding() {
