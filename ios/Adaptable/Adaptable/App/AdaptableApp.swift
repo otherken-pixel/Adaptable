@@ -25,6 +25,8 @@ struct AdaptableApp: App {
                 .task {
                     authStore.start()
                     await PushManager.shared.refreshAuthorizationStatus()
+                    // Cold launch skips willEnterForeground (NotRunning → Active).
+                    consumePendingShareImport()
                 }
                 .onOpenURL { url in
                     handle(url: url)
@@ -38,10 +40,14 @@ struct AdaptableApp: App {
                     Task {
                         await notificationsStore.resubscribeIfNeeded()
                     }
-                    if let pending = KitchenSnapshot.consumePendingImport() {
-                        deepLinks.openImport(url: pending.url, text: pending.text)
-                    }
+                    consumePendingShareImport()
                 }
+        }
+    }
+
+    private func consumePendingShareImport() {
+        if let pending = KitchenSnapshot.consumePendingImport() {
+            deepLinks.openImport(url: pending.url, text: pending.text)
         }
     }
 
@@ -66,9 +72,7 @@ struct AdaptableApp: App {
             return
         }
         if url.scheme == "com.adaptable.app", url.host == "import" {
-            if let pending = KitchenSnapshot.consumePendingImport() {
-                deepLinks.openImport(url: pending.url, text: pending.text)
-            }
+            consumePendingShareImport()
             return
         }
         if url.scheme == "com.adaptable.app", url.host == "recipe",

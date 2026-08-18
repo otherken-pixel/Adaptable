@@ -16,6 +16,7 @@ final class ShoppingStore: ObservableObject {
         case toggle(id: String, checked: Bool)
         case remove(id: String)
         case clearChecked
+        case updateQuantity(id: String, quantity: String)
     }
 
     private func queueKey(for userId: String) -> String {
@@ -86,7 +87,15 @@ final class ShoppingStore: ObservableObject {
             }
         }
         for pair in mergedIds {
-            try? await API.updateShoppingItemQuantity(userId: userId, id: pair.id, quantity: pair.quantity)
+            if !NetworkMonitor.shared.isOnline {
+                enqueue(.updateQuantity(id: pair.id, quantity: pair.quantity), userId: userId)
+                continue
+            }
+            do {
+                try await API.updateShoppingItemQuantity(userId: userId, id: pair.id, quantity: pair.quantity)
+            } catch {
+                enqueue(.updateQuantity(id: pair.id, quantity: pair.quantity), userId: userId)
+            }
         }
         guard !rows.isEmpty else {
             Haptics.success()
@@ -233,6 +242,8 @@ final class ShoppingStore: ObservableObject {
                     try await API.removeShoppingItem(userId: userId, id: id)
                 case .clearChecked:
                     try await API.clearCheckedShoppingItems(userId: userId)
+                case .updateQuantity(let id, let quantity):
+                    try await API.updateShoppingItemQuantity(userId: userId, id: id, quantity: quantity)
                 }
             } catch {
                 remaining.append(op)
