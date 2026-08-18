@@ -6,6 +6,9 @@ import Foundation
 /// still fire via `Alarm.scheduleTimerNotification`.
 @MainActor
 enum CookTimerLiveActivity {
+    /// Chains create work so overlapping `sync` calls cannot end a just-requested activity.
+    private static var syncTask: Task<Void, Never>?
+
     static func sync(
         recipeTitle: String,
         emoji: String,
@@ -49,8 +52,21 @@ enum CookTimerLiveActivity {
                 Task { await other.end(nil, dismissalPolicy: .immediate) }
             }
         } else {
-            Task {
-                for activity in Activity<CookTimerAttributes>.activities {
+            let previous = syncTask
+            syncTask = Task {
+                await previous?.value
+                let activities = Activity<CookTimerAttributes>.activities
+                if let existing = activities.first(where: {
+                    $0.attributes.recipeName == attributes.recipeName
+                        && $0.attributes.emoji == attributes.emoji
+                }) {
+                    await existing.update(ActivityContent(state: state, staleDate: soonest.endsAt))
+                    for other in activities where other.id != existing.id {
+                        await other.end(nil, dismissalPolicy: .immediate)
+                    }
+                    return
+                }
+                for activity in activities {
                     await activity.end(nil, dismissalPolicy: .immediate)
                 }
                 do {
