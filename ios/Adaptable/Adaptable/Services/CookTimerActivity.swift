@@ -8,6 +8,8 @@ import Foundation
 enum CookTimerLiveActivity {
     /// Chains create work so overlapping `sync` calls cannot end a just-requested activity.
     private static var syncTask: Task<Void, Never>?
+    /// Bumped in `endAll` so in-flight / queued creates bail out after teardown.
+    private static var syncGeneration = 0
 
     static func sync(
         recipeTitle: String,
@@ -53,8 +55,10 @@ enum CookTimerLiveActivity {
             }
         } else {
             let previous = syncTask
+            let generation = syncGeneration
             syncTask = Task {
                 await previous?.value
+                guard !Task.isCancelled, generation == syncGeneration else { return }
                 let activities = Activity<CookTimerAttributes>.activities
                 if let existing = activities.first(where: {
                     $0.attributes.recipeName == attributes.recipeName
@@ -69,6 +73,7 @@ enum CookTimerLiveActivity {
                 for activity in activities {
                     await activity.end(nil, dismissalPolicy: .immediate)
                 }
+                guard !Task.isCancelled, generation == syncGeneration else { return }
                 do {
                     _ = try Activity.request(
                         attributes: attributes,
@@ -83,6 +88,9 @@ enum CookTimerLiveActivity {
     }
 
     static func endAll() {
+        syncGeneration += 1
+        syncTask?.cancel()
+        syncTask = nil
         for activity in Activity<CookTimerAttributes>.activities {
             Task { await activity.end(nil, dismissalPolicy: .immediate) }
         }
