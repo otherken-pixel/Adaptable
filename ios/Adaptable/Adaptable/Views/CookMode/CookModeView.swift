@@ -58,6 +58,15 @@ struct CookModeView: View {
         } catch {
             loadError = AppError.friendlyMessage(for: error)
         }
+        applyCookCommand(deepLinks.pendingCookCommand)
+    }
+
+    private func applyCookCommand(_ command: String?) {
+        guard let command, let recipe else { return }
+        deepLinks.pendingCookCommand = nil
+        let total = (recipe.steps ?? []).count
+        if command == "next" { idx = min(idx + 1, total + 1) }
+        if command == "timer" { startTimer(step: idx, total: total, recipe: recipe) }
     }
 
     private var factor: Double {
@@ -90,10 +99,7 @@ struct CookModeView: View {
             CookLiveActivityController.end()
         }
         .onReceive(NotificationCenter.default.publisher(for: .cookCommand)) { note in
-            guard let command = note.object as? String, let recipe else { return }
-            let total = (recipe.steps ?? []).count
-            if command == "next" { idx = min(idx + 1, total + 1) }
-            if command == "timer" { startTimer(step: idx, total: total, recipe: recipe) }
+            applyCookCommand(note.object as? String)
         }
         .navigationBarHidden(true)
         .toolbar(.hidden, for: .tabBar)

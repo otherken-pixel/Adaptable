@@ -108,10 +108,10 @@ struct CookLiveActivityWidget: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
-                        Link(destination: URL(string: "com.adaptable.app://cook/next")!) {
+                        Link(destination: URL(string: "com.adaptable.app://cook/next?id=\(context.attributes.recipeId)")!) {
                             Text("Next step").font(.system(size: 13, weight: .bold))
                         }
-                        Link(destination: URL(string: "com.adaptable.app://cook/timer")!) {
+                        Link(destination: URL(string: "com.adaptable.app://cook/timer?id=\(context.attributes.recipeId)")!) {
                             Text("Start timer").font(.system(size: 13, weight: .bold))
                         }
                     }

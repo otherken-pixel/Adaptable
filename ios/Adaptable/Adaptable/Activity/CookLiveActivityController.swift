@@ -2,6 +2,10 @@ import Foundation
 import ActivityKit
 
 enum CookLiveActivityController {
+    static var currentRecipeId: String? {
+        Activity<CookActivityAttributes>.activities.first?.attributes.recipeId
+    }
+
     @discardableResult
     static func start(recipe: Recipe, stepLabel: String, step: Int, total: Int, timerEndsAt: Date?) -> String? {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return nil }

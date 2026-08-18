@@ -44,15 +44,15 @@ final class ShoppingStore: ObservableObject {
     ) async {
         var existing: [String: ShoppingItem] = [:]
         for item in items where !item.checked {
-            let key = GroceryMerge.batchKey(item.item)
+            let key = GroceryMerge.normalizeKey(item.item)
             if existing[key] == nil { existing[key] = item }
         }
 
         var rows: [(recipeId: String?, recipeTitle: String, item: String, quantity: String)] = []
         var mergedIds: [(id: String, quantity: String)] = []
         for ing in recipe.ingredients ?? [] {
-            let key = GroceryMerge.batchKey(ing.item)
-            if skipKeys.contains(key) { continue }
+            if skipKeys.contains(GroceryMerge.batchKey(ing.item)) { continue }
+            let key = GroceryMerge.normalizeKey(ing.item)
             let qty = Quantity.scale(ing.quantity, factor: scaleFactor)
             if let hit = existing[key] {
                 let merged = GroceryMerge.mergeQuantities(existing: hit.quantity, incoming: qty)

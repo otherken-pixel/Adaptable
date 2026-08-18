@@ -118,6 +118,9 @@ struct GenerateView: View {
         .onChange(of: deepLinks.pendingImportURL) { _, url in
             consumePendingImport()
         }
+        .onChange(of: deepLinks.pendingImportText) { _, _ in
+            consumePendingImport()
+        }
         .onAppear {
             consumePendingImport()
             consumePendingPrep()

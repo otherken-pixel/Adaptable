@@ -22,7 +22,7 @@ struct CookNextStepIntent: AppIntent {
     static var openAppWhenRun = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        NotificationCenter.default.post(name: .cookCommand, object: "next")
+        await MainActor.run { AppEnvironment.shared.deepLinks.issueCookCommand("next") }
         return .result(dialog: "Next step.")
     }
 }
@@ -33,7 +33,7 @@ struct CookStartTimerIntent: AppIntent {
     static var openAppWhenRun = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        NotificationCenter.default.post(name: .cookCommand, object: "timer")
+        await MainActor.run { AppEnvironment.shared.deepLinks.issueCookCommand("timer") }
         return .result(dialog: "Timer started.")
     }
 }

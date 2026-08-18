@@ -36,6 +36,7 @@ final class DeepLinkCenter: ObservableObject {
     @Published var pendingImportURL: String?
     @Published var pendingImportText: String?
     @Published var pendingCookRecipeId: String?
+    @Published var pendingCookCommand: String?
     @Published var cookbookRecipeId: String?
     @Published var createRecipeId: String?
     @Published var pendingPrep = false
@@ -71,6 +72,19 @@ final class DeepLinkCenter: ObservableObject {
     func openCook(_ recipeId: String, servings: Int? = nil) {
         pendingCookRecipeId = nil
         cookSession = CookSession(recipeId: recipeId, servings: servings)
+    }
+
+    /// Open Cook Mode if needed, then deliver `next` / `timer` once the cook UI is up.
+    func issueCookCommand(_ command: String, recipeId: String? = nil) {
+        let id = recipeId
+            ?? cookSession?.recipeId
+            ?? CookLiveActivityController.currentRecipeId
+            ?? KitchenSnapshot.tonight()?.recipeId
+        if let id, cookSession?.recipeId != id {
+            openCook(id)
+        }
+        pendingCookCommand = command
+        NotificationCenter.default.post(name: .cookCommand, object: command)
     }
 
     func openCookbookRecipe(_ id: String) {

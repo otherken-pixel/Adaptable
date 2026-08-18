@@ -21,6 +21,9 @@ final class EngagementStore: ObservableObject {
             loadedForProfileId = nil
             return
         }
+        // Only set after a successful fetch so failures can retry, but skip
+        // when this profile is already loaded to avoid refetching on every tab.
+        if loadedForProfileId == profile.id { return }
         do {
             async let v = API.fetchMyVotes(userId: profile.id)
             async let s = API.fetchMySaveIds(userId: profile.id)

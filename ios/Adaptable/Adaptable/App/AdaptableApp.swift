@@ -54,12 +54,13 @@ struct AdaptableApp: App {
 
         if url.scheme == "com.adaptable.app", url.host == "cook" {
             let command = url.pathComponents.dropFirst().first ?? url.path
+            let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "id" })?.value
             if command == "next" || url.path.contains("next") {
-                NotificationCenter.default.post(name: .cookCommand, object: "next")
+                deepLinks.issueCookCommand("next", recipeId: id)
             } else if command == "timer" || url.path.contains("timer") {
-                NotificationCenter.default.post(name: .cookCommand, object: "timer")
-            } else if let id = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?.first(where: { $0.name == "id" })?.value {
+                deepLinks.issueCookCommand("timer", recipeId: id)
+            } else if let id {
                 deepLinks.openCook(id)
             }
             return
