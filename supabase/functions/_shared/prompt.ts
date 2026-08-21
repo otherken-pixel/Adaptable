@@ -289,6 +289,44 @@ export async function fetchPublicHttp(
   return res;
 }
 
+function abortError(): DOMException {
+  return new DOMException("The signal has been aborted", "AbortError");
+}
+
+function closeQuietly(conn: Deno.Conn): void {
+  try {
+    conn.close();
+  } catch {
+    /* already closed */
+  }
+}
+
+/** Honor AbortSignal even when the runtime ignores ConnectOptions.signal. */
+async function awaitAbortableConn(
+  pending: Promise<Deno.Conn>,
+  signal?: AbortSignal,
+): Promise<Deno.Conn> {
+  if (signal?.aborted) {
+    void pending.then(closeQuietly, () => {});
+    throw abortError();
+  }
+  if (!signal) return await pending;
+
+  let onAbort: () => void = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => reject(abortError());
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([pending, aborted]);
+  } catch (err) {
+    void pending.then(closeQuietly, () => {});
+    throw err;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
+
 async function fetchPinnedToIp(
   url: URL,
   ip: string,
@@ -303,35 +341,27 @@ async function fetchPinnedToIp(
     throw new UnsafeUrlError("INVALID_URL");
   }
 
-  const conn = await Deno.connect({ hostname: ip, port });
-  let sock: Deno.Conn = conn;
-  try {
-    if (url.protocol === "https:") {
-      sock = await Deno.startTls(conn, {
-        hostname: url.hostname,
-        alpnProtocols: ["http/1.1"],
-      });
-    }
-  } catch (err) {
-    try {
-      conn.close();
-    } catch {
-      /* already closed */
-    }
-    throw err;
-  }
-
-  const abort = () => {
-    try {
-      sock.close();
-    } catch {
-      /* already closed */
-    }
-  };
   const signal = init.signal;
+  if (signal?.aborted) throw abortError();
+
+  // Deploy forbids Deno.connect to :443; connectTls dials the pinned IP and
+  // uses the original hostname for SNI / cert checks (serverName + unstable symbol).
+  const pending = url.protocol === "https:"
+    ? Deno.connectTls({
+        hostname: ip,
+        port,
+        alpnProtocols: ["http/1.1"],
+        signal,
+        serverName: url.hostname,
+        [Symbol.for("unstableServerName")]: url.hostname,
+      } as Parameters<typeof Deno.connectTls>[0])
+    : Deno.connect({ hostname: ip, port, signal });
+  const sock = await awaitAbortableConn(pending, signal);
+
+  const abort = () => closeQuietly(sock);
   if (signal?.aborted) {
     abort();
-    throw new DOMException("The signal has been aborted", "AbortError");
+    throw abortError();
   }
   signal?.addEventListener("abort", abort, { once: true });
 
