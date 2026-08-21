@@ -48,6 +48,13 @@ Deno.serve(async (req) => {
       return json({ error: "You must be signed in to read a fridge photo." }, 401);
     }
 
+    const body = await req.json().catch(() => null);
+    const image = typeof body?.image_base64 === "string" ? body.image_base64 : "";
+    const mime = typeof body?.mime_type === "string" ? body.mime_type : "image/jpeg";
+    if (!image || image.length > 6_000_000) {
+      return json({ error: "Send a fridge photo under ~4 MB." }, 400);
+    }
+
     const rate = await assertDailyActionLimit(
       supabase,
       user.id,
@@ -56,13 +63,6 @@ Deno.serve(async (req) => {
       "fridge scan",
     );
     if (!rate.ok) return json({ error: rate.error }, rate.status);
-
-    const body = await req.json().catch(() => null);
-    const image = typeof body?.image_base64 === "string" ? body.image_base64 : "";
-    const mime = typeof body?.mime_type === "string" ? body.mime_type : "image/jpeg";
-    if (!image || image.length > 6_000_000) {
-      return json({ error: "Send a fridge photo under ~4 MB." }, 400);
-    }
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) return json({ error: "Recipe engine is not configured." }, 500);
