@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { create, getNumericDate } from "https://deno.land/x/djwt@v2.8/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { hasServiceRole, hasSharedSecret } from "../_shared/adminAuth.ts";
 
 /**
  * Supabase Edge Function to dispatch Apple Push Notifications (APNs).
@@ -23,6 +24,15 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 serve(async (req) => {
   try {
+    const webhookSecret = Deno.env.get("PUSH_WEBHOOK_SECRET");
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!hasSharedSecret(req, webhookSecret) && !hasServiceRole(req, serviceKey)) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const { deviceToken, isSandbox, title, body, customData } =
       await req.json();
 

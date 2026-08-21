@@ -51,6 +51,10 @@ export const shoppingLocal = {
     items = items.map((i) => (i.id === id ? { ...i, checked } : i));
     persist();
   },
+  updateQuantity(id: string, quantity: string) {
+    items = items.map((i) => (i.id === id ? { ...i, quantity } : i));
+    persist();
+  },
   remove(id: string) {
     items = items.filter((i) => i.id !== id);
     persist();

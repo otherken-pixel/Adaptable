@@ -5,6 +5,7 @@ import {
   extractAllergies,
   findAllergyViolations,
 } from "../_shared/safety.ts";
+import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
@@ -72,22 +73,26 @@ Deno.serve(async (req) => {
       ? ` STRICT SAFETY RULE — do not use ${allergies.join(", ")} or any derivative.`
       : "";
 
-    const prompt =
-      `The cook is making "${title}" and is out of "${missing}". ` +
-      `Rewrite this step so it still works without that ingredient. ` +
-      `Keep it one short instruction a beginner can follow. ` +
-      `Original step: "${instruction}". ` +
-      `Return a substitute name if one is obvious.` +
+    const system =
+      "The cook is out of one ingredient. Rewrite the original step so it still works without that ingredient. " +
+      "Keep it one short instruction a beginner can follow. Return a substitute name if one is obvious." +
       allergyRule;
 
-    const payload = {
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+    const payload = geminiIsolatedPayload({
+      system,
+      userParts: [{
+        text: [
+          untrustedBlock("recipe title", title),
+          untrustedBlock("missing ingredient", missing),
+          untrustedBlock("original step", instruction),
+        ].join("\n"),
+      }],
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
         temperature: allergies.length > 0 ? 0.3 : 0.4,
       },
-    };
+    });
 
     let last = "";
     for (const model of GEMINI_MODELS) {
