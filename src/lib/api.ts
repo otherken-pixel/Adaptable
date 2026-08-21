@@ -305,15 +305,47 @@ export async function registerDeviceToken(
 
 /* ---- Shopping list ---- */
 
+export async function householdMemberIds(userId: string): Promise<string[]> {
+  if (isDemo) return [userId];
+  const { data: mine } = await supabase!
+    .from("household_members")
+    .select("user_id")
+    .eq("user_id", userId);
+  if (!mine?.length) return [userId];
+  const { data: members, error } = await supabase!
+    .from("household_members")
+    .select("user_id");
+  if (error || !members?.length) return [userId];
+  const ids = [...new Set(members.map((m) => String(m.user_id)))];
+  return ids.length ? ids : [userId];
+}
+
 export async function fetchShoppingItems(userId: string): Promise<ShoppingItem[]> {
   if (isDemo) return shoppingLocal.list();
+  const ids = await householdMemberIds(userId).catch(() => [userId]);
   const { data, error } = await supabase!
     .from("shopping_items")
     .select("id, recipe_id, recipe_title, item, quantity, checked, created_at")
-    .eq("user_id", userId)
+    .in("user_id", ids)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as ShoppingItem[];
+}
+
+export async function updateShoppingItemQuantity(
+  _userId: string,
+  id: string,
+  quantity: string,
+): Promise<void> {
+  if (isDemo) {
+    shoppingLocal.updateQuantity(id, quantity);
+    return;
+  }
+  const { error } = await supabase!
+    .from("shopping_items")
+    .update({ quantity })
+    .eq("id", id);
+  if (error) throw error;
 }
 
 export async function addShoppingItems(
@@ -330,7 +362,7 @@ export async function addShoppingItems(
 }
 
 export async function setShoppingItemChecked(
-  userId: string,
+  _userId: string,
   id: string,
   checked: boolean,
 ): Promise<void> {
@@ -341,12 +373,11 @@ export async function setShoppingItemChecked(
   const { error } = await supabase!
     .from("shopping_items")
     .update({ checked })
-    .eq("user_id", userId)
     .eq("id", id);
   if (error) throw error;
 }
 
-export async function removeShoppingItem(userId: string, id: string): Promise<void> {
+export async function removeShoppingItem(_userId: string, id: string): Promise<void> {
   if (isDemo) {
     shoppingLocal.remove(id);
     return;
@@ -354,7 +385,6 @@ export async function removeShoppingItem(userId: string, id: string): Promise<vo
   const { error } = await supabase!
     .from("shopping_items")
     .delete()
-    .eq("user_id", userId)
     .eq("id", id);
   if (error) throw error;
 }
@@ -364,10 +394,11 @@ export async function clearCheckedShoppingItems(userId: string): Promise<void> {
     shoppingLocal.clearChecked();
     return;
   }
+  const ids = await householdMemberIds(userId).catch(() => [userId]);
   const { error } = await supabase!
     .from("shopping_items")
     .delete()
-    .eq("user_id", userId)
+    .in("user_id", ids)
     .eq("checked", true);
   if (error) throw error;
 }

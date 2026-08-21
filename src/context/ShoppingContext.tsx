@@ -13,6 +13,7 @@ import {
   fetchShoppingItems,
   removeShoppingItem,
   setShoppingItemChecked,
+  updateShoppingItemQuantity,
 } from "@/lib/api";
 import { scaleQuantity } from "@/lib/quantity";
 import { mergeQuantities, normalizeGroceryKey } from "@/lib/groceryMerge";
@@ -26,7 +27,8 @@ const QUEUE_KEY = "adaptable.shopping.offlineQueue.v1";
 type QueueOp =
   | { type: "toggle"; id: string; checked: boolean }
   | { type: "remove"; id: string }
-  | { type: "clearChecked" };
+  | { type: "clearChecked" }
+  | { type: "updateQuantity"; id: string; quantity: string };
 
 interface ShoppingState {
   items: ShoppingItem[];
@@ -83,6 +85,8 @@ export function ShoppingProvider({ children }: { children: ReactNode }) {
             await removeShoppingItem(userId, op.id);
           } else if (op.type === "clearChecked") {
             await clearCheckedShoppingItems(userId);
+          } else if (op.type === "updateQuantity") {
+            await updateShoppingItemQuantity(userId, op.id, op.quantity);
           }
         } catch {
           remaining.push(op);
@@ -145,7 +149,6 @@ export function ShoppingProvider({ children }: { children: ReactNode }) {
         const qty = scaleQuantity(ing.quantity, scaleFactor);
         const hit = existingKeys.get(key);
         if (hit) {
-          // Already on list — merge quantities in UI; server keeps original row.
           quantityPatches.push({
             id: hit.id,
             quantity: mergeQuantities(hit.quantity, qty),
@@ -167,6 +170,25 @@ export function ShoppingProvider({ children }: { children: ReactNode }) {
             return p ? { ...i, quantity: p.quantity } : i;
           }),
         );
+        for (const patch of quantityPatches) {
+          if (patch.id.startsWith("tmp-")) continue;
+          if (!isOnline()) {
+            enqueue({
+              type: "updateQuantity",
+              id: patch.id,
+              quantity: patch.quantity,
+            });
+            continue;
+          }
+          updateShoppingItemQuantity(profile.id, patch.id, patch.quantity).catch(
+            () =>
+              enqueue({
+                type: "updateQuantity",
+                id: patch.id,
+                quantity: patch.quantity,
+              }),
+          );
+        }
       }
 
       if (toAdd.length === 0) return;
@@ -192,7 +214,7 @@ export function ShoppingProvider({ children }: { children: ReactNode }) {
           ),
         );
     },
-    [profile, items],
+    [profile, items, enqueue],
   );
 
   const toggle = useCallback(

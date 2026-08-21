@@ -18,6 +18,7 @@ import {
   insertRecipeRow,
   recipeInsertPayload,
 } from "../_shared/mealPrep.ts";
+import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
 
 /** Soft daily cap on AI generations per user (UTC day). */
 const DAILY_GENERATE_LIMIT = 25;
@@ -249,7 +250,7 @@ Deno.serve(async (req) => {
     const temperature = allergies.length > 0 ? 0.45 : 0.85;
 
     const baseInstruction =
-      `Create one complete, realistic, delicious recipe for this request: "${prompt}". ` +
+      "Create one complete, realistic, delicious recipe for the cook request in the UNTRUSTED DATA block. " +
       (requestedServings
         ? `The recipe must serve exactly ${requestedServings} ${requestedServings === 1 ? "person" : "people"} — size every ingredient quantity for ${requestedServings} servings. `
         : "") +
@@ -267,19 +268,15 @@ Deno.serve(async (req) => {
       'if it has 30 g protein per serving or more, include a "High-protein" tag.';
 
     async function generateOnce(extra: string) {
-      const payload = {
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: baseInstruction + extra }],
-          },
-        ],
+      const payload = geminiIsolatedPayload({
+        system: baseInstruction + extra,
+        userParts: [{ text: untrustedBlock("cook request", prompt) }],
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: recipeSchema,
           temperature,
         },
-      };
+      });
       return await callGeminiWithModelFallback(geminiKey!, payload);
     }
 

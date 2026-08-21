@@ -1,10 +1,15 @@
 // Extract visible pantry ingredients from a fridge / counter photo.
 
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { assertDailyActionLimit } from "../_shared/safety.ts";
+
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-flash-latest",
 ];
+
+const DAILY_FRIDGE_LIMIT = 20;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +30,33 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
   try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return json({ error: "You must be signed in to read a fridge photo." }, 401);
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return json({ error: "You must be signed in to read a fridge photo." }, 401);
+    }
+
+    const rate = await assertDailyActionLimit(
+      supabase,
+      user.id,
+      "read-fridge",
+      DAILY_FRIDGE_LIMIT,
+      "fridge scan",
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+
     const body = await req.json().catch(() => null);
     const image = typeof body?.image_base64 === "string" ? body.image_base64 : "";
     const mime = typeof body?.mime_type === "string" ? body.mime_type : "image/jpeg";

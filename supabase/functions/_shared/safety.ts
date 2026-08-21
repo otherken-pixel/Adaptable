@@ -170,3 +170,45 @@ export async function assertDailyRecipeLimit(
   }
   return { ok: true };
 }
+
+/** Soft daily cap for actions that do not insert a recipe (e.g. fridge reads). */
+export async function assertDailyActionLimit(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  action: string,
+  limit: number,
+  actionLabel: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+
+  const { count, error } = await supabase
+    .from("ai_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("action", action)
+    .gte("created_at", start.toISOString());
+
+  if (error) {
+    console.error("action rate limit count failed", error);
+    return { ok: true };
+  }
+
+  if ((count ?? 0) >= limit) {
+    return {
+      ok: false,
+      status: 429,
+      error: `Daily ${actionLabel} limit reached (${limit}/day). Try again tomorrow — this keeps the AI kitchen fair for everyone.`,
+    };
+  }
+
+  const { error: insertError } = await supabase.from("ai_usage_events").insert({
+    user_id: userId,
+    action,
+  });
+  if (insertError) {
+    console.error("action rate limit insert failed", insertError);
+  }
+  return { ok: true };
+}

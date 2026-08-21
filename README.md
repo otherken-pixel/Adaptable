@@ -14,6 +14,9 @@ keepers to your Cookbook.
 | AI | Google Gemini (structured JSON output) |
 | Hosting | Vercel (SPA) |
 
+The Vercel production branch is configured in the project dashboard
+(not `vercel.json`) and should be `main`.
+
 ## ✨ Features
 
 - **AI Generator** — chat-style prompt box with suggestion chips, playful
@@ -129,7 +132,13 @@ supabase secrets set GEMINI_API_KEY=<your-gemini-key>
 supabase functions deploy delete-account
 
 # 3. iOS device push (optional, see "Notifications" below):
+#    --no-verify-jwt is required for Database Webhooks; the function
+#    still rejects callers that lack PUSH_WEBHOOK_SECRET or the service role.
 supabase functions deploy push-dispatch --no-verify-jwt
+
+# 4. Cover backfill (ops only — service-role Bearer or BACKFILL_SECRET):
+supabase secrets set BACKFILL_SECRET=$(openssl rand -hex 24)
+supabase functions deploy backfill-covers
 ```
 
 In the dashboard:
@@ -192,12 +201,13 @@ Setup for device push (iOS):
      APNS_KEY_ID=XXXXXXXXXX \
      APNS_TEAM_ID=YYYYYYYYYY \
      APNS_BUNDLE_ID=com.adaptable.app \
-     PUSH_WEBHOOK_SECRET=$(openssl rand -hex 24)
+   PUSH_WEBHOOK_SECRET=$(openssl rand -hex 24)
    supabase functions deploy push-dispatch --no-verify-jwt
-   ```
+```
 3. Create a Database Webhook (Dashboard → Database → Webhooks) on
    `INSERT` into `public.notifications`, pointing at the `push-dispatch`
    function URL, with header `x-webhook-secret: <PUSH_WEBHOOK_SECRET>`.
+   The function returns 401 without that header (or a service-role Bearer).
 
 Android note: Google only allows background push through its FCM
 service. Since this project is Firebase-free by design, Android users
@@ -218,6 +228,8 @@ that follow the system.
 ## 🔐 Security notes
 
 - Gemini API key lives only in Supabase Edge Function secrets.
+- `backfill-covers` accepts the service-role Bearer or `BACKFILL_SECRET`
+  (`x-backfill-secret`); a signed-in user JWT is not enough.
 - The edge function forwards the caller's JWT to Postgres, so recipe
   inserts run under the user's identity and RLS policies.
 - Vote counts are maintained by a `security definer` trigger — clients

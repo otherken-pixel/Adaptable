@@ -20,6 +20,13 @@ import {
   insertRecipeRow,
   recipeInsertPayload,
 } from "../_shared/mealPrep.ts";
+import {
+  UnsafeUrlError,
+  assertSafePublicHttpUrl,
+  fetchPublicHttp,
+  geminiIsolatedPayload,
+  untrustedBlock,
+} from "../_shared/prompt.ts";
 
 /** Soft daily cap on imports per user (UTC day). Free but not infinite. */
 const DAILY_IMPORT_LIMIT = 40;
@@ -168,20 +175,22 @@ Deno.serve(async (req) => {
       // Strip data-URL prefix if a client sent one.
       const pure = imageBase64.replace(/^data:[^;]+;base64,/, "");
       parts.push({ inline_data: { mime_type: mimeType, data: pure } });
-      parts.push({ text: IMPORT_INSTRUCTIONS });
+      parts.push({ text: untrustedBlock("cookbook photo", "Extract the recipe from this image.") });
     } else if (url) {
       let parsed: URL;
       try {
-        parsed = new URL(url);
-        if (!["http:", "https:"].includes(parsed.protocol)) throw new Error();
-      } catch {
+        parsed = await assertSafePublicHttpUrl(url);
+      } catch (e) {
+        if (e instanceof UnsafeUrlError && e.message === "BLOCKED_URL") {
+          return json({ error: "That link is not allowed." }, 400);
+        }
         return json({ error: "That doesn't look like a valid link." }, 400);
       }
       sourceUrl = parsed.toString();
 
       let pageText = "";
       try {
-        const res = await fetch(sourceUrl, {
+        const res = await fetchPublicHttp(parsed, {
           headers: {
             "User-Agent":
               "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
@@ -200,7 +209,10 @@ Deno.serve(async (req) => {
           .replace(/<[^>]+>/g, " ")
           .replace(/\s+/g, " ");
         pageText = (ldBlocks + "\n" + stripped).slice(0, 40_000);
-      } catch {
+      } catch (e) {
+        if (e instanceof UnsafeUrlError) {
+          return json({ error: "That link is not allowed." }, 400);
+        }
         return json(
           {
             error:
@@ -210,22 +222,23 @@ Deno.serve(async (req) => {
         );
       }
       parts.push({
-        text: `${IMPORT_INSTRUCTIONS}\n\nSource URL: ${sourceUrl}\n\nPAGE CONTENT:\n${pageText}`,
+        text: untrustedBlock("source url", sourceUrl) + "\n" + untrustedBlock("page content", pageText),
       });
     } else {
       parts.push({
-        text: `${IMPORT_INSTRUCTIONS}\n\nPASTED TEXT:\n${text!.slice(0, 20_000)}`,
+        text: untrustedBlock("pasted text", (text ?? "").slice(0, 20_000)),
       });
     }
 
-    const payload = {
-      contents: [{ role: "user", parts }],
+    const payload = geminiIsolatedPayload({
+      system: IMPORT_INSTRUCTIONS,
+      userParts: parts,
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: recipeSchema,
         temperature: 0.2,
       },
-    };
+    });
 
     const gemini = await callGeminiWithModelFallback(geminiKey, payload);
     if (!gemini.ok) {
