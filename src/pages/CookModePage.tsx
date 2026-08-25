@@ -569,6 +569,7 @@ export default function CookModePage() {
               <VotePill
                 recipeId={recipe.id}
                 baseCount={recipe.net_upvotes}
+                recipe={recipe}
                 size="lg"
               />
               <SaveButton recipeId={recipe.id} variant="bar" />

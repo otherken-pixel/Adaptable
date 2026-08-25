@@ -502,6 +502,7 @@ let demoGenCount = 0;
 export async function demoGenerate(
   prompt: string,
   servings?: number,
+  opts?: { surprise?: boolean },
 ): Promise<Recipe> {
   await new Promise((r) => setTimeout(r, 2600 + Math.random() * 1200));
   const template = DEMO_TEMPLATES[demoGenCount++ % DEMO_TEMPLATES.length];
@@ -519,18 +520,37 @@ export async function demoGenerate(
             ...ing,
             quantity: scaleQuantity(ing.quantity, factor),
           })),
-    id: `gen-${Date.now()}`,
+    id: opts?.surprise ? "preview" : `gen-${Date.now()}`,
     author_id: DEMO_USER.id,
     author: { id: DEMO_USER.id, username: DEMO_USER.username, avatar_url: null },
-    source_prompt: prompt,
+    source_prompt: opts?.surprise
+      ? "Surprise the cook with one complete dinner recipe."
+      : prompt,
     net_upvotes: 0,
     cook_count: 0,
     comment_count: 0,
     created_at: new Date().toISOString(),
   };
-  demoStore.addRecipe(recipe);
-  simulateEngagement(recipe);
+  if (!opts?.surprise) {
+    demoStore.addRecipe(recipe);
+    simulateEngagement(recipe);
+  }
   return recipe;
+}
+
+/** Persist a surprise preview into the demo cookbook / feed. */
+export function demoKeep(recipe: Recipe): Recipe {
+  if (recipe.id !== "preview" && !recipe.id.startsWith("preview-")) {
+    return recipe;
+  }
+  const kept: Recipe = {
+    ...recipe,
+    id: `gen-${Date.now()}`,
+    created_at: new Date().toISOString(),
+  };
+  demoStore.addRecipe(kept);
+  simulateEngagement(kept);
+  return kept;
 }
 
 /** Fakes recipe import in Demo Mode (live mode parses the real source). */

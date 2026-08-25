@@ -115,7 +115,10 @@ function escapeReg(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Soft daily cap: count recipes authored today (UTC). */
+/** Action name for surprise / preview generations that do not insert yet. */
+export const GENERATION_USAGE_ACTION = "generation";
+
+/** Soft daily cap: recipes authored today (UTC) plus preview generations. */
 /** Optional ops hook when a content report is filed (set REPORT_WEBHOOK_URL). */
 export async function notifyReport(payload: {
   targetType: string;
@@ -161,7 +164,20 @@ export async function assertDailyRecipeLimit(
     return { ok: true };
   }
 
-  if ((count ?? 0) >= limit) {
+  let extra = 0;
+  const { count: eventCount, error: eventError } = await supabase
+    .from("ai_usage_events")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("action", GENERATION_USAGE_ACTION)
+    .gte("created_at", start.toISOString());
+  if (eventError) {
+    console.error("rate limit event count failed", eventError);
+  } else {
+    extra = eventCount ?? 0;
+  }
+
+  if ((count ?? 0) + extra >= limit) {
     return {
       ok: false,
       status: 429,
@@ -169,6 +185,21 @@ export async function assertDailyRecipeLimit(
     };
   }
   return { ok: true };
+}
+
+/** Count a preview generation against the shared daily cap (no recipe row yet). */
+export async function recordGenerationEvent(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase.from("ai_usage_events").insert({
+    user_id: userId,
+    action: GENERATION_USAGE_ACTION,
+  });
+  if (error) {
+    console.error("generation usage insert failed", error);
+  }
 }
 
 /** Soft daily cap for actions that do not insert a recipe (e.g. fridge reads). */

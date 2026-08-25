@@ -441,6 +441,43 @@ enum API {
         if SupabaseManager.isDemo { return await DemoStore.shared.generate(prompt: prompt, servings: servings) }
         struct Body: Encodable { let prompt: String; let servings: Int? }
         let body = Body(prompt: prompt, servings: servings)
+        return try await invokeGenerate(body)
+    }
+
+    static func generateSurprise(
+        servings: Int?,
+        constraints: SurpriseConstraints,
+        excludeTitles: [String]
+    ) async throws -> Recipe {
+        if SupabaseManager.isDemo {
+            return await DemoStore.shared.generate(prompt: "", servings: servings, surprise: true)
+        }
+        struct Body: Encodable {
+            let surprise: Bool
+            let servings: Int?
+            let constraints: SurpriseConstraints
+            let exclude_titles: [String]
+        }
+        return try await invokeGenerate(Body(
+            surprise: true,
+            servings: servings,
+            constraints: constraints,
+            exclude_titles: excludeTitles
+        ))
+    }
+
+    static func keepGeneratedRecipe(_ recipe: Recipe) async throws -> Recipe {
+        if recipe.id != "preview" && !recipe.id.hasPrefix("preview-") { return recipe }
+        if SupabaseManager.isDemo { return await DemoStore.shared.keep(recipe) }
+        struct Body: Encodable {
+            let keep: Bool
+            let recipe: Recipe
+            let servings: Int?
+        }
+        return try await invoke("generate-recipe", body: Body(keep: true, recipe: recipe, servings: recipe.servings))
+    }
+
+    private static func invokeGenerate(_ body: some Encodable) async throws -> Recipe {
         // One client-side retry for transient edge/Gemini failures.
         do {
             return try await invoke("generate-recipe", body: body)

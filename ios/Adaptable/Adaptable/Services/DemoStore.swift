@@ -367,7 +367,17 @@ final class DemoStore {
 
     // MARK: - Demo recipe generation (no API key required)
 
-    func generate(prompt: String, servings: Int?) async -> Recipe {
+    func keep(_ recipe: Recipe) async -> Recipe {
+        if recipe.id != "preview" && !recipe.id.hasPrefix("preview-") { return recipe }
+        var kept = recipe
+        kept.id = "gen-\(Int(Date().timeIntervalSince1970 * 1000))"
+        kept.created_at = ISO8601DateFormatter().string(from: Date())
+        addRecipe(kept)
+        simulateEngagement(recipeId: kept.id)
+        return kept
+    }
+
+    func generate(prompt: String, servings: Int?, surprise: Bool = false) async -> Recipe {
         try? await Task.sleep(nanoseconds: UInt64((2.6 + Double.random(in: 0...1.2)) * 1_000_000_000))
         let template = DemoStore.templates[genCount % DemoStore.templates.count]
         genCount += 1
@@ -382,16 +392,18 @@ final class DemoStore {
                 return i
             }
         }
-        recipe.id = "gen-\(Int(Date().timeIntervalSince1970 * 1000))"
+        recipe.id = surprise ? "preview" : "gen-\(Int(Date().timeIntervalSince1970 * 1000))"
         recipe.author_id = DemoStore.demoUser.id
         recipe.author = DemoStore.demoUser.lite
-        recipe.source_prompt = prompt
+        recipe.source_prompt = surprise ? "Surprise the cook with one complete dinner recipe." : prompt
         recipe.net_upvotes = 0
         recipe.cook_count = 0
         recipe.comment_count = 0
         recipe.created_at = ISO8601DateFormatter().string(from: Date())
-        addRecipe(recipe)
-        simulateEngagement(recipeId: recipe.id)
+        if !surprise {
+            addRecipe(recipe)
+            simulateEngagement(recipeId: recipe.id)
+        }
         return recipe
     }
 

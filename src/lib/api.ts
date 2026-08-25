@@ -1,5 +1,5 @@
 import { supabase, isDemo } from "./supabase";
-import { demoStore, demoGenerate, demoImport } from "./demo";
+import { demoStore, demoGenerate, demoImport, demoKeep } from "./demo";
 import { shoppingLocal } from "./shoppingLocal";
 import { sortByTrending } from "./trending";
 import { getCachedRecipe, setCachedFeed, setCachedRecipe } from "./cache";
@@ -13,6 +13,8 @@ import type {
   ShoppingItem,
   VoteValue,
 } from "./types";
+import type { SurpriseConstraints } from "./surprise";
+import { isPreviewRecipe } from "./surprise";
 
 const RECIPE_SELECT = "*, author:profiles!recipes_author_id_fkey(id, username, avatar_url)";
 const COMMENT_SELECT = "*, author:profiles!comments_user_id_fkey(id, username, avatar_url)";
@@ -593,6 +595,37 @@ export async function generateRecipe(
     body: { prompt, servings },
   });
   if (error) throw new Error(error.message ?? "Generation failed");
+  if (data?.error) throw new Error(data.error);
+  return data.recipe as Recipe;
+}
+
+export async function generateSurprise(
+  servings?: number,
+  constraints?: SurpriseConstraints,
+  excludeTitles?: string[],
+): Promise<Recipe> {
+  if (isDemo) return demoGenerate("", servings, { surprise: true });
+  const { data, error } = await supabase!.functions.invoke("generate-recipe", {
+    body: {
+      surprise: true,
+      servings,
+      constraints: constraints ?? {},
+      exclude_titles: excludeTitles ?? [],
+    },
+  });
+  if (error) throw new Error(error.message ?? "Generation failed");
+  if (data?.error) throw new Error(data.error);
+  return data.recipe as Recipe;
+}
+
+/** Persist a surprise preview. Until this succeeds it is not on Discover. */
+export async function keepGeneratedRecipe(recipe: Recipe): Promise<Recipe> {
+  if (isDemo) return demoKeep(recipe);
+  if (!isPreviewRecipe(recipe)) return recipe;
+  const { data, error } = await supabase!.functions.invoke("generate-recipe", {
+    body: { keep: true, recipe, servings: recipe.servings },
+  });
+  if (error) throw new Error(error.message ?? "Could not keep that recipe");
   if (data?.error) throw new Error(data.error);
   return data.recipe as Recipe;
 }

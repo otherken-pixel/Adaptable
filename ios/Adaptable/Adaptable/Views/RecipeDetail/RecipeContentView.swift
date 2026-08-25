@@ -5,6 +5,7 @@ import SwiftUI
 /// Mirrors `src/components/RecipeView.tsx`.
 struct RecipeContentView: View {
     let recipe: Recipe
+    var preview: Bool = false
 
     @EnvironmentObject private var shoppingStore: ShoppingStore
     @EnvironmentObject private var authStore: AuthStore
@@ -18,8 +19,9 @@ struct RecipeContentView: View {
     @State private var shareItem: ShareItem?
     @State private var shareBusy = false
 
-    init(recipe: Recipe) {
+    init(recipe: Recipe, preview: Bool = false) {
         self.recipe = recipe
+        self.preview = preview
         _servings = State(initialValue: recipe.servings ?? 1)
     }
 
@@ -33,8 +35,8 @@ struct RecipeContentView: View {
             if recipe.protein_g != nil || recipe.carbs_g != nil || recipe.fat_g != nil {
                 macroBand
             }
-            actionButtons
-            if let planned {
+            if !preview { actionButtons }
+            if !preview, let planned {
                 Text("Planned for \(planned) (\(servings) servings) — see it in Cookbook")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundStyle(Theme.accent)
@@ -42,8 +44,10 @@ struct RecipeContentView: View {
             }
             ingredientsSection
             stepsSection
-            voteShareBar
-            remixButton
+            if !preview {
+                voteShareBar
+                remixButton
+            }
         }
         .sheet(isPresented: $planOpen) { dayPickerSheet }
         .sheet(item: $shareItem) { item in
@@ -286,6 +290,7 @@ struct RecipeContentView: View {
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
 
+            if !preview {
             Button {
                 addToGroceries()
             } label: {
@@ -301,6 +306,7 @@ struct RecipeContentView: View {
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(addedToList ? .clear : Theme.line))
             }
             .buttonStyle(.pressable)
+            }
         }
     }
 
@@ -354,7 +360,7 @@ struct RecipeContentView: View {
 
     private var voteShareBar: some View {
         HStack(spacing: 12) {
-            VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
+            VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg, recipe: recipe)
             SaveButtonView(recipeId: recipe.id, variant: .bar)
             Button {
                 Task { await presentShare() }

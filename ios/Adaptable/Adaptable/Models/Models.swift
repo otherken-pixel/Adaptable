@@ -171,6 +171,30 @@ struct Recipe: Codable, Equatable, Identifiable {
     var totalMinutes: Int { (prep_time_minutes ?? 0) + (cook_time_minutes ?? 0) }
 }
 
+struct SurpriseConstraints: Encodable, Equatable {
+    var max_minutes: Int?
+    var meal_slot: String?
+    var cuisine: String?
+    var pantry_mode: String?
+    var ingredients: [String]?
+}
+
+enum SurpriseOptions {
+    static let cuisines = [
+        "Italian", "Mexican", "Thai", "Chinese", "Japanese", "Indian",
+        "Korean", "Mediterranean", "French", "American", "Middle Eastern",
+        "Vietnamese", "Greek", "Spanish", "Caribbean", "North African",
+    ]
+    static let times = [15, 20, 30, 45, 60]
+    static let slots: [(id: String, label: String)] = [
+        ("breakfast", "Breakfast"),
+        ("lunch", "Lunch"),
+        ("dinner", "Dinner"),
+        ("snack", "Snack"),
+        ("dessert", "Dessert"),
+    ]
+}
+
 enum BundleKind: String, Codable, Equatable {
     case sharedBase = "shared_base"
     case concurrent
