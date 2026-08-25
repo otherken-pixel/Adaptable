@@ -1,5 +1,13 @@
 /** Rows and shared shapes for the Supabase schema + Gemini output. */
 
+/** Quiet like-drift stored under profiles.preferences.learned. */
+export interface LearnedTaste {
+  cuisines?: Record<string, number>;
+  proteins?: Record<string, number>;
+  staples?: string[];
+  spice_delta?: number;
+}
+
 /** Taste profile stored in profiles.preferences (jsonb). */
 export interface Preferences {
   diets?: string[];
@@ -8,6 +16,7 @@ export interface Preferences {
   household_size?: number;
   spice?: "Mild" | "Medium" | "Hot";
   skill?: "Beginner" | "Confident" | "Pro";
+  learned?: LearnedTaste;
 }
 
 export interface Profile {

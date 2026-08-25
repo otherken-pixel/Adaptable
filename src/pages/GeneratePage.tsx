@@ -3,7 +3,10 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowUp,
   Camera,
+  Check,
   ChefHat,
+  Clock,
+  Dices,
   Link2,
   Minus,
   Plus,
@@ -12,18 +15,30 @@ import {
   Shuffle,
   Sparkles,
   Users,
+  Utensils,
   Wand2,
   X,
 } from "lucide-react";
 import {
   fetchRecipe,
   generateRecipe,
+  generateSurprise,
   importRecipe,
+  keepGeneratedRecipe,
   type ImportSource,
 } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import type { Recipe } from "@/lib/types";
 import RecipeView from "@/components/RecipeView";
+import {
+  SURPRISE_CUISINES,
+  SURPRISE_SLOTS,
+  SURPRISE_TIMES,
+  isPreviewRecipe,
+  type PantryMode,
+  type SurpriseConstraints,
+} from "@/lib/surprise";
+import { recordRecipeTaste } from "@/lib/tasteMemory";
 
 const SUGGESTIONS = [
   "High-protein vegan dinner in 20 minutes 💪",
@@ -80,7 +95,7 @@ export default function GeneratePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
 
-  const { profile } = useAuth();
+  const { profile, updatePreferences } = useAuth();
 
   // How many people the generated recipe should serve — defaults to the
   // household size from the taste profile.
@@ -110,10 +125,22 @@ export default function GeneratePage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const lastImportRef = useRef<ImportSource | null>(null);
+  const lastActionRef = useRef<"generate" | "surprise" | "import">("generate");
+  const lastSurpriseTitleRef = useRef<string | null>(null);
+
+  const [lockTime, setLockTime] = useState<number | null>(null);
+  const [lockSlot, setLockSlot] = useState<string | null>(null);
+  const [lockCuisine, setLockCuisine] = useState<string | null>(null);
+  const [lockPantry, setLockPantry] = useState<PantryMode | null>(null);
+  const [lockItems, setLockItems] = useState<string[]>([]);
+  const [lockDraft, setLockDraft] = useState("");
+  const [keeping, setKeeping] = useState(false);
+  const [keepError, setKeepError] = useState("");
 
   const runImport = async (source: ImportSource, label: string) => {
     if (phase === "loading") return;
     lastImportRef.current = source;
+    lastActionRef.current = "import";
     setPrompt(label);
     setPhase("loading");
     setRecipe(null);
@@ -213,6 +240,7 @@ export default function GeneratePage() {
       return;
     }
     lastImportRef.current = null;
+    lastActionRef.current = "generate";
     setPrompt(p);
     setPhase("loading");
     setRecipe(null);
@@ -243,10 +271,80 @@ export default function GeneratePage() {
     }
   };
 
+  const surpriseConstraints = (): SurpriseConstraints => ({
+    max_minutes: lockTime,
+    meal_slot: lockSlot,
+    cuisine: lockCuisine,
+    pantry_mode: lockPantry,
+    ingredients: lockItems,
+  });
+
+  const addLockItem = (raw: string) => {
+    const item = raw.trim();
+    if (!item) return;
+    setLockItems((prev) =>
+      prev.some((p) => p.toLowerCase() === item.toLowerCase())
+        ? prev
+        : [...prev, item],
+    );
+    setLockDraft("");
+  };
+
+  const rollSurprise = async () => {
+    if (phase === "loading") return;
+    if (!profile) {
+      setErrorMsg("Sign in to generate recipes.");
+      setPhase("error");
+      return;
+    }
+    lastImportRef.current = null;
+    lastActionRef.current = "surprise";
+    setKeepError("");
+    setPrompt("Surprise roll");
+    setPhase("loading");
+    const exclude = lastSurpriseTitleRef.current
+      ? [lastSurpriseTitleRef.current]
+      : [];
+    setRecipe(null);
+    topRef.current?.scrollIntoView({ behavior: "smooth" });
+    try {
+      const result = await generateSurprise(serves, surpriseConstraints(), exclude);
+      lastSurpriseTitleRef.current = result.title;
+      setRecipe(result);
+      setPhase("done");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      if (msg.includes("sign in") || msg.includes("auth")) {
+        setErrorMsg("Please sign in and try again.");
+      } else {
+        setErrorMsg(msg);
+      }
+      setPhase("error");
+    }
+  };
+
+  const keepSurprise = async () => {
+    if (!recipe || keeping) return;
+    setKeeping(true);
+    setKeepError("");
+    try {
+      const kept = await keepGeneratedRecipe(recipe);
+      setRecipe(kept);
+      if (profile?.preferences) {
+        await updatePreferences(recordRecipeTaste(kept, profile.preferences));
+      }
+    } catch (err) {
+      setKeepError(err instanceof Error ? err.message : "Could not keep that recipe.");
+    } finally {
+      setKeeping(false);
+    }
+  };
+
   const reset = () => {
     setPhase("idle");
     setRecipe(null);
     setPrompt("");
+    lastActionRef.current = "generate";
     if (remixId) navigate("/create", { replace: true });
     inputRef.current?.focus();
   };
@@ -254,13 +352,33 @@ export default function GeneratePage() {
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
       <div ref={topRef} />
-      <header className="pt-6 pb-4">
-        <p className="text-xs font-bold tracking-[0.18em] text-accent uppercase">
-          AI Chef
-        </p>
-        <h1 className="mt-1 text-[32px] leading-none font-extrabold tracking-tight">
-          Create
-        </h1>
+      <header className="flex items-end justify-between pt-6 pb-4">
+        <div>
+          <p className="text-xs font-bold tracking-[0.18em] text-accent uppercase">
+            AI Chef
+          </p>
+          <h1 className="mt-1 text-[32px] leading-none font-extrabold tracking-tight">
+            Create
+          </h1>
+        </div>
+        {!remixSource && (
+          <button
+            type="button"
+            aria-label="Roll a surprise recipe"
+            onClick={() => {
+              if (mode !== "describe") setMode("describe");
+              void rollSurprise();
+            }}
+            disabled={phase === "loading"}
+            className="pressable flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md shadow-accent/20"
+            style={{
+              background:
+                "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+            }}
+          >
+            <Dices size={22} strokeWidth={2.2} />
+          </button>
+        )}
       </header>
 
       {phase === "idle" && (
@@ -326,8 +444,20 @@ export default function GeneratePage() {
                   </h2>
                   <p className="mt-2 max-w-72 text-sm leading-relaxed text-muted">
                     Describe cravings, constraints, time limits or whatever's in
-                    the fridge — get a complete recipe in seconds.
+                    the fridge — or tap the dice for a surprise.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => void rollSurprise()}
+                    className="pressable mt-5 flex h-12 items-center gap-2 rounded-full px-5 text-[14px] font-extrabold text-white shadow-md shadow-accent/20"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+                    }}
+                  >
+                    <Dices size={18} strokeWidth={2.2} />
+                    Surprise me
+                  </button>
                 </div>
               )}
             </>
@@ -364,6 +494,119 @@ export default function GeneratePage() {
               </button>
             </div>
           </div>
+
+          {!remixSource && mode === "describe" && (
+            <div className="mb-5">
+              <p className="mb-2 text-xs font-bold tracking-wide text-faint uppercase">
+                Optional locks — then roll
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {SURPRISE_TIMES.map((mins) => (
+                  <LockChip
+                    key={mins}
+                    icon={Clock}
+                    label={`${mins} min`}
+                    selected={lockTime === mins}
+                    onClick={() =>
+                      setLockTime((cur) => (cur === mins ? null : mins))
+                    }
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SURPRISE_SLOTS.map((slot) => (
+                  <LockChip
+                    key={slot.id}
+                    icon={Utensils}
+                    label={slot.label}
+                    selected={lockSlot === slot.id}
+                    onClick={() =>
+                      setLockSlot((cur) => (cur === slot.id ? null : slot.id))
+                    }
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SURPRISE_CUISINES.map((c) => (
+                  <LockChip
+                    key={c}
+                    label={c}
+                    selected={lockCuisine === c}
+                    onClick={() =>
+                      setLockCuisine((cur) => (cur === c ? null : c))
+                    }
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <LockChip
+                  icon={Refrigerator}
+                  label="Leftovers"
+                  selected={lockPantry === "leftover"}
+                  onClick={() =>
+                    setLockPantry((cur) => (cur === "leftover" ? null : "leftover"))
+                  }
+                />
+                <LockChip
+                  icon={Refrigerator}
+                  label="Fridge"
+                  selected={lockPantry === "fridge"}
+                  onClick={() =>
+                    setLockPantry((cur) => (cur === "fridge" ? null : "fridge"))
+                  }
+                />
+              </div>
+              {lockPantry && (
+                <div className="mt-3">
+                  {lockItems.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {lockItems.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() =>
+                            setLockItems((prev) => prev.filter((p) => p !== item))
+                          }
+                          className="pressable flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1.5 text-[12px] font-bold text-accent"
+                        >
+                          {item}
+                          <X size={12} strokeWidth={2.8} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 rounded-2xl border border-line bg-raised p-1.5 pl-4">
+                    <input
+                      value={lockDraft}
+                      onChange={(e) => setLockDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addLockItem(lockDraft);
+                        }
+                      }}
+                      maxLength={40}
+                      placeholder={
+                        lockPantry === "leftover"
+                          ? "Add a leftover…"
+                          : "Add a fridge item…"
+                      }
+                      className="h-10 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-faint"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Add item"
+                      onClick={() => addLockItem(lockDraft)}
+                      disabled={!lockDraft.trim()}
+                      className="pressable flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sunken text-muted disabled:opacity-30"
+                    >
+                      <Plus size={17} strokeWidth={2.6} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {(remixSource || mode === "describe") && (
             <>
@@ -588,7 +831,9 @@ export default function GeneratePage() {
               {LOADING_LINES[lineIdx]}
             </p>
             <p className="mt-1 max-w-64 truncate text-xs text-faint">
-              “{prompt}”
+              {lastActionRef.current === "surprise"
+                ? "Rolling the dice…"
+                : `“${prompt}”`}
             </p>
           </div>
           <div className="overflow-hidden rounded-card border border-line bg-raised">
@@ -620,6 +865,7 @@ export default function GeneratePage() {
             onClick={() => {
               const src = lastImportRef.current;
               if (src) void runImport(src, prompt);
+              else if (lastActionRef.current === "surprise") void rollSurprise();
               else void submit();
             }}
             className="pressable mt-5 rounded-full bg-content px-6 py-2.5 text-sm font-bold text-surface"
@@ -631,19 +877,45 @@ export default function GeneratePage() {
 
       {phase === "done" && recipe && (
         <>
-          <div className="mb-4 flex items-center justify-between rounded-2xl bg-accent-soft px-4 py-3">
+          <div className="mb-4 flex items-center justify-between gap-2 rounded-2xl bg-accent-soft px-4 py-3">
             <p className="text-[13px] font-bold text-accent">
-              ✨ Fresh out of the AI kitchen — it's live on the feed
+              {isPreviewRecipe(recipe)
+                ? "🎲 Surprise roll — keep it to share on Discover"
+                : "✨ Fresh out of the AI kitchen — it's live on the feed"}
             </p>
             <button
-              onClick={reset}
+              onClick={
+                isPreviewRecipe(recipe) ? () => void rollSurprise() : reset
+              }
               className="pressable flex shrink-0 items-center gap-1.5 rounded-full bg-raised px-3 py-1.5 text-xs font-bold shadow-sm"
             >
-              <RotateCcw size={13} strokeWidth={2.4} />
-              New
+              {isPreviewRecipe(recipe) ? (
+                <Dices size={13} strokeWidth={2.4} />
+              ) : (
+                <RotateCcw size={13} strokeWidth={2.4} />
+              )}
+              {isPreviewRecipe(recipe) ? "Re-roll" : "New"}
             </button>
           </div>
-          <RecipeView recipe={recipe} />
+          {isPreviewRecipe(recipe) && keepError && (
+            <p className="mb-3 text-[13px] font-semibold text-down">{keepError}</p>
+          )}
+          {isPreviewRecipe(recipe) && (
+            <button
+              type="button"
+              onClick={() => void keepSurprise()}
+              disabled={keeping}
+              className="pressable mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl text-[15px] font-extrabold text-white shadow-md shadow-accent/20 disabled:opacity-50"
+              style={{
+                background:
+                  "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+              }}
+            >
+              <Check size={18} strokeWidth={2.6} />
+              {keeping ? "Keeping…" : "Keep this recipe"}
+            </button>
+          )}
+          <RecipeView recipe={recipe} preview={isPreviewRecipe(recipe)} />
         </>
       )}
 
@@ -688,5 +960,32 @@ export default function GeneratePage() {
           </div>
         )}
     </div>
+  );
+}
+
+function LockChip({
+  label,
+  selected,
+  onClick,
+  icon: Icon,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+  icon?: typeof Clock;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`pressable flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[13px] font-semibold ${
+        selected
+          ? "bg-content text-surface"
+          : "border border-line bg-raised shadow-sm"
+      }`}
+    >
+      {Icon ? <Icon size={13} strokeWidth={2.4} /> : null}
+      {label}
+    </button>
   );
 }

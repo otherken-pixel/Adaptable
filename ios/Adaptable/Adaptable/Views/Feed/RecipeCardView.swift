@@ -76,7 +76,7 @@ struct RecipeCardView: View {
                             }
                         }
                         Spacer()
-                        VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0)
+                        VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, recipe: recipe)
                     }
                 }
                 .padding(16)

@@ -501,7 +501,7 @@ struct CookModeView: View {
                 .padding(.horizontal, 16).padding(.vertical, 8).background(Theme.accentSoft, in: Capsule())
 
             HStack(spacing: 12) {
-                VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg)
+                VotePillView(recipeId: recipe.id, baseCount: recipe.net_upvotes ?? 0, size: .lg, recipe: recipe)
                 SaveButtonView(recipeId: recipe.id, variant: .bar)
             }
             .frame(maxWidth: 320)

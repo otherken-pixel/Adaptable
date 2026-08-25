@@ -70,7 +70,7 @@ export default function RecipeCard({
               <p className="text-[11px] text-faint">{timeAgo(recipe.created_at)}</p>
             </div>
           </div>
-          <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} />
+          <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} recipe={recipe} />
         </div>
       </div>
     </Link>

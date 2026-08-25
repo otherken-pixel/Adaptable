@@ -7,6 +7,11 @@ enum TasteMemory {
         bump(prefs, cuisine: recipe.cuisine, protein: recipe.base_protein ?? protein(from: recipe), staple: nil, spice: 0)
     }
 
+    static func recordVote(_ recipe: Recipe, value: Int, prefs: Preferences) -> Preferences {
+        let delta = value >= 0 ? 1 : -1
+        return bump(prefs, cuisine: recipe.cuisine, protein: recipe.base_protein ?? protein(from: recipe), staple: nil, spice: 0, amount: delta)
+    }
+
     static func recordRemix(prompt: String, prefs: Preferences) -> Preferences {
         let lower = prompt.lowercased()
         var delta = 0
@@ -64,15 +69,16 @@ enum TasteMemory {
         cuisine: String?,
         protein: String?,
         staple: String?,
-        spice: Int
+        spice: Int,
+        amount: Int = 1
     ) -> Preferences {
         var next = prefs
         var learned = next.learned ?? LearnedTaste()
         if let cuisine, !cuisine.isEmpty {
-            learned.cuisines[cuisine, default: 0] += 1
+            learned.cuisines[cuisine, default: 0] += amount
         }
         if let protein, !protein.isEmpty, protein != "none" {
-            learned.proteins[protein, default: 0] += 1
+            learned.proteins[protein, default: 0] += amount
         }
         if let staple, !staple.isEmpty, !learned.staples.contains(staple) {
             learned.staples.append(staple)

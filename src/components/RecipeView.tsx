@@ -42,7 +42,14 @@ function nextDays(count: number): Array<{ iso: string; label: string }> {
 }
 
 /** Full recipe render: hero, stats, scalable ingredient checklist, steps. */
-export default function RecipeView({ recipe }: { recipe: Recipe }) {
+export default function RecipeView({
+  recipe,
+  preview = false,
+}: {
+  recipe: Recipe;
+  /** Surprise roll before keep — cook-mode-ready, but not on Discover yet. */
+  preview?: boolean;
+}) {
   const navigate = useNavigate();
   const { addRecipe } = useShopping();
   const { profile } = useAuth();
@@ -189,7 +196,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
         </div>
       )}
 
-      {!signedIn && (
+      {!signedIn && !preview && (
         <div className="mt-4 rounded-2xl border border-accent/30 bg-accent-soft px-4 py-3 text-[13px] font-semibold text-accent">
           You’re viewing a shared recipe —{" "}
           <strong className="font-extrabold">Start Cooking</strong> works without
@@ -206,7 +213,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
       )}
 
       {/* Start cooking + plan — guests can cook; account needed for social/write. */}
-      <div className="mt-4 flex gap-3">
+      {!preview && <div className="mt-4 flex gap-3">
         <button
           onClick={() =>
             navigate(`/cook/${recipe.id}?servings=${servings}`)
@@ -233,8 +240,8 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
             <CalendarPlus size={20} strokeWidth={2.2} />
           )}
         </button>
-      </div>
-      {planned && (
+      </div>}
+      {!preview && planned && (
         <p className="animate-fade-up mt-2 text-center text-[13px] font-bold text-accent">
           Planned for {planned} ({servings} servings) — see it in Cookbook →
           Planner
@@ -335,6 +342,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
           })}
         </div>
 
+        {!preview && (
         <button
           onClick={addToGroceries}
           className={`pressable mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border text-[14px] font-bold transition-colors ${
@@ -355,6 +363,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
             </>
           )}
         </button>
+        )}
       </section>
 
       {/* Steps */}
@@ -386,8 +395,9 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
       </section>
 
       {/* Action bar */}
+      {!preview && (
       <div className="mt-7 flex items-center gap-3">
-        <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} size="lg" />
+        <VotePill recipeId={recipe.id} baseCount={recipe.net_upvotes} recipe={recipe} size="lg" />
         <SaveButton recipeId={recipe.id} variant="bar" />
         <button
           aria-label="Share"
@@ -397,8 +407,10 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
           <Share2 size={19} strokeWidth={2.2} />
         </button>
       </div>
+      )}
 
       {/* Remix */}
+      {!preview && (
       <button
         onClick={() => navigate(`/create?remix=${recipe.id}`)}
         className="pressable mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-line text-[14px] font-bold text-muted"
@@ -406,6 +418,7 @@ export default function RecipeView({ recipe }: { recipe: Recipe }) {
         <Shuffle size={16} strokeWidth={2.2} className="text-accent" />
         Remix this recipe — make it yours
       </button>
+      )}
     </div>
   );
 }

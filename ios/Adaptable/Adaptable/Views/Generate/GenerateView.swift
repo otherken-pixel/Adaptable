@@ -78,6 +78,17 @@ struct GenerateView: View {
     @State private var addedPrep = false
     @State private var prepError: String?
 
+    @State private var lockTime: Int?
+    @State private var lockSlot: String?
+    @State private var lockCuisine: String?
+    @State private var lockPantry: String?
+    @State private var lockItems: [String] = []
+    @State private var lockDraft = ""
+    @State private var lastAction: String = "generate"
+    @State private var lastSurpriseTitle: String?
+    @State private var keeping = false
+    @State private var keepError: String?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -158,9 +169,27 @@ struct GenerateView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("AI CHEF").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
-            Text("Create").font(.system(size: 32, weight: .heavy))
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("AI CHEF").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
+                Text("Create").font(.system(size: 32, weight: .heavy))
+            }
+            Spacer()
+            if remixSource == nil {
+                Button {
+                    if mode != .describe { mode = .describe }
+                    Task { await rollSurprise() }
+                } label: {
+                    Image(systemName: "dice.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 48, height: 48)
+                        .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+                .disabled(phase == .loading)
+                .accessibilityLabel("Roll a surprise recipe")
+            }
         }
         .padding(.top, 16)
     }
@@ -193,6 +222,10 @@ struct GenerateView: View {
 
             if remixSource != nil || mode == .describe || mode == .pantry {
                 partySizeRow
+            }
+
+            if remixSource == nil && mode == .describe {
+                surpriseLocks
             }
 
             if remixSource != nil || mode == .describe {
@@ -253,11 +286,114 @@ struct GenerateView: View {
                 .overlay(Image(systemName: "fork.knife").font(.system(size: 32, weight: .semibold)).foregroundStyle(.white))
                 .floating
             Text("What are we cooking tonight?").font(.system(size: 20, weight: .heavy))
-            Text("Describe cravings, constraints, time limits or whatever's in the fridge — get a complete recipe in seconds.")
+            Text("Describe cravings, constraints, time limits or whatever's in the fridge — or tap the dice for a surprise.")
                 .font(.system(size: 14)).foregroundStyle(Theme.muted).multilineTextAlignment(.center).frame(maxWidth: 280)
+            Button {
+                Task { await rollSurprise() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "dice.fill")
+                    Text("Surprise me").font(.system(size: 14, weight: .heavy))
+                }
+                .padding(.horizontal, 20)
+                .frame(height: 48)
+                .foregroundStyle(.white)
+                .background(Theme.heroGradient, in: Capsule())
+            }
+            .buttonStyle(.pressable)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+    }
+
+    private var surpriseLocks: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("OPTIONAL LOCKS — THEN ROLL")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Theme.faint)
+            FlowLayout(spacing: 8) {
+                ForEach(SurpriseOptions.times, id: \.self) { mins in
+                    lockChip(title: "\(mins) min", selected: lockTime == mins) {
+                        lockTime = lockTime == mins ? nil : mins
+                    }
+                }
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(SurpriseOptions.slots, id: \.id) { slot in
+                    lockChip(title: slot.label, selected: lockSlot == slot.id) {
+                        lockSlot = lockSlot == slot.id ? nil : slot.id
+                    }
+                }
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(SurpriseOptions.cuisines, id: \.self) { cuisine in
+                    lockChip(title: cuisine, selected: lockCuisine == cuisine) {
+                        lockCuisine = lockCuisine == cuisine ? nil : cuisine
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                lockChip(title: "Leftovers", selected: lockPantry == "leftover") {
+                    lockPantry = lockPantry == "leftover" ? nil : "leftover"
+                }
+                lockChip(title: "Fridge", selected: lockPantry == "fridge") {
+                    lockPantry = lockPantry == "fridge" ? nil : "fridge"
+                }
+            }
+            if lockPantry != nil {
+                if !lockItems.isEmpty {
+                    FlowLayout(spacing: 8) {
+                        ForEach(lockItems, id: \.self) { item in
+                            Button { lockItems.removeAll { $0 == item } } label: {
+                                HStack(spacing: 6) {
+                                    Text(item)
+                                    Image(systemName: "xmark").font(.system(size: 10, weight: .heavy))
+                                }
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Theme.accent)
+                                .padding(.horizontal, 12).padding(.vertical, 6)
+                                .background(Theme.accentSoft, in: Capsule())
+                            }
+                        }
+                    }
+                }
+                HStack(spacing: 8) {
+                    TextField(lockPantry == "leftover" ? "Add a leftover…" : "Add a fridge item…", text: $lockDraft)
+                        .onSubmit { addLockItem(lockDraft) }
+                    Button { addLockItem(lockDraft) } label: {
+                        Image(systemName: "plus").frame(width: 36, height: 36).background(Theme.sunken, in: Circle()).foregroundStyle(Theme.muted)
+                    }
+                    .disabled(lockDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line))
+            }
+        }
+    }
+
+    private func lockChip(title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            Haptics.selection()
+            action()
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                .foregroundStyle(selected ? Theme.surface : Theme.content)
+                .background(selected ? AnyShapeStyle(Theme.content) : AnyShapeStyle(Theme.raised), in: Capsule())
+                .overlay(Capsule().stroke(Theme.line))
+        }
+        .buttonStyle(.pressable)
+    }
+
+    private func addLockItem(_ raw: String) {
+        let item = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !item.isEmpty else { return }
+        if !lockItems.contains(where: { $0.lowercased() == item.lowercased() }) {
+            lockItems.append(item)
+        }
+        lockDraft = ""
     }
 
     private var partySizeRow: some View {
@@ -446,7 +582,9 @@ struct GenerateView: View {
                 Text(loadingLines[lineIdx]).font(.system(size: 15, weight: .bold)).id(lineIdx)
                 Text(mode == .prep
                      ? "\(prepCount) leftover-friendly meals"
-                     : "\u{201C}\(prompt)\u{201D}")
+                     : lastAction == "surprise"
+                        ? "Rolling the dice…"
+                        : "\u{201C}\(prompt)\u{201D}")
                     .font(.system(size: 12)).foregroundStyle(Theme.faint).lineLimit(1).frame(maxWidth: 240)
             }
             .frame(maxWidth: .infinity)
@@ -480,6 +618,7 @@ struct GenerateView: View {
                 Task {
                     if mode == .prep { await buildPrep() }
                     else if let src = lastImportSource { await runImport(src, label: prompt) }
+                    else if lastAction == "surprise" { await rollSurprise() }
                     else { await submit() }
                 }
             }
@@ -493,21 +632,25 @@ struct GenerateView: View {
     private var doneContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text(prepBundle != nil
-                     ? "✨ \(prepBundle!.recipes.count) leftover-friendly meals — live on the feed"
-                     : "✨ Fresh out of the AI kitchen — it's live on the feed")
+                Text(bannerText)
                     .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accent)
                 Spacer()
                 Button {
-                    phase = .idle
-                    recipe = nil
-                    prompt = ""
-                    remixSource = nil
-                    prepBundle = nil
-                    addedPrep = false
-                    prepError = nil
+                    if isPreview {
+                        Task { await rollSurprise() }
+                    } else {
+                        phase = .idle
+                        recipe = nil
+                        prompt = ""
+                        remixSource = nil
+                        prepBundle = nil
+                        addedPrep = false
+                        prepError = nil
+                        lastAction = "generate"
+                    }
                 } label: {
-                    Label("New", systemImage: "arrow.counterclockwise").font(.system(size: 12, weight: .bold))
+                    Label(isPreview ? "Re-roll" : "New", systemImage: isPreview ? "dice" : "arrow.counterclockwise")
+                        .font(.system(size: 12, weight: .bold))
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(Theme.raised, in: Capsule())
                 }
@@ -515,10 +658,31 @@ struct GenerateView: View {
             .padding(14)
             .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
+            if isPreview {
+                if let keepError {
+                    Text(keepError)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.down)
+                }
+                Button {
+                    Task { await keepSurprise() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark")
+                        Text(keeping ? "Keeping…" : "Keep this recipe").font(.system(size: 15, weight: .heavy))
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .foregroundStyle(.white)
+                    .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .disabled(keeping)
+                .buttonStyle(.pressable)
+            }
+
             if let prepBundle {
                 prepResult(prepBundle)
             } else if let recipe {
-                RecipeContentView(recipe: recipe)
+                RecipeContentView(recipe: recipe, preview: isPreview)
             }
         }
     }
@@ -696,6 +860,21 @@ struct GenerateView: View {
         .background(.ultraThinMaterial)
     }
 
+    private var isPreview: Bool {
+        guard let recipe, prepBundle == nil else { return false }
+        return recipe.id == "preview" || recipe.id.hasPrefix("preview-")
+    }
+
+    private var bannerText: String {
+        if let prepBundle {
+            return "✨ \(prepBundle.recipes.count) leftover-friendly meals — live on the feed"
+        }
+        if isPreview {
+            return "🎲 Surprise roll — keep it to share on Discover"
+        }
+        return "✨ Fresh out of the AI kitchen — it's live on the feed"
+    }
+
     // MARK: - Actions
 
     private func submit(_ text: String? = nil) async {
@@ -712,6 +891,7 @@ struct GenerateView: View {
             return
         }
         lastImportSource = nil
+        lastAction = "generate"
         prompt = p
         phase = .loading
         recipe = nil
@@ -736,6 +916,68 @@ struct GenerateView: View {
             print("[GenerateView] Failed to generate recipe: \(error)")
             errorMessage = AppError.friendlyMessage(for: error)
             phase = .error
+        }
+    }
+
+    private func rollSurprise() async {
+        guard phase != .loading else { return }
+        guard authStore.profile != nil else {
+            errorMessage = "You need to be logged in to generate recipes."
+            phase = .error
+            return
+        }
+        if !NetworkMonitor.shared.isOnline {
+            errorMessage = "You're offline — connect to generate a recipe."
+            phase = .error
+            return
+        }
+        lastImportSource = nil
+        lastAction = "surprise"
+        keepError = nil
+        prompt = "Surprise roll"
+        phase = .loading
+        recipe = nil
+        prepBundle = nil
+        let exclude = lastSurpriseTitle.map { [$0] } ?? []
+        do {
+            let result = try await API.generateSurprise(
+                servings: serves,
+                constraints: SurpriseConstraints(
+                    max_minutes: lockTime,
+                    meal_slot: lockSlot,
+                    cuisine: lockCuisine,
+                    pantry_mode: lockPantry,
+                    ingredients: lockItems
+                ),
+                excludeTitles: exclude
+            )
+            lastSurpriseTitle = result.title
+            recipe = result
+            phase = .done
+            Haptics.success()
+        } catch {
+            print("[GenerateView] Failed to roll surprise: \(error)")
+            errorMessage = AppError.friendlyMessage(for: error)
+            phase = .error
+        }
+    }
+
+    private func keepSurprise() async {
+        guard let recipe, !keeping else { return }
+        keeping = true
+        keepError = nil
+        defer { keeping = false }
+        do {
+            let kept = try await API.keepGeneratedRecipe(recipe)
+            self.recipe = kept
+            if let prefs = authStore.profile?.preferences {
+                try? await authStore.updatePreferences(TasteMemory.recordCook(kept, prefs: prefs))
+            }
+            deepLinks.requestFeedRefresh()
+            Haptics.success()
+        } catch {
+            print("[GenerateView] Failed to keep surprise: \(error)")
+            keepError = AppError.friendlyMessage(for: error)
         }
     }
 

@@ -53,6 +53,7 @@ export default function TasteProfilePage() {
     setSaving(true);
     try {
       await updatePreferences({
+        ...initial,
         diets,
         allergies,
         dislikes,

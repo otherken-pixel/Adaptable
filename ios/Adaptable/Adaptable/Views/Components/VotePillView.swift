@@ -8,6 +8,7 @@ struct VotePillView: View {
     let recipeId: String
     let baseCount: Int
     var size: VotePillSize = .sm
+    var recipe: Recipe? = nil
 
     @EnvironmentObject private var engagement: EngagementStore
     @EnvironmentObject private var authStore: AuthStore
@@ -60,6 +61,11 @@ struct VotePillView: View {
     private func cast(_ value: VoteValue) {
         guard let userId = authStore.profile?.id else { return }
         Haptics.selection()
+        let current = engagement.votes[recipeId] ?? 0
+        let next: VoteValue? = current == value ? nil : value
         engagement.castVote(recipeId: recipeId, value: value, userId: userId)
+        if let next, let recipe, let prefs = authStore.profile?.preferences {
+            Task { try? await authStore.updatePreferences(TasteMemory.recordVote(recipe, value: next, prefs: prefs)) }
+        }
     }
 }
