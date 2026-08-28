@@ -1,6 +1,7 @@
 /**
  * Server-built surprise brief: cuisine × protein × method lottery.
  * Clients send structured locks only — never a free-text prompt.
+ * Method may be locked (e.g. Crock pot → slow_cooker); otherwise it is drawn.
  * Keep in lockstep with src/lib/surprise.ts option lists.
  */
 
@@ -69,6 +70,7 @@ export interface SurpriseConstraints {
   cuisine?: string | null;
   pantry_mode?: string | null;
   ingredients?: string[] | null;
+  method?: string | null;
 }
 
 export interface ParsedSurpriseConstraints {
@@ -77,6 +79,7 @@ export interface ParsedSurpriseConstraints {
   cuisine: string | null;
   pantry_mode: PantryMode | null;
   ingredients: string[];
+  method: CookingMethod | null;
 }
 
 export interface SurpriseBrief {
@@ -95,7 +98,7 @@ const METHOD_LABEL: Record<CookingMethod, string> = {
   stovetop: "stovetop",
   sheet_pan: "sheet-pan",
   air_fryer: "air-fryer",
-  slow_cooker: "slow-cooker",
+  slow_cooker: "crock-pot / slow-cooker",
   grill: "grill",
   no_cook: "no-cook",
   instant_pot: "Instant Pot",
@@ -153,9 +156,16 @@ export function parseSurpriseConstraints(
     pantry_mode = obj.pantry_mode;
   }
 
+  let method: CookingMethod | null = null;
+  if (typeof obj.method === "string") {
+    const key = obj.method.trim().toLowerCase().replace(/[\s-]+/g, "_");
+    const hit = SURPRISE_METHODS.find((m) => m === key);
+    if (hit) method = hit;
+  }
+
   const ingredients = sanitizeIngredientLocks(obj.ingredients);
 
-  return { max_minutes, meal_slot, cuisine, pantry_mode, ingredients };
+  return { max_minutes, meal_slot, cuisine, pantry_mode, ingredients, method };
 }
 
 export function sanitizeIngredientLocks(raw: unknown): string[] {
@@ -269,7 +279,7 @@ export function buildSurpriseBrief(opts: {
     );
   }
   if (methods.length === 0) methods = ["stovetop"];
-  const method = pickWeighted(methods, () => 1, rand);
+  const method = constraints.method ?? pickWeighted(methods, () => 1, rand);
 
   const meal_slot = constraints.meal_slot ??
     pickWeighted<MealSlot>(

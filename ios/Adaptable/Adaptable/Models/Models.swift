@@ -177,6 +177,7 @@ struct SurpriseConstraints: Encodable, Equatable {
     var cuisine: String?
     var pantry_mode: String?
     var ingredients: [String]?
+    var method: String?
 }
 
 enum SurpriseOptions {
@@ -192,6 +193,9 @@ enum SurpriseOptions {
         ("dinner", "Dinner"),
         ("snack", "Snack"),
         ("dessert", "Dessert"),
+    ]
+    static let methods: [(id: String, label: String)] = [
+        ("slow_cooker", "Crock pot"),
     ]
 }
 

@@ -40,6 +40,7 @@ export interface SurpriseConstraints {
   cuisine?: string | null;
   pantry_mode?: PantryMode | null;
   ingredients?: string[] | null;
+  method?: string | null;
 }
 
 export function isPreviewRecipe(recipe: { id?: string } | null | undefined): boolean {
