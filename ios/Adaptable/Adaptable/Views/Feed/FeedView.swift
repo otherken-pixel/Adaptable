@@ -43,57 +43,68 @@ struct FeedView: View {
     @State private var activeChipId = "all"
     /// Bumped when filters change so we can scroll the list back to the top.
     @State private var scrollToTopToken = 0
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    Color.clear.frame(height: 0).id(feedTopID)
-                    header
-                    searchAndChips
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, 16)
+            searchAndChips
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if let errorMessage {
-                        EmptyStateView(emoji: "📡", title: "Connection hiccup", message: errorMessage) {
-                            PillButton(title: "Retry") { Task { await load() } }
-                        }
-                    } else if recipes == nil {
-                        FeedSkeleton()
-                    } else if filteredRecipes.isEmpty {
-                        emptyView
-                    } else {
-                        LazyVStack(spacing: 16) {
-                            ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
-                                RecipeCardView(recipe: recipe, index: index)
+            // Search chrome stays outside the refreshable list so the parent
+            // ScrollView cannot steal the first tap (same issue chips hit).
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Color.clear.frame(height: 0).id(feedTopID)
+
+                        if let errorMessage {
+                            EmptyStateView(emoji: "📡", title: "Connection hiccup", message: errorMessage) {
+                                PillButton(title: "Retry") { Task { await load() } }
+                            }
+                        } else if recipes == nil {
+                            FeedSkeleton()
+                        } else if filteredRecipes.isEmpty {
+                            emptyView
+                        } else {
+                            LazyVStack(spacing: 16) {
+                                ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
+                                    RecipeCardView(recipe: recipe, index: index)
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: .infinity)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
-            }
-            .background(Theme.surface)
-            .navigationBarHidden(true)
-            .refreshable {
-                await engagement.load(for: authStore.profile, force: true)
-                await load(showSkeleton: false)
-            }
-            .task { if recipes == nil { await load() } }
-            .onChange(of: sort) { _, _ in
-                Task { await load() }
-            }
-            .onChange(of: deepLinks.feedRefreshToken) { _, _ in
-                Task { await load(showSkeleton: false) }
-            }
-            .onChange(of: deepLinks.feedTagFilter) { _, tag in
-                guard let tag else { return }
-                selectChip(tagChipId(tag))
-                deepLinks.feedTagFilter = nil
-            }
-            .onChange(of: scrollToTopToken) { _, _ in
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(feedTopID, anchor: .top)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .refreshable {
+                    await engagement.load(for: authStore.profile, force: true)
+                    await load(showSkeleton: false)
+                }
+                .onChange(of: scrollToTopToken) { _, _ in
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo(feedTopID, anchor: .top)
+                    }
                 }
             }
+        }
+        .background(Theme.surface)
+        .navigationBarHidden(true)
+        .task { if recipes == nil { await load() } }
+        .onChange(of: sort) { _, _ in
+            Task { await load() }
+        }
+        .onChange(of: deepLinks.feedRefreshToken) { _, _ in
+            Task { await load(showSkeleton: false) }
+        }
+        .onChange(of: deepLinks.feedTagFilter) { _, tag in
+            guard let tag else { return }
+            selectChip(tagChipId(tag))
+            deepLinks.feedTagFilter = nil
         }
     }
 
@@ -181,11 +192,23 @@ struct FeedView: View {
     private var searchAndChips: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Theme.faint)
+                Button {
+                    searchFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(Theme.faint)
+                        .frame(width: 22, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
                 TextField("Search recipes, tags, cuisines…", text: $search)
                     .font(.system(size: 15))
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .focused($searchFocused)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 if !search.isEmpty {
                     Button {
                         search = ""
@@ -203,11 +226,16 @@ struct FeedView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 44)
-            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .background {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Theme.raised)
+                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .onTapGesture { searchFocused = true }
+            }
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
 
             // Horizontal chip strip. Buttons (not nested scroll gestures) drive
-            // selection so taps remain reliable inside the parent ScrollView.
+            // selection so taps stay reliable next to the search field.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(chips) { chip in
