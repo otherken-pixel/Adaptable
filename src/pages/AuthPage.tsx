@@ -11,8 +11,7 @@ function safeNext(raw: string | null): string | null {
 }
 
 export default function AuthPage() {
-  const { signInWithPassword, signUp, signInWithGoogle, requestPasswordReset } =
-    useAuth();
+  const { signInWithPassword, signUp, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const next = safeNext(params.get("next"));
@@ -44,17 +43,6 @@ export default function AuthPage() {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const google = async () => {
-    setError(null);
-    try {
-      // OAuth returns to origin; next path is preserved via sessionStorage.
-      if (next) sessionStorage.setItem("adaptable.next", next);
-      await signInWithGoogle();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed.");
     }
   };
 
@@ -147,24 +135,6 @@ export default function AuthPage() {
         </button>
       </form>
 
-      {mode !== "forgot" && (
-        <>
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-line" />
-            <span className="text-xs font-semibold text-faint">or</span>
-            <span className="h-px flex-1 bg-line" />
-          </div>
-
-          <button
-            onClick={() => void google()}
-            className="pressable flex h-13 w-full items-center justify-center gap-3 rounded-2xl border border-line bg-raised text-[15px] font-bold"
-          >
-            <GoogleMark />
-            Continue with Google
-          </button>
-        </>
-      )}
-
       <p className="mt-6 text-center text-[12px] text-faint">
         <Link to="/privacy" className="font-semibold text-muted underline-offset-2 hover:underline">
           Privacy
@@ -238,28 +208,5 @@ function Field({
         className="h-13 w-full rounded-2xl border border-line bg-raised px-4 text-[15px] outline-none placeholder:text-faint focus:border-accent"
       />
     </label>
-  );
-}
-
-function GoogleMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="#4285F4"
-        d="M23.5 12.27c0-.85-.08-1.66-.22-2.45H12v4.64h6.46a5.53 5.53 0 0 1-2.4 3.62v3h3.88c2.27-2.1 3.56-5.18 3.56-8.81Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.96-1.07 7.94-2.91l-3.88-3c-1.08.72-2.45 1.15-4.06 1.15-3.13 0-5.78-2.11-6.72-4.95H1.27v3.09A12 12 0 0 0 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.28 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.27a12 12 0 0 0 0 10.76l4.01-3.09Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.77c1.76 0 3.35.6 4.6 1.8l3.44-3.44A11.98 11.98 0 0 0 1.27 6.62l4.01 3.09C6.22 6.88 8.87 4.77 12 4.77Z"
-      />
-    </svg>
   );
 }

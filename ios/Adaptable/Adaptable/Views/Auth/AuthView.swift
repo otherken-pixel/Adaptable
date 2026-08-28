@@ -2,7 +2,7 @@ import SwiftUI
 
 private enum AuthMode { case signIn, signUp, forgot }
 
-/// Sign in / sign up / forgot password + Google OAuth. Mirrors
+/// Sign in / sign up / forgot password via email. Mirrors
 /// `src/pages/AuthPage.tsx`.
 struct AuthView: View {
     @EnvironmentObject private var authStore: AuthStore
@@ -88,29 +88,6 @@ struct AuthView: View {
                     .disabled(busy)
                 }
 
-                if mode != .forgot {
-                    HStack(spacing: 12) {
-                        Rectangle().fill(Theme.line).frame(height: 1)
-                        Text("or").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.faint)
-                        Rectangle().fill(Theme.line).frame(height: 1)
-                    }
-
-                    Button {
-                        Task { await google() }
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "g.circle.fill").foregroundStyle(.red)
-                            Text("Continue with Google").font(.system(size: 15, weight: .bold))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .foregroundStyle(Theme.content)
-                        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
-                    }
-                    .buttonStyle(.pressable)
-                }
-
                 Button {
                     mode = mode == .signIn ? .signUp : .signIn
                     errorMessage = nil; notice = nil
@@ -161,15 +138,6 @@ struct AuthView: View {
             }
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-
-    private func google() async {
-        errorMessage = nil
-        do {
-            try await authStore.signInWithGoogle()
-        } catch {
-            errorMessage = "Google sign-in failed."
         }
     }
 }

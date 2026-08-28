@@ -49,7 +49,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           "We collect only what we need to run the product:",
         ],
         bullets: [
-          "**Account:** email address, username, and an optional profile photo. If you sign in with Google, Google shares your email and basic profile with us so we can create your account.",
+          "**Account:** email address, username, and an optional profile photo.",
           "**Taste profile:** diets, allergies, dislikes, household size, spice level, and cooking skill. Used only to personalize recipes.",
           "**Content you create:** prompts, imported recipe sources, recipes, comments, meal plans, grocery lists, and photos of dishes you cook or pages you import.",
           "**Device data for alerts:** an Apple Push Notification service (APNs) token when you enable notifications on iOS.",
@@ -87,7 +87,6 @@ export const LEGAL_DOCS: LegalDoc[] = [
         bullets: [
           "**Supabase** — database, authentication, file storage, and realtime updates.",
           "**Google Gemini** — recipe generation and import on our servers. The Gemini API key never ships in the app.",
-          "**Google** — if you choose “Continue with Google,” for sign-in only.",
           "**Vercel** — hosts the website.",
           "**Apple Push Notification service** — device alerts on iOS.",
         ],
@@ -160,7 +159,6 @@ export const LEGAL_DOCS: LegalDoc[] = [
         bullets: [
           "Forgot password — use **Forgot password?** on the sign-in screen. We email a reset link.",
           "No confirmation email — check spam, then try signing up again or email support.",
-          "Google sign-in issues — try email and password, or contact us with the email on the Google account.",
         ],
       },
       {

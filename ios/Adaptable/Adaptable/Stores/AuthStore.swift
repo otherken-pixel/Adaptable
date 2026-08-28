@@ -120,13 +120,6 @@ final class AuthStore: ObservableObject {
         )
     }
 
-    func signInWithGoogle() async throws {
-        try await SupabaseManager.client.auth.signInWithOAuth(
-            provider: .google,
-            redirectTo: SupabaseManager.redirectURL
-        )
-    }
-
     func signOut() async {
         guard !isDemo else { return }
         // Unregister push before clearing session so the API still has a user.

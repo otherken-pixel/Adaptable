@@ -70,7 +70,7 @@ The Vercel production branch is configured in the project dashboard
   every platform, and the `push-dispatch` edge function delivers device
   push by calling Apple's APNs directly. No Firebase anywhere.
 - **Cookbook** — personal saves, synced live across every screen.
-- **Auth** — Supabase email/password + Google OAuth, auto-created profiles.
+- **Auth** — Supabase email/password, auto-created profiles.
 - **Demo Mode** — no env vars? The app boots with seeded recipes and a local
   store so the whole loop is explorable with zero setup.
 
@@ -143,7 +143,7 @@ supabase functions deploy backfill-covers
 
 In the dashboard:
 
-- **Auth → Providers**: enable Google for OAuth.
+- **Auth → Providers**: email/password only (disable Google if it was on).
 - **Auth → URL Configuration**: set the Site URL to your production
   domain and add it (plus `http://localhost:5173`) to Redirect URLs —
   email confirmation and password-reset links land there.
@@ -156,7 +156,7 @@ A confirmed test login exists: `test@adaptable.dev` /
 `CookSomething!42`. Click-through checklist: sign in with it → feed
 shows the seeded recipes → vote/save/comment → edit username on
 Profile → sign out → create your own account (confirmation email) →
-"Forgot password?" flow → Google sign-in → Profile → Delete account
+"Forgot password?" flow → Profile → Delete account
 (needs the `delete-account` function deployed).
 
 Setting up a fresh project instead? Run the migrations with

@@ -18,7 +18,6 @@ interface AuthState {
   isDemo: boolean;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, username: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   /** Emails a recovery link that lands on /reset-password. */
   requestPasswordReset: (email: string) => Promise<void>;
@@ -97,14 +96,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
-
-  const signInWithGoogle = useCallback(async () => {
-    const { error } = await supabase!.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) throw error;
-  }, []);
 
   const signOut = useCallback(async () => {
     if (isDemo) return;
@@ -187,7 +178,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isDemo,
       signInWithPassword,
       signUp,
-      signInWithGoogle,
       signOut,
       requestPasswordReset,
       updatePassword,
@@ -201,7 +191,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signInWithPassword,
       signUp,
-      signInWithGoogle,
       signOut,
       requestPasswordReset,
       updatePassword,

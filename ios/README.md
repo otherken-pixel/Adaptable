@@ -13,7 +13,7 @@ versa.
 | Backend | [supabase-swift](https://github.com/supabase/supabase-swift) (Postgrest, Auth, Realtime, Storage, Edge Functions) |
 | Push | Raw APNs via the existing `push-dispatch` edge function — no Firebase |
 | Voice | `Speech` + `AVFoundation` for Cook Mode hands-free commands |
-| Auth | Email/password + Google OAuth (`ASWebAuthenticationSession`, handled internally by the SDK) |
+| Auth | Email/password (Supabase) |
 
 ## Opening the project
 
@@ -82,7 +82,7 @@ Every screen and feature in the web app has a native counterpart:
   push-notification opt-in, sign out, delete account.
 - **Taste Profile** — diets, allergies (hard safety rule server-side),
   dislikes, household size, spice, skill.
-- **Auth** — sign in / sign up / forgot password, Google OAuth, password
+- **Auth** — sign in / sign up / forgot password via email, password
   reset via the `com.adaptable.app://reset-password` deep link.
 - **Demo Mode** — identical seeded recipes/comments/templates to the web
   app, with the same simulated community engagement (delayed
@@ -101,15 +101,6 @@ To receive real device pushes:
 2. Follow the "`Notifications — the no-Firebase pipeline`" setup steps in
    `../README.md` (APNs auth key, edge function secrets, Database
    Webhook) — it's the same backend, so nothing iOS-specific to deploy.
-
-## Google Sign-In
-
-No separate native Google client ID is needed — `signInWithOAuth` opens
-Supabase's hosted `/auth/v1/authorize` page in an ephemeral
-`ASWebAuthenticationSession` and redirects back to
-`com.adaptable.app://login-callback`, exactly like the web app's redirect
-flow. Make sure that redirect URL is allow-listed under **Auth → URL
-Configuration** in the Supabase dashboard (see `../README.md`).
 
 ## What's intentionally not native-app-first
 
