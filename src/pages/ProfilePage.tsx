@@ -315,6 +315,9 @@ export default function ProfilePage() {
         <Link to="/privacy" className="pressable underline-offset-2 hover:underline">
           Privacy
         </Link>
+        <Link to="/terms" className="pressable underline-offset-2 hover:underline">
+          Terms
+        </Link>
       </div>
 
       {!isDemo && (

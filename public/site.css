@@ -1,0 +1,92 @@
+/* Standalone styles for App Review legal pages (no JS required). */
+:root {
+  --surface: #faf8f5;
+  --raised: #ffffff;
+  --sunken: #f0ece6;
+  --line: rgb(28 25 23 / 0.08);
+  --content: #1c1917;
+  --muted: #78716c;
+  --faint: #a8a29e;
+  --accent: #ea580c;
+  --accent-strong: #c2410c;
+  --accent-soft: rgb(234 88 12 / 0.12);
+  --down: #dc2626;
+  --nav-blur: rgb(250 248 245 / 0.86);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0c0a09;
+    --raised: #1c1917;
+    --sunken: #141110;
+    --line: rgb(250 248 245 / 0.09);
+    --content: #f5f2ee;
+    --muted: #a8a29e;
+    --faint: #78716c;
+    --accent: #f97316;
+    --accent-strong: #fb923c;
+    --accent-soft: rgb(249 115 22 / 0.16);
+    --down: #f87171;
+    --nav-blur: rgb(12 10 9 / 0.82);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--content);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+a { color: var(--accent); font-weight: 700; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.wrap { max-width: 720px; margin: 0 auto; padding: 0 20px; }
+.site-header {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--nav-blur);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--line);
+}
+.site-header .wrap {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; min-height: 56px;
+}
+.brand { display: flex; align-items: center; gap: 10px; color: var(--content); font-weight: 800; font-size: 16px; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav { display: flex; flex-wrap: wrap; gap: 14px 18px; }
+.nav a { color: var(--muted); font-size: 13px; font-weight: 650; }
+.nav a[aria-current="page"] { color: var(--content); }
+.hero-contact {
+  margin: 20px 0 28px;
+  padding: 18px 20px;
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.hero-contact .email { display: block; font-size: 20px; font-weight: 800; color: var(--accent); word-break: break-all; }
+.hero-contact p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+article { padding: 32px 0 64px; }
+.kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); margin: 0 0 8px; }
+h1 { font-size: 32px; line-height: 1.15; letter-spacing: -0.03em; margin: 0 0 12px; }
+h2 { font-size: 18px; margin: 28px 0 8px; }
+p { color: var(--muted); font-size: 15px; margin: 0 0 12px; }
+ul { margin: 0 0 12px; padding-left: 1.25rem; color: var(--muted); font-size: 15px; }
+li { margin: 0 0 6px; }
+li strong, p strong, h1, h2 { color: var(--content); }
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 28px 0 40px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 12px; }
+.site-footer a { color: var(--muted); font-weight: 650; }
+.note { font-size: 12px; color: var(--faint); }
+
+@media (max-width: 640px) {
+  h1 { font-size: 26px; }
+  .nav { display: none; }
+}

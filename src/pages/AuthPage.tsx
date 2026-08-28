@@ -61,15 +61,17 @@ export default function AuthPage() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-6 pt-safe pb-safe">
       <div className="animate-fade-up flex flex-col items-center pb-8 text-center">
-        <div
-          className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl shadow-xl shadow-accent/25"
-          style={{
-            background:
-              "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
-          }}
-        >
-          <ChefHat size={38} className="text-white" strokeWidth={2} />
-        </div>
+        <Link to="/" aria-label="Adaptable home">
+          <div
+            className="flex h-20 w-20 animate-float items-center justify-center rounded-3xl shadow-xl shadow-accent/25"
+            style={{
+              background:
+                "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
+            }}
+          >
+            <ChefHat size={38} className="text-white" strokeWidth={2} />
+          </div>
+        </Link>
         <h1 className="mt-5 text-3xl font-extrabold tracking-tight">Adaptable</h1>
         <p className="mt-2 max-w-64 text-sm leading-relaxed text-muted">
           AI recipes that adapt to you. Generate, cook, vote.
@@ -166,6 +168,10 @@ export default function AuthPage() {
       <p className="mt-6 text-center text-[12px] text-faint">
         <Link to="/privacy" className="font-semibold text-muted underline-offset-2 hover:underline">
           Privacy
+        </Link>
+        {" · "}
+        <Link to="/terms" className="font-semibold text-muted underline-offset-2 hover:underline">
+          Terms
         </Link>
         {" · "}
         <Link to="/support" className="font-semibold text-muted underline-offset-2 hover:underline">

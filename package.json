@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "npm run legal && vite",
+    "legal": "node --experimental-strip-types scripts/render-legal-html.mjs",
+    "build": "npm run legal && tsc -b && vite build",
     "preview": "vite preview",
     "test": "node --experimental-strip-types scripts/smoke-tests.mjs",
     "cap:sync": "npm run build && npx cap sync",

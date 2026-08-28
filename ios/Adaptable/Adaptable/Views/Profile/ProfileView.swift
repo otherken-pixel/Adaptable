@@ -203,16 +203,15 @@ struct ProfileView: View {
     private var signOutButton: some View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
-                if let support = URL(string: "https://adaptable-pi.vercel.app/support") {
-                    Link("Support", destination: support)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.muted)
-                }
-                if let privacy = URL(string: "https://adaptable-pi.vercel.app/privacy") {
-                    Link("Privacy", destination: privacy)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.muted)
-                }
+                Link("Support", destination: SiteConfig.supportURL)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                Link("Privacy", destination: SiteConfig.privacyURL)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+                Link("Terms", destination: SiteConfig.termsURL)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
             }
             Button {
                 Task { await authStore.signOut() }

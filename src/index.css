@@ -161,6 +161,19 @@ nav {
   user-select: none;
 }
 
+/* Marketing / legal pages: allow selecting policy text (App Review, users). */
+.site-page,
+.site-page a,
+.site-page button,
+.site-page nav {
+  user-select: text;
+}
+
+.site-doc a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 @utility pt-safe {
   padding-top: env(safe-area-inset-top);
 }

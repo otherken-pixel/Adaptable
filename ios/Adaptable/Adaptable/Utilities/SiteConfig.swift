@@ -13,6 +13,11 @@ enum SiteConfig {
         "www.adaptable.cooking",
     ]
 
+    static var privacyURL: URL { baseURL.appendingPathComponent("privacy") }
+    static var supportURL: URL { baseURL.appendingPathComponent("support") }
+    static var termsURL: URL { baseURL.appendingPathComponent("terms") }
+    static var communityURL: URL { baseURL.appendingPathComponent("community") }
+
     static func recipeURL(id: String) -> URL {
         baseURL
             .appendingPathComponent("recipe")

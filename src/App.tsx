@@ -17,14 +17,22 @@ import AuthPage from "@/pages/AuthPage";
 import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import TasteProfilePage from "@/pages/TasteProfilePage";
 import OnboardingPage from "@/pages/OnboardingPage";
-import { PrivacyPage, SupportPage } from "@/pages/LegalPages";
+import {
+  CommunityPage,
+  PrivacyPage,
+  SupportPage,
+  TermsPage,
+} from "@/pages/LegalPages";
+import LandingPage from "@/site/LandingPage";
+import { isPublicPath, isSitePath } from "@/lib/site";
 import { ChefHat } from "lucide-react";
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
+    if (hash) return;
     window.scrollTo(0, 0);
-  }, [pathname]);
+  }, [pathname, hash]);
   return null;
 }
 
@@ -83,8 +91,7 @@ function AuthenticatedShell() {
   const showOnboarding =
     !!profile &&
     needsOnboarding(profile) &&
-    !location.pathname.startsWith("/privacy") &&
-    !location.pathname.startsWith("/support") &&
+    !isSitePath(location.pathname) &&
     !location.pathname.startsWith("/reset-password") &&
     !location.pathname.startsWith("/recipe/") &&
     !location.pathname.startsWith("/cook/");
@@ -109,11 +116,14 @@ function AuthenticatedShell() {
         <Route path="/taste" element={<TasteProfilePage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/support" element={<SupportPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/community" element={<CommunityPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/auth" element={<Navigate to="/" replace />} />
         <Route path="*" element={<FeedPage />} />
       </Routes>
-      {location.pathname !== "/onboarding" && <BottomNav />}
+      {location.pathname !== "/onboarding" &&
+        !isSitePath(location.pathname) && <BottomNav />}
     </>
   );
 }
@@ -144,23 +154,19 @@ function Shell() {
 
   if (loading) return <Splash />;
 
-  // Always available — share links, public cook, and App Store requirements.
-  const publicExact = ["/privacy", "/support", "/reset-password", "/auth"];
-  const isPublicRecipe = location.pathname.startsWith("/recipe/");
-  const isPublicCook = location.pathname.startsWith("/cook/");
-  const isPublic =
-    isPublicRecipe || isPublicCook || publicExact.includes(location.pathname);
-
   if (!profile) {
-    if (isPublic) {
+    if (isPublicPath(location.pathname)) {
       return (
         <>
           <ScrollToTop />
           <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/recipe/:id" element={<RecipeDetailPage />} />
             <Route path="/cook/:id" element={<CookModePage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/support" element={<SupportPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/community" element={<CommunityPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="*" element={<AuthPage />} />

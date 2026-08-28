@@ -128,6 +128,16 @@ struct AuthView: View {
                     .font(.system(size: 14, weight: .semibold))
                 }
                 .padding(.top, 4)
+
+                HStack(spacing: 8) {
+                    Link("Privacy", destination: SiteConfig.privacyURL)
+                    Text("·").foregroundStyle(Theme.faint)
+                    Link("Terms", destination: SiteConfig.termsURL)
+                    Text("·").foregroundStyle(Theme.faint)
+                    Link("Support", destination: SiteConfig.supportURL)
+                }
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.muted)
                 .padding(.bottom, 24)
             }
             .padding(.horizontal, 24)
