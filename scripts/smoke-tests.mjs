@@ -136,13 +136,27 @@ const junk = parseSurpriseConstraints({
   max_minutes: 999,
   meal_slot: "brunch-party",
   pantry_mode: "wizard",
+  method: "wizard",
   ingredients: ["  ", "x".repeat(80), 12],
 });
 assert.equal(junk.cuisine, null);
 assert.equal(junk.max_minutes, null);
 assert.equal(junk.meal_slot, null);
 assert.equal(junk.pantry_mode, null);
+assert.equal(junk.method, null);
 assert.equal(junk.ingredients.length, 1);
+
+const crock = buildSurpriseBrief({
+  constraints: parseSurpriseConstraints({
+    method: "slow_cooker",
+    max_minutes: 15,
+    pantry_mode: "leftover",
+  }),
+  random: () => 0,
+});
+assert.equal(crock.method, "slow_cooker");
+assert.match(crock.prompt, /crock-pot \/ slow-cooker/);
+assert.match(crock.prompt, /15 minutes/);
 
 const veganProteins = allowedSurpriseProteins({
   diets: ["Vegan"],

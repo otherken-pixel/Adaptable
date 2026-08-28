@@ -82,6 +82,7 @@ struct GenerateView: View {
     @State private var lockSlot: String?
     @State private var lockCuisine: String?
     @State private var lockPantry: String?
+    @State private var lockMethod: String?
     @State private var lockItems: [String] = []
     @State private var lockDraft = ""
     @State private var lastAction: String = "generate"
@@ -332,12 +333,17 @@ struct GenerateView: View {
                     }
                 }
             }
-            HStack(spacing: 8) {
+            FlowLayout(spacing: 8) {
                 lockChip(title: "Leftovers", selected: lockPantry == "leftover") {
                     lockPantry = lockPantry == "leftover" ? nil : "leftover"
                 }
                 lockChip(title: "Fridge", selected: lockPantry == "fridge") {
                     lockPantry = lockPantry == "fridge" ? nil : "fridge"
+                }
+                ForEach(SurpriseOptions.methods, id: \.id) { method in
+                    lockChip(title: method.label, selected: lockMethod == method.id) {
+                        lockMethod = lockMethod == method.id ? nil : method.id
+                    }
                 }
             }
             if lockPantry != nil {
@@ -947,7 +953,8 @@ struct GenerateView: View {
                     meal_slot: lockSlot,
                     cuisine: lockCuisine,
                     pantry_mode: lockPantry,
-                    ingredients: lockItems
+                    ingredients: lockItems,
+                    method: lockMethod
                 ),
                 excludeTitles: exclude
             )
