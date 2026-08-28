@@ -40,7 +40,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Who we are",
         paragraphs: [
-          "Adaptable is a recipe app for iPhone and the web. The service is operated from the product at [adaptable.cooking](/). Questions: [privacy@adaptable.app](mailto:privacy@adaptable.app).",
+          "Adaptable is an iPhone recipe app. This website is for download, support, and legal pages. Questions: [privacy@adaptable.app](mailto:privacy@adaptable.app).",
         ],
       },
       {
@@ -169,7 +169,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
           "**Recipe generation failed** — check your connection and try again in a minute. Daily limits protect the AI engine for everyone.",
           "**Allergies** — set them in Taste Profile. We block generations that still contain listed allergens when we can detect them. Always double-check ingredients if you have a severe allergy. Adaptable is not a medical device.",
           "**Push notifications** — enable them in Profile, then allow Adaptable in iOS Settings → Notifications.",
-          "**Shared recipe links** — open in Safari, or tap to open the Adaptable app when it is installed.",
+          "**Shared recipe links** — open in the Adaptable iPhone app. If you only have a browser, download Adaptable from the App Store.",
         ],
       },
       {
@@ -191,7 +191,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
     slug: "terms",
     title: "Terms of Use",
     updated: "August 28, 2026",
-    lede: "These terms govern your use of Adaptable on iPhone and the web. The App Store listing also uses Apple’s standard EULA. If you do not agree, do not use the app.",
+    lede: "These terms govern your use of the Adaptable iPhone app and this website. The App Store listing also uses Apple’s standard EULA. If you do not agree, do not use the app.",
     sections: [
       {
         heading: "The service",

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { APP_STORE_URL, SUPPORT_EMAIL } from "@/lib/site";
-import { useAuth } from "@/context/AuthContext";
 import BrandMark from "./BrandMark";
 import AppStoreCta from "./AppStoreCta";
 
@@ -12,20 +11,15 @@ export default function MarketingLayout({
   title?: string;
   children: React.ReactNode;
 }) {
-  const { profile } = useAuth();
-
   useEffect(() => {
     const prev = document.title;
     document.title = title
       ? `${title} — Adaptable`
-      : "Adaptable — AI recipes that adapt to you";
+      : "Adaptable — AI recipes for iPhone";
     return () => {
       document.title = prev;
     };
   }, [title]);
-
-  const ctaTo = profile ? "/" : "/auth";
-  const ctaLabel = profile ? "Open app" : "Sign in";
 
   return (
     <div className="site-page min-h-dvh bg-surface text-content">
@@ -36,11 +30,9 @@ export default function MarketingLayout({
             Adaptable
           </Link>
           <nav className="hidden items-center gap-5 sm:flex">
-            {!profile ? (
-              <a href="/#features" className="text-[13px] font-semibold text-muted hover:text-content">
-                Features
-              </a>
-            ) : null}
+            <a href="/#features" className="text-[13px] font-semibold text-muted hover:text-content">
+              Features
+            </a>
             <NavLink
               to="/support"
               className={({ isActive }) =>
@@ -57,19 +49,19 @@ export default function MarketingLayout({
             >
               Privacy
             </NavLink>
-            <Link
-              to={ctaTo}
-              className="pressable rounded-full bg-content px-3.5 py-1.5 text-[13px] font-bold text-surface"
-            >
-              {ctaLabel}
-            </Link>
+            {APP_STORE_URL ? (
+              <a
+                href={APP_STORE_URL}
+                className="pressable rounded-full bg-content px-3.5 py-1.5 text-[13px] font-bold text-surface"
+              >
+                Get the app
+              </a>
+            ) : (
+              <span className="rounded-full bg-content px-3.5 py-1.5 text-[13px] font-bold text-surface">
+                iPhone app
+              </span>
+            )}
           </nav>
-          <Link
-            to={ctaTo}
-            className="pressable rounded-full bg-content px-3.5 py-1.5 text-[13px] font-bold text-surface sm:hidden"
-          >
-            {ctaLabel}
-          </Link>
         </div>
       </header>
 
@@ -83,7 +75,7 @@ export default function MarketingLayout({
               Adaptable
             </Link>
             <p className="mt-2 max-w-xs text-sm text-muted">
-              AI recipes that adapt to you.
+              AI recipes that adapt to you — on iPhone.
             </p>
             <div className="mt-4">
               <AppStoreCta />

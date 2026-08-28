@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import {
   Camera,
   ChefHat,
@@ -7,7 +7,6 @@ import {
   ShoppingCart,
   Sparkles,
   Timer,
-  Users,
 } from "lucide-react";
 import MarketingLayout from "./MarketingLayout";
 import BrandMark from "./BrandMark";
@@ -22,7 +21,7 @@ const FEATURES = [
   {
     icon: Camera,
     title: "Import anything",
-    body: "Paste a link, snap a cookbook page, or drop raw text. We extract a clean recipe.",
+    body: "Paste a link, snap a cookbook page, or share from Safari. We extract a clean recipe.",
   },
   {
     icon: ShieldCheck,
@@ -32,30 +31,30 @@ const FEATURES = [
   {
     icon: Timer,
     title: "Cook Mode",
-    body: "One step at a time, huge type, timers that keep running, optional voice commands.",
+    body: "One step at a time, huge type, Live Activities on the Lock Screen, optional voice commands.",
   },
   {
     icon: ShoppingCart,
     title: "Groceries",
-    body: "Scale servings and send the week to a list grouped by recipe — or out to Reminders.",
+    body: "Scale servings and send the week to a list — or out to Apple Reminders.",
   },
   {
-    icon: Users,
-    title: "Community",
-    body: "Vote, comment, remix, and cook public recipes. Report anything that doesn’t belong.",
+    icon: ChefHat,
+    title: "Built for iPhone",
+    body: "Widgets, share sheet, and timers that keep going when you pocket the phone.",
   },
 ] as const;
 
 const STEPS = [
   { n: "1", title: "Tell us the constraint", body: "A craving, a photo, a link, or a fridge." },
   { n: "2", title: "Get a recipe that fits", body: "Ingredients, steps, macros, scaled to your household." },
-  { n: "3", title: "Cook, then keep it", body: "Timers, a grocery list, and a save to your Cookbook." },
+  { n: "3", title: "Cook on your phone", body: "Timers, a grocery list, and a save to your Cookbook." },
 ] as const;
 
 const FAQ = [
   {
-    q: "Is the iPhone app required?",
-    a: "No. You can cook in the browser today. The iPhone app adds Cook Mode timers on the Lock Screen, push, and Reminders export.",
+    q: "Is there a web app?",
+    a: "No. Adaptable is an iPhone app. This site is for download, support, and legal pages.",
   },
   {
     q: "Does it know my allergies?",
@@ -63,7 +62,7 @@ const FAQ = [
   },
   {
     q: "How do I delete my account?",
-    a: "Profile → Delete account, or email support@adaptable.app. Details are on the Support page.",
+    a: "In the iPhone app: Profile → Delete account. Or email support@adaptable.app.",
   },
 ] as const;
 
@@ -76,31 +75,26 @@ export default function LandingPage() {
 
   return (
     <MarketingLayout>
-      <section className="mx-auto max-w-6xl px-5 pt-14 pb-16 sm:pt-20">
-        <div className="max-w-2xl">
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pt-14 pb-16 sm:pt-20 lg:grid-cols-2">
+        <div>
           <div className="mb-6">
             <BrandMark size={56} />
           </div>
           <p className="text-[11px] font-extrabold tracking-[0.14em] text-accent uppercase">
-            Adaptable
+            For iPhone
           </p>
           <h1 className="mt-3 text-4xl font-extrabold tracking-tight sm:text-6xl sm:leading-[1.05]">
             AI recipes that adapt to you.
           </h1>
           <p className="mt-4 max-w-lg text-lg leading-relaxed text-muted">
             Diets, allergies, time, and whatever is already in the fridge.
-            Generate, import, cook, and save — on iPhone and the web.
+            Generate, import, and cook — in an app built for the kitchen.
           </p>
-          <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-            <Link
-              to="/auth"
-              className="pressable inline-flex h-12 items-center rounded-full bg-content px-6 text-[15px] font-bold text-surface"
-            >
-              Start cooking in the browser
-            </Link>
-            <AppStoreCta />
+          <div className="mt-8">
+            <AppStoreCta size="lg" />
           </div>
         </div>
+        <PhonePreview />
       </section>
 
       <section id="features" className="scroll-mt-16 border-t border-line">
@@ -169,5 +163,44 @@ export default function LandingPage() {
         </div>
       </section>
     </MarketingLayout>
+  );
+}
+
+function PhonePreview() {
+  return (
+    <div className="mx-auto w-full max-w-[320px]" aria-hidden>
+      <div className="rounded-[2.4rem] border border-line bg-content p-3 shadow-2xl shadow-accent/10">
+        <div className="overflow-hidden rounded-[1.9rem] bg-surface">
+          <div className="px-5 pt-8 pb-4">
+            <p className="text-[11px] font-extrabold tracking-[0.14em] text-accent uppercase">
+              For you
+            </p>
+            <p className="mt-1 text-2xl font-extrabold tracking-tight">Tonight</p>
+          </div>
+          <div className="mx-4 mb-5 overflow-hidden rounded-3xl border border-line bg-raised">
+            <div
+              className="flex h-36 items-end p-4 text-3xl"
+              style={{
+                background:
+                  "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
+              }}
+            >
+              <span>🍝</span>
+            </div>
+            <div className="space-y-2 p-4">
+              <p className="text-[16px] font-extrabold leading-snug">
+                20-minute spicy tomato pasta
+              </p>
+              <p className="text-[13px] text-muted">
+                Pantry staples. High protein. Your heat level.
+              </p>
+              <p className="text-[12px] font-semibold text-faint">
+                20 min · 2 servings
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

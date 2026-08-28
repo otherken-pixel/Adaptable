@@ -1,11 +1,14 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 /// Mirrors `src/pages/ProfilePage.tsx`: avatar, stats, username edit, taste
 /// profile link, push toggle, sign out, delete account.
 struct ProfileView: View {
     @EnvironmentObject private var authStore: AuthStore
+    @EnvironmentObject private var subscriptions: SubscriptionStore
     @StateObject private var push = PushManager.shared
+    @State private var showPaywall = false
 
     @State private var mine: [Recipe] = []
     @State private var editing = false
@@ -26,6 +29,7 @@ struct ProfileView: View {
                 header
                 if let profile = authStore.profile {
                     identityCard(profile)
+                    plusCard
                     statsRow
                     if !mine.isEmpty {
                         creationsSection
@@ -49,6 +53,54 @@ struct ProfileView: View {
         .refreshable { await loadMine() }
         .task { await loadMine() }
         .task { await push.refreshAuthorizationStatus() }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView()
+                .environmentObject(subscriptions)
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var plusSubtitle: String {
+        if subscriptions.isPlus {
+            return "Active — manage in your Apple ID settings"
+        }
+        if let yearly = subscriptions.yearly, let monthly = subscriptions.monthly {
+            return "Unlimited AI recipes. \(monthly.displayPrice)/month or \(yearly.displayPrice)/year."
+        }
+        return "Unlimited AI recipes. $4.99/month or $39.99/year."
+    }
+
+    private var plusCard: some View {
+        Button {
+            if subscriptions.isPlus {
+                if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                    UIApplication.shared.open(url)
+                }
+            } else {
+                showPaywall = true
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: subscriptions.isPlus ? "checkmark.seal.fill" : "sparkles")
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(subscriptions.isPlus ? "Adaptable Plus" : "Unlock Adaptable Plus")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundStyle(Theme.content)
+                    Text(plusSubtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right").foregroundStyle(Theme.faint)
+            }
+            .padding(20)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {

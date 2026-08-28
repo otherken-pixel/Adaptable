@@ -8,6 +8,7 @@ struct AdaptableApp: App {
     @StateObject private var engagementStore = EngagementStore()
     @StateObject private var shoppingStore = ShoppingStore()
     @StateObject private var notificationsStore = NotificationsStore()
+    @StateObject private var subscriptions = SubscriptionStore.shared
     @StateObject private var deepLinks = AppEnvironment.shared.deepLinks
     @StateObject private var network = NetworkMonitor.shared
 
@@ -20,10 +21,12 @@ struct AdaptableApp: App {
                 .environmentObject(engagementStore)
                 .environmentObject(shoppingStore)
                 .environmentObject(notificationsStore)
+                .environmentObject(subscriptions)
                 .environmentObject(deepLinks)
                 .environmentObject(network)
                 .task {
                     authStore.start()
+                    subscriptions.start()
                     await PushManager.shared.refreshAuthorizationStatus()
                     // Cold launch skips willEnterForeground (NotRunning → Active).
                     consumePendingShareImport()

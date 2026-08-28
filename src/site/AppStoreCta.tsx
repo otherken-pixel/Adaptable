@@ -1,10 +1,20 @@
 import { APP_STORE_URL } from "@/lib/site";
 
 /** Official Apple badge only when the listing exists. Never a homemade mark. */
-export default function AppStoreCta({ className = "" }: { className?: string }) {
+export default function AppStoreCta({
+  className = "",
+  size = "md",
+}: {
+  className?: string;
+  size?: "md" | "lg";
+}) {
+  const height = size === "lg" ? 54 : 40;
+
   if (!APP_STORE_URL) {
     return (
-      <p className={`text-sm font-semibold text-muted ${className}`}>
+      <p
+        className={`inline-flex items-center rounded-full bg-content px-5 py-3 text-sm font-bold text-surface ${className}`}
+      >
         Coming soon on the App Store
       </p>
     );
@@ -19,8 +29,8 @@ export default function AppStoreCta({ className = "" }: { className?: string }) 
       <img
         src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83"
         alt="Download on the App Store"
-        height={40}
-        className="h-10 w-auto"
+        height={height}
+        className={size === "lg" ? "h-[54px] w-auto" : "h-10 w-auto"}
       />
     </a>
   );

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { KeyRound, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -10,7 +10,6 @@ import { useAuth } from "@/context/AuthContext";
  */
 export default function ResetPasswordPage() {
   const { updatePassword } = useAuth();
-  const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
@@ -28,7 +27,6 @@ export default function ResetPasswordPage() {
     try {
       await updatePassword(password);
       setDone(true);
-      setTimeout(() => navigate("/", { replace: true }), 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update password.");
     } finally {
@@ -46,15 +44,19 @@ export default function ResetPasswordPage() {
           Set a new password
         </h1>
         <p className="mt-2 max-w-64 text-sm leading-relaxed text-muted">
-          You're signed in via your recovery link — choose a new password to
-          finish.
+          Choose a new password, then open Adaptable on your iPhone.
         </p>
       </div>
 
       {done ? (
-        <p className="animate-fade-up rounded-xl bg-accent-soft px-4 py-3 text-center text-sm font-bold text-accent">
-          Password updated 🎉 Taking you home…
-        </p>
+        <div className="animate-fade-up space-y-4 text-center">
+          <p className="rounded-xl bg-accent-soft px-4 py-3 text-sm font-bold text-accent">
+            Password updated. Open the Adaptable app on your iPhone to sign in.
+          </p>
+          <Link to="/" className="text-sm font-semibold text-muted underline-offset-2 hover:underline">
+            Back to Adaptable
+          </Link>
+        </div>
       ) : (
         <form onSubmit={submit} className="animate-fade-up space-y-3">
           <label className="block">
