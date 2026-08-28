@@ -52,7 +52,7 @@
          </BuildableReference>
       </BuildableProductRunnable>
       <StoreKitConfigurationFileReference
-         identifier = "Adaptable/Resources/Adaptable.storekit">
+         identifier = "../../Adaptable/Resources/Adaptable.storekit">
       </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction

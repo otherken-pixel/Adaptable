@@ -163,7 +163,7 @@ struct OnboardingView: View {
     private var footer: some View {
         VStack(spacing: 10) {
             Button {
-                Task { await advance() }
+                advance()
             } label: {
                 HStack {
                     if busy { ProgressView().tint(Theme.surface) }
@@ -229,13 +229,13 @@ struct OnboardingView: View {
         }
     }
 
-    private func advance() async {
+    private func advance() {
         if step < 4 {
             Haptics.light()
             step += 1
             return
         }
-        await finish(save: true)
+        finish(save: true)
     }
 
     private func finish(save: Bool) {

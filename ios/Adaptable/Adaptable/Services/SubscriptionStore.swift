@@ -115,7 +115,7 @@ final class SubscriptionStore: ObservableObject {
     static func introOfferLabel(for product: Product) -> String? {
         guard let offer = product.subscription?.introductoryOffer else { return nil }
         switch offer.paymentMode {
-        case .free:
+        case .freeTrial:
             return "Start \(periodPhrase(offer.period)) free trial"
         case .payAsYouGo:
             return "Then \(product.displayPrice) per \(periodUnit(product))"
