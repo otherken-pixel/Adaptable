@@ -3,11 +3,14 @@ import { useLocation } from "react-router-dom";
 import {
   Camera,
   ChefHat,
+  Clock,
+  Gauge,
   ShieldCheck,
   ShoppingCart,
   Sparkles,
   Timer,
 } from "lucide-react";
+import RecipeCover from "@/components/RecipeCover";
 import MarketingLayout from "./MarketingLayout";
 import BrandMark from "./BrandMark";
 import AppStoreCta from "./AppStoreCta";
@@ -177,26 +180,32 @@ function PhonePreview() {
             </p>
             <p className="mt-1 text-2xl font-extrabold tracking-tight">Tonight</p>
           </div>
-          <div className="mx-4 mb-5 overflow-hidden rounded-3xl border border-line bg-raised">
-            <div
-              className="flex h-36 items-end p-4 text-3xl"
-              style={{
-                background:
-                  "linear-gradient(135deg, #fb923c 0%, #ea580c 55%, #dc2626 120%)",
-              }}
-            >
-              <span>🍝</span>
-            </div>
-            <div className="space-y-2 p-4">
-              <p className="text-[16px] font-extrabold leading-snug">
-                20-minute spicy tomato pasta
-              </p>
-              <p className="text-[13px] text-muted">
-                Pantry staples. High protein. Your heat level.
-              </p>
-              <p className="text-[12px] font-semibold text-faint">
-                20 min · 2 servings
-              </p>
+          <div className="mx-4 mb-5 overflow-hidden rounded-card border border-line bg-raised shadow-[0_2px_16px_rgb(0_0_0/0.05)]">
+            <RecipeCover
+              recipeId="marketing-hero"
+              imageUrl="/marketing/hero-pasta.jpg"
+              cuisine="Italian"
+              heightClass="h-40"
+            />
+            <div className="space-y-3 p-4">
+              <div>
+                <h3 className="text-[17px] leading-snug font-bold tracking-tight">
+                  20-minute spicy tomato pasta
+                </h3>
+                <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">
+                  Pantry staples. High protein. Your heat level.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1 rounded-full bg-sunken px-2.5 py-1 text-xs font-semibold text-muted">
+                  <Clock size={13} strokeWidth={2.2} />
+                  20 min
+                </span>
+                <span className="flex items-center gap-1 rounded-full bg-sunken px-2.5 py-1 text-xs font-semibold text-muted">
+                  <Gauge size={13} strokeWidth={2.2} />
+                  Easy
+                </span>
+              </div>
             </div>
           </div>
         </div>

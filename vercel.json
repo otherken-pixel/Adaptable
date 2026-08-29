@@ -26,7 +26,7 @@
     { "source": "/community", "destination": "/community.html" },
     { "source": "/community/", "destination": "/community.html" },
     {
-      "source": "/((?!api/|\\.well-known/).*)",
+      "source": "/((?!api/|\\.well-known/|marketing/).*)",
       "destination": "/index.html"
     }
   ]
