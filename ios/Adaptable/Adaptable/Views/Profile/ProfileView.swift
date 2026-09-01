@@ -8,7 +8,6 @@ struct ProfileView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var subscriptions: SubscriptionStore
     @StateObject private var push = PushManager.shared
-    @State private var showPaywall = false
 
     @State private var mine: [Recipe] = []
     @State private var editing = false
@@ -47,17 +46,13 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
+            .contentShape(Rectangle())
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
         .refreshable { await loadMine() }
         .task { await loadMine() }
         .task { await push.refreshAuthorizationStatus() }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView()
-                .environmentObject(subscriptions)
-                .presentationDragIndicator(.visible)
-        }
     }
 
     private var plusSubtitle: String {
@@ -71,15 +66,7 @@ struct ProfileView: View {
     }
 
     private var plusCard: some View {
-        Button {
-            if subscriptions.isPlus {
-                if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                    UIApplication.shared.open(url)
-                }
-            } else {
-                showPaywall = true
-            }
-        } label: {
+        Button(action: openPlus) {
             HStack(spacing: 12) {
                 Image(systemName: subscriptions.isPlus ? "checkmark.seal.fill" : "sparkles")
                     .foregroundStyle(Theme.accent)
@@ -93,14 +80,33 @@ struct ProfileView: View {
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.muted)
                 }
-                Spacer()
+                Spacer(minLength: 0)
                 Image(systemName: "chevron.right").foregroundStyle(Theme.faint)
             }
             .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous).stroke(Theme.line))
+            // `.plain` + Spacer leaves the wide empty region (especially on iPad
+            // regular width) outside the tap target. Match Discover search: the
+            // filled card shape must be the hit target.
+            .contentShape(RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.pressable)
+        .accessibilityLabel(subscriptions.isPlus ? "Adaptable Plus" : "Unlock Adaptable Plus")
+        .accessibilityHint(subscriptions.isPlus
+            ? "Opens Apple ID subscription settings"
+            : "Shows Adaptable Plus monthly and yearly plans")
+    }
+
+    private func openPlus() {
+        if subscriptions.isPlus {
+            if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
+        subscriptions.presentPaywall()
     }
 
     private var header: some View {

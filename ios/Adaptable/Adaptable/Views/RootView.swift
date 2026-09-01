@@ -5,6 +5,7 @@ struct RootView: View {
     @EnvironmentObject private var engagementStore: EngagementStore
     @EnvironmentObject private var shoppingStore: ShoppingStore
     @EnvironmentObject private var notificationsStore: NotificationsStore
+    @EnvironmentObject private var subscriptions: SubscriptionStore
     @EnvironmentObject private var network: NetworkMonitor
     @Binding var showResetPassword: Bool
 
@@ -23,6 +24,10 @@ struct RootView: View {
         }
         .fullScreenCover(isPresented: $showResetPassword) {
             ResetPasswordView(isPresented: $showResetPassword)
+        }
+        .fullScreenCover(isPresented: $subscriptions.isPaywallPresented) {
+            PaywallView()
+                .environmentObject(subscriptions)
         }
         .task(id: authStore.profile?.id) {
             await engagementStore.load(for: authStore.profile)

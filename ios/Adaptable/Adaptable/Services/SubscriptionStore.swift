@@ -23,6 +23,9 @@ final class SubscriptionStore: ObservableObject {
     @Published private(set) var currentProductID: String?
     @Published private(set) var loadingProducts = false
     @Published var lastError: String?
+    /// Presented from `RootView` as a fullScreenCover so iPad's floating tab bar
+    /// cannot swallow the paywall the way a child `.sheet` can.
+    @Published var isPaywallPresented = false
 
     private var listener: Task<Void, Never>?
 
@@ -33,6 +36,13 @@ final class SubscriptionStore: ObservableObject {
     func start() {
         guard listener == nil else { return }
         listener = Task { await listenForTransactions() }
+        Task { await refresh() }
+    }
+
+    /// Opens the StoreKit paywall. Always presents a real UI — never a silent no-op.
+    func presentPaywall() {
+        lastError = nil
+        isPaywallPresented = true
         Task { await refresh() }
     }
 
