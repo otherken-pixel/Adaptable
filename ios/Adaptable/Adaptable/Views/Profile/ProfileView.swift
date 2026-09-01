@@ -46,7 +46,6 @@ struct ProfileView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
-            .contentShape(Rectangle())
         }
         .background(Theme.surface)
         .navigationBarHidden(true)
