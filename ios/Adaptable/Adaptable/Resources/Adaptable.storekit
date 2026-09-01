@@ -29,15 +29,15 @@
   },
   "subscriptionGroups" : [
     {
-      "id" : "plus",
+      "id" : "adaptable_pro",
       "localizations" : [
         {
           "description" : "Unlimited AI recipes that adapt to you.",
-          "displayName" : "Adaptable Plus",
+          "displayName" : "Adaptable Pro",
           "locale" : "en_US"
         }
       ],
-      "name" : "Plus",
+      "name" : "Adaptable Pro",
       "subscriptions" : [
         {
           "adHocOffers" : [
@@ -54,14 +54,14 @@
           "localizations" : [
             {
               "description" : "Unlimited AI recipes, billed once a year. Cancel anytime.",
-              "displayName" : "Plus Yearly",
+              "displayName" : "Annual",
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.adaptable.app.plus.yearly",
+          "productID" : "adaptable_annual",
           "recurringSubscriptionPeriod" : "P1Y",
-          "referenceName" : "Plus Yearly",
-          "subscriptionGroupID" : "plus",
+          "referenceName" : "Annual",
+          "subscriptionGroupID" : "adaptable_pro",
           "type" : "RecurringSubscription"
         },
         {
@@ -79,14 +79,14 @@
           "localizations" : [
             {
               "description" : "Unlimited AI recipes, billed every month. Cancel anytime.",
-              "displayName" : "Plus Monthly",
+              "displayName" : "Monthly",
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.adaptable.app.plus.monthly",
+          "productID" : "adaptable_monthly",
           "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Plus Monthly",
-          "subscriptionGroupID" : "plus",
+          "referenceName" : "Monthly",
+          "subscriptionGroupID" : "adaptable_pro",
           "type" : "RecurringSubscription"
         }
       ]

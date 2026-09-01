@@ -3,18 +3,18 @@ import StoreKit
 
 /// StoreKit 2 subscriptions for Adaptable Plus.
 ///
-/// App Store Connect (same subscription group, same rank):
-///   `com.adaptable.app.plus.monthly`  — 1 month, $4.99
-///   `com.adaptable.app.plus.yearly`   — 1 year,  $39.99
-/// Attach a 7-day free intro on yearly in Connect if you want a trial;
+/// App Store Connect group **Adaptable Pro** (do not invent new product IDs):
+///   `adaptable_monthly`  — 1 month, $4.99  (Apple ID 6797548523)
+///   `adaptable_annual`   — 1 year,  $39.99 (Apple ID 6797549037)
+/// Attach a 7-day free intro on annual in Connect if you want a trial;
 /// the paywall reads it from StoreKit and will not claim a trial otherwise.
 @MainActor
 final class SubscriptionStore: ObservableObject {
     static let shared = SubscriptionStore()
     private init() {}
 
-    static let monthlyID = "com.adaptable.app.plus.monthly"
-    static let yearlyID = "com.adaptable.app.plus.yearly"
+    static let monthlyID = "adaptable_monthly"
+    static let yearlyID = "adaptable_annual"
     static let productIDs: Set<String> = [monthlyID, yearlyID]
 
     @Published private(set) var monthly: Product?
