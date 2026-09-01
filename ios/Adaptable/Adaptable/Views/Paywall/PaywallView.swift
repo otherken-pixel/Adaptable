@@ -55,7 +55,7 @@ struct PaywallView: View {
                 if plus { dismiss() }
             }
             .alert(
-                "Couldn’t complete purchase",
+                "Adaptable Plus",
                 isPresented: Binding(
                     get: { subscriptions.lastError != nil },
                     set: { if !$0 { subscriptions.lastError = nil } }
@@ -122,8 +122,15 @@ struct PaywallView: View {
                 .padding(.vertical, 24)
         } else if subscriptions.products.isEmpty {
             VStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Theme.accent)
                 Text("Couldn’t load prices from the App Store.")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .heavy))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(Theme.content)
+                Text(subscriptions.lastError ?? "Check your connection and try again.")
+                    .font(.system(size: 13))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.muted)
                 Button("Try again") {
