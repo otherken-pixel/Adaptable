@@ -404,6 +404,9 @@ final class ShoppingStore: ObservableObject {
         persistQueue(for: userId)
         if remaining.isEmpty {
             items = (try? await API.fetchShoppingItems(userId: userId)) ?? items
+            // Overlapping adds enqueue tmp- rows during this pass; restoring
+            // them keeps the retry from treating a refetch wipe as a delete.
+            rehydratePendingInserts()
         }
     }
 
