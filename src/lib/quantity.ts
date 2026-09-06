@@ -109,3 +109,86 @@ export function scaleQuantity(quantity: string, factor: number): string {
     quantity.slice(match.index + match[0].length)
   );
 }
+
+/**
+ * Add two free-text quantities when the first number's unit is compatible.
+ * Mirrors `Quantity.add` in ios/.../Utilities/Quantity.swift.
+ * "1 cup" + "½ cup" → "1 ½ cup". Falls back to `"a + b"` when units clash.
+ */
+export function addQuantities(existing: string, incoming: string): string {
+  const a = existing.trim();
+  const b = incoming.trim();
+  if (!a) return b;
+  if (!b || a.localeCompare(b, undefined, { sensitivity: "accent" }) === 0) {
+    return a;
+  }
+
+  const pa = parseMeasured(a);
+  const pb = parseMeasured(b);
+  if (!pa || !pb) return `${a} + ${b}`;
+  const ua = canonicalUnit(pa.unit);
+  const ub = canonicalUnit(pb.unit);
+  if (!ua || !ub || ua !== ub) return `${a} + ${b}`;
+  const sum = formatQuantityNumber(pa.value + pb.value);
+  const unit = pa.unit ? ` ${pa.unit}` : "";
+  const rest = pa.rest ? ` ${pa.rest}` : "";
+  return `${sum}${unit}${rest}`;
+}
+
+function parseMeasured(
+  raw: string,
+): { value: number; unit: string; rest: string } | null {
+  const match = raw.match(NUMBER_RE);
+  if (!match || match.index === undefined) return null;
+  const value = parseNumeric(match[0]);
+  if (value === null) return null;
+  const after = raw.slice(match.index + match[0].length).trim();
+  const space = after.indexOf(" ");
+  const unit = space === -1 ? after : after.slice(0, space);
+  const rest = space === -1 ? "" : after.slice(space + 1);
+  return { value, unit, rest };
+}
+
+function canonicalUnit(unit: string): string {
+  const key = unit.toLowerCase().replace(/\./g, "").replace(/s$/, "");
+  switch (key) {
+    case "cup":
+    case "c":
+      return "cup";
+    case "tbsp":
+    case "tablespoon":
+    case "tb":
+    case "tbs":
+      return "tbsp";
+    case "tsp":
+    case "teaspoon":
+    case "t":
+      return "tsp";
+    case "g":
+    case "gram":
+      return "g";
+    case "kg":
+    case "kilogram":
+      return "kg";
+    case "oz":
+    case "ounce":
+      return "oz";
+    case "lb":
+    case "pound":
+      return "lb";
+    case "ml":
+    case "milliliter":
+    case "millilitre":
+      return "ml";
+    case "l":
+    case "liter":
+    case "litre":
+      return "l";
+    case "clove":
+      return "clove";
+    case "can":
+      return "can";
+    default:
+      return unit.toLowerCase();
+  }
+}

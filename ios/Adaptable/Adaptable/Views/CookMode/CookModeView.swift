@@ -58,20 +58,36 @@ struct CookModeView: View {
         containerWidth >= 700 && !dynamicTypeSize.isAccessibilitySize
     }
 
+    private var allergyHits: [String] {
+        guard let recipe else { return [] }
+        return AllergenLexicon.ingredientViolations(
+            in: recipe,
+            allergies: authStore.profile?.preferences?.allergies ?? []
+        )
+    }
+
     var body: some View {
         Group {
             if let recipe {
-                content(recipe)
+                if allergyHits.isEmpty {
+                    content(recipe)
+                } else {
+                    blockedCook(recipe)
+                }
             } else {
                 Theme.surface.ignoresSafeArea().overlay(ProgressView())
             }
         }
         .task {
             recipe = try? await API.fetchRecipe(id: recipeId)
-            restoreFromLiveActivityIfNeeded()
-            applyCookCommand(deepLinks.pendingCookCommand)
+            if allergyHits.isEmpty {
+                restoreFromLiveActivityIfNeeded()
+                applyCookCommand(deepLinks.pendingCookCommand)
+            }
+            syncCookHardware()
         }
-        .onAppear { CookModeManager.startCookMode() }
+        .onAppear { syncCookHardware() }
+        .onChange(of: recipe?.id) { _, _ in syncCookHardware() }
         .onDisappear {
             voice.stop()
             CookModeManager.stopCookMode()
@@ -93,6 +109,58 @@ struct CookModeView: View {
             }
         }
         .onPreferenceChange(CookWidthKey.self) { containerWidth = $0 }
+    }
+
+    private func blockedCook(_ recipe: Recipe) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .frame(width: 44, height: 44)
+                        .background(Theme.sunken, in: Circle())
+                        .foregroundStyle(Theme.muted)
+                }
+                .accessibilityLabel("Exit cook mode")
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+
+            VStack(alignment: .leading, spacing: 16) {
+                Label("Cook Mode blocked", systemImage: "exclamationmark.shield.fill")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(Theme.down)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Theme.down.opacity(0.12), in: Capsule())
+
+                Text(recipe.title ?? "This recipe")
+                    .font(.system(size: 28, weight: .heavy))
+
+                Text("Ingredients match \(Format.list(allergyHits)) from your Taste Profile. We will not start this cook.")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Theme.muted)
+
+                Text("Always double-check the list yourself if you have a severe allergy.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.faint)
+
+                Button { dismiss() } label: {
+                    Text("Go back")
+                        .font(.system(size: 16, weight: .heavy))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .foregroundStyle(.white)
+                        .background(Theme.down.opacity(0.85), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .buttonStyle(.pressable)
+            }
+            .padding(24)
+            Spacer()
+        }
+        .background(Theme.surface.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Cook Mode blocked. \(Format.list(allergyHits)) found in ingredients.")
     }
 
     @ViewBuilder
@@ -654,7 +722,7 @@ struct CookModeView: View {
     }
 
     private func recordCookIfNeeded(recipe: Recipe) {
-        guard !cookRecorded, let userId = authStore.profile?.id else { return }
+        guard allergyHits.isEmpty, !cookRecorded, let userId = authStore.profile?.id else { return }
         cookRecorded = true
         Task { try? await API.recordCook(userId: userId, recipeId: recipe.id) }
     }
@@ -783,8 +851,22 @@ struct CookModeView: View {
         startAllTimers(for: resolved, recipe: recipe)
     }
 
+    private func syncCookHardware() {
+        // Recipe is still loading — do not treat that as a block or we will
+        // tear down Live Activities before restoreFromLiveActivityIfNeeded.
+        guard recipe != nil else { return }
+        if allergyHits.isEmpty {
+            CookModeManager.startCookMode()
+        } else {
+            voice.stop()
+            CookModeManager.stopCookMode()
+            CookTimerLiveActivity.endAll()
+            CookLiveActivityController.end()
+        }
+    }
+
     private func applyCookCommand(_ command: String?) {
-        guard let command, let recipe else { return }
+        guard let command, let recipe, allergyHits.isEmpty else { return }
         deepLinks.pendingCookCommand = nil
         let total = (recipe.steps ?? []).count
         if command == "next" { idx = min(idx + 1, total + 1) }

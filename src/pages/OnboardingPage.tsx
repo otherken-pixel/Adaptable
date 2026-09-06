@@ -4,6 +4,7 @@ import { ArrowRight, Check, Shield } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import type { Preferences } from "@/lib/types";
 import { formatList } from "@/lib/locale";
+import { TASTE_PROFILE_ALLERGY_CHIPS } from "@/lib/allergy";
 
 const DIETS = [
   "Vegetarian",
@@ -17,17 +18,7 @@ const DIETS = [
   "Kosher",
 ];
 
-const ALLERGIES = [
-  "Peanuts",
-  "Tree nuts",
-  "Dairy",
-  "Eggs",
-  "Gluten",
-  "Shellfish",
-  "Fish",
-  "Soy",
-  "Sesame",
-];
+const ALLERGIES = [...TASTE_PROFILE_ALLERGY_CHIPS];
 
 const SPICE = ["Mild", "Medium", "Hot"] as const;
 const SKILL = ["Beginner", "Confident", "Pro"] as const;

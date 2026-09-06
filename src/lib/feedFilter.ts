@@ -1,4 +1,5 @@
 import type { Recipe } from "./types";
+import { recipeMayContainAllergens } from "./allergy.ts";
 
 /** Chip kinds that drive Discover filtering. Mirrors iOS `FeedFilter.Chip`. */
 export type FeedChip =
@@ -20,6 +21,7 @@ export function filterFeedRecipes(
   chip: FeedChip,
   dietTags: string[],
   followedAuthorIds: Set<string>,
+  allergies: string[] = [],
 ): Recipe[] {
   const q = search.trim().toLowerCase();
   const diets = dietTags.map((d) => d.toLowerCase());
@@ -44,6 +46,9 @@ export function filterFeedRecipes(
           r.tags.some((t) => t.toLowerCase() === "high-protein")
         );
       case "foryou":
+        if (allergies.length && recipeMayContainAllergens(r, allergies).length) {
+          return false;
+        }
         if (diets.length === 0) return false;
         return r.tags.some((t) => diets.includes(t.toLowerCase()));
       case "following":

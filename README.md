@@ -129,12 +129,25 @@ supabase functions deploy generate-recipe
 supabase secrets set GEMINI_API_KEY=<your-gemini-key>
 
 # 2. Account deletion (required for App Store review):
+#    Cleans storage (recipe-covers / cook-photos / avatars) and leaves
+#    leftover households before auth.admin.deleteUser.
 supabase functions deploy delete-account
+
+# 2b. Plus entitlement (server cap — client isPlus cannot raise the 25/day
+#     generate/keep limit). Deploy even before Apple keys exist; free users
+#     stay capped. See "Adaptable Plus (server)" below.
+supabase functions deploy report-plus-entitlement
+supabase functions deploy generate-recipe
 
 # 3. iOS device push (optional, see "Notifications" below):
 #    --no-verify-jwt is required for Database Webhooks; the function
 #    still rejects callers that lack PUSH_WEBHOOK_SECRET or the service role.
+#    Ken must deploy edge functions and apply migrations after merge —
+#    this repo does not claim dashboard/deploy status.
 supabase functions deploy push-dispatch --no-verify-jwt
+supabase functions deploy generate-recipe
+supabase functions deploy read-fridge
+supabase functions deploy adapt-step
 
 # 4. Cover backfill (ops only — service-role Bearer or BACKFILL_SECRET):
 supabase secrets set BACKFILL_SECRET=$(openssl rand -hex 24)
@@ -152,15 +165,65 @@ In the dashboard:
 
 ### Verifying accounts
 
-A confirmed test login exists: `test@adaptable.dev` /
-`CookSomething!42`. Click-through checklist: sign in with it → feed
-shows the seeded recipes → vote/save/comment → edit username on
-Profile → sign out → create your own account (confirmation email) →
-"Forgot password?" flow → Profile → Delete account
-(needs the `delete-account` function deployed).
+Do **not** commit or publish production passwords. Create your own
+account on the live project (or a local Demo Mode session) and walk
+this checklist:
+
+1. Sign up with email/password → confirm the email if required.
+2. Feed shows seeded recipes → vote / save / comment.
+3. Edit username on Profile → sign out → sign back in.
+4. "Forgot password?" recovery link.
+5. Profile → Delete account (needs `delete-account` deployed). Confirm
+   recipe-covers / cook-photos / avatars for that user are gone and an
+   empty leftover household does not linger.
 
 Setting up a fresh project instead? Run the migrations with
 `supabase db push` — they are ordered and idempotent from empty.
+
+### Adaptable Plus (server)
+
+Free accounts are capped at **25 generate/keep calls per UTC day** in
+`generate-recipe`. That check reads `plus_entitlements`, not the iOS
+`isPlus` flag. A patched client cannot raise the cap.
+
+Plus is granted only by:
+
+1. **Preferred:** iOS sends the StoreKit 2 JWS to
+   `report-plus-entitlement`, which calls Apple's App Store Server API
+   and upserts `plus_entitlements`. Requires these secrets (In-App
+   Purchase key from App Store Connect → Users and Access →
+   Integrations — **do not invent these**):
+
+   ```bash
+   supabase secrets set \
+     APPLE_IAP_ISSUER_ID=<issuer-uuid> \
+     APPLE_IAP_KEY_ID=<key-id> \
+     APPLE_IAP_PRIVATE_KEY="$(cat SubscriptionKey_XXXXXXXXXX.p8)" \
+     APPLE_BUNDLE_ID=com.adaptable.app
+   supabase functions deploy report-plus-entitlement
+   supabase functions deploy generate-recipe
+   ```
+
+   An App Store shared secret alone is **not** enough for StoreKit 2
+   JWS verification. Until the three IAP key secrets exist, the
+   function returns `503 APPLE_IAP_NOT_CONFIGURED` and Plus stays off.
+
+2. **Interim (App Review / Ken):** grant a specific user via SQL in
+   the dashboard (service role). Clients cannot write this table.
+
+   ```sql
+   insert into public.plus_entitlements
+     (user_id, is_plus, product_id, environment)
+   values ('<user-uuid>', true, 'manual-review', 'Manual')
+   on conflict (user_id) do update
+     set is_plus = true,
+         product_id = 'manual-review',
+         environment = 'Manual',
+         updated_at = now();
+   ```
+
+Apply migration `20260906160000_plus_entitlements.sql` before relying
+on either path. Gemini stays server-side only.
 
 ### Schema at a glance
 
@@ -175,6 +238,7 @@ Setting up a fresh project instead? Run the migrations with
 | `cooks` | One row per finished Cook Mode session; trigger syncs `recipes.cook_count` | Owner only |
 | `notifications` | Inbox rows written by DB triggers on votes/comments/cooks; streamed via Realtime | Owner read/update; no client insert |
 | `device_tokens` | Raw APNs push tokens per user | Owner only |
+| `plus_entitlements` | StoreKit-verified (or ops-granted) Plus flag | Owner read; no client write |
 
 ### Notifications — the no-Firebase pipeline
 
@@ -207,6 +271,9 @@ Setup for device push (iOS):
 3. Create a Database Webhook (Dashboard → Database → Webhooks) on
    `INSERT` into `public.notifications`, pointing at the `push-dispatch`
    function URL, with header `x-webhook-secret: <PUSH_WEBHOOK_SECRET>`.
+   The function reads the webhook `{ type, table, record }` payload,
+   looks up `device_tokens` for `record.user_id`, and sends APNs.
+   Expired tokens (APNs 410) are pruned from `device_tokens`.
    The function returns 401 without that header (or a service-role Bearer).
 
 Android note: Google only allows background push through its FCM

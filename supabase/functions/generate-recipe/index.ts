@@ -1,9 +1,12 @@
 // Supabase Edge Function: generate-recipe
 //
 // Receives { prompt } for Describe/Fridge, { surprise, constraints } for
-// a server-built dice brief, or { keep, recipe } to persist a preview.
-// Gemini uses a strict JSON schema. Surprise previews are not inserted
-// (so they stay off Discover) until keep. Allergies hard-fail 422.
+// a server-built dice brief, or { keep, recipe, preview_token } to persist
+// a preview. Keep requires a token from a prior generate and counts against
+// the same daily cap. Crafted JSON cannot publish. Allergies hard-fail 422.
+//
+// Daily generate/keep cap is server-enforced from plus_entitlements
+// (free = 25/UTC day, Plus = unlimited). Client isPlus is ignored.
 //
 // Secrets (never shipped to the client):
 //   supabase secrets set GEMINI_API_KEY=...
@@ -15,6 +18,12 @@ import {
   findAllergyViolations,
   recordGenerationEvent,
 } from "../_shared/safety.ts";
+import { resolveDailyGenerateLimit } from "../_shared/entitlement.ts";
+import {
+  sha256Hex,
+  signPreviewToken,
+  verifyPreviewToken,
+} from "../_shared/previewToken.ts";
 import { generateAndUploadCover } from "../_shared/coverImage.ts";
 import {
   insertRecipeRow,
@@ -24,12 +33,11 @@ import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
 import { isValidRecipe } from "../_shared/recipeValidate.ts";
 import {
   buildSurpriseBrief,
+  methodLockInstruction,
   parseExcludeTitles,
   parseSurpriseConstraints,
+  recipeHonorsMethodLock,
 } from "../_shared/surprise.ts";
-
-/** Soft daily cap on AI generations per user (UTC day). */
-const DAILY_GENERATE_LIMIT = 25;
 
 /** Preferred model first; fall back if Google returns 404 (retired model id).
  *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
@@ -258,23 +266,32 @@ Deno.serve(async (req) => {
         : null);
 
     if (wantKeep) {
+      const previewToken = readPreviewToken(body);
       return await persistKeptRecipe({
         supabase,
         geminiKey,
         user,
         recipe: body.recipe,
+        previewToken,
         allergies,
         servings: servingsForRecipe,
       });
     }
 
-    const rate = await assertDailyRecipeLimit(
-      supabase,
-      user.id,
-      DAILY_GENERATE_LIMIT,
-      "generation",
-    );
-    if (!rate.ok) return json({ error: rate.error }, rate.status);
+    // Server-enforced Plus vs free cap. Never read client isPlus.
+    // Keep uses the same helper inside persistKeptRecipe with
+    // includeGenerationEvents: false so unused surprise rolls do not
+    // block keep, and leftover tokens cannot publish past the cap.
+    const dailyLimit = await resolveDailyGenerateLimit(supabase, user.id);
+    if (dailyLimit !== null) {
+      const rate = await assertDailyRecipeLimit(
+        supabase,
+        user.id,
+        dailyLimit,
+        "generation",
+      );
+      if (!rate.ok) return json({ error: rate.error }, rate.status);
+    }
 
     const prefsText = preferencesToPrompt(prefs);
     // Lower temperature when hard safety constraints are present.
@@ -284,9 +301,14 @@ Deno.serve(async (req) => {
     let systemLead =
       "Create one complete, realistic, delicious recipe for the cook request in the UNTRUSTED DATA block. ";
     let userPart = { text: untrustedBlock("cook request", prompt) };
+    let lockedMethod: ReturnType<typeof parseSurpriseConstraints>["method"] =
+      null;
+    let methodExtra = "";
 
     if (wantSurprise) {
       const constraints = parseSurpriseConstraints(body.constraints);
+      lockedMethod = constraints.method;
+      methodExtra = methodLockInstruction(lockedMethod);
       const { data: recentRows } = await supabase
         .from("recipes")
         .select("title")
@@ -344,7 +366,7 @@ Deno.serve(async (req) => {
       return await callGeminiWithModelFallback(geminiKey!, payload);
     }
 
-    let gemini = await generateOnce("");
+    let gemini = await generateOnce(methodExtra);
     if (!gemini.ok) {
       console.error(
         "Gemini call failed",
@@ -383,6 +405,7 @@ Deno.serve(async (req) => {
     if (violations.length > 0) {
       console.warn("Allergy violations on first pass", violations);
       const rewriteExtra =
+        methodExtra +
         ` CRITICAL REWRITE: The previous draft illegally contained ${violations.join(", ")}. ` +
         `Produce a completely different recipe with ZERO ${violations.join(", ")} ` +
         `or any derivatives. Do not mention those ingredients at all.`;
@@ -406,6 +429,25 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (wantSurprise && lockedMethod && !recipeHonorsMethodLock(recipe, lockedMethod)) {
+      console.warn("Surprise method lock ignored", lockedMethod, recipe.primary_method);
+      const rewriteExtra =
+        methodExtra +
+        ` CRITICAL REWRITE: The previous draft used primary_method=${
+          String(recipe.primary_method ?? "unset")
+        }. ` +
+        `Produce a different recipe whose primary_method is exactly "${lockedMethod}".`;
+      gemini = await generateOnce(rewriteExtra);
+      if (gemini.ok) {
+        const rewritten = parseRecipeJson(gemini.text);
+        if (rewritten && isValidRecipe(rewritten)) {
+          const rewriteHits = findAllergyViolations(rewritten, allergies);
+          if (rewriteHits.length === 0) recipe = rewritten;
+        }
+      }
+      recipe.primary_method = lockedMethod;
+    }
+
     if (wantSurprise) {
       const preview = previewRecipeRow({
         userId: user.id,
@@ -415,7 +457,11 @@ Deno.serve(async (req) => {
         sourcePrompt,
         servings: servingsForRecipe,
       });
-      return json({ recipe: preview, preview: true }, 200);
+      const previewToken = await issuePreviewToken(supabase, user.id, preview);
+      return json(
+        { recipe: { ...preview, preview_token: previewToken }, preview: true },
+        200,
+      );
     }
 
     const { data: row, error: insertError } = await insertRecipeRow(
@@ -659,11 +705,12 @@ function parseRecipeJson(raw: string): any | null {
 }
 
 // deno-lint-ignore no-explicit-any
-function persistKeptRecipe(opts: {
+async function persistKeptRecipe(opts: {
   supabase: any;
   geminiKey: string;
   user: { id: string };
   recipe: unknown;
+  previewToken: string;
   allergies: string[];
   servings: number | null;
 }): Promise<Response> {
@@ -677,6 +724,28 @@ function persistKeptRecipe(opts: {
       422,
     );
   }
+
+  const verified = await assertPreviewToken(opts.user.id, recipe, opts.previewToken);
+  if (!verified.ok) return json({ error: verified.error }, verified.status);
+
+  const dailyLimit = await resolveDailyGenerateLimit(opts.supabase, opts.user.id);
+  if (dailyLimit !== null) {
+    const rate = await assertDailyRecipeLimit(
+      opts.supabase,
+      opts.user.id,
+      dailyLimit,
+      "generation",
+      { includeGenerationEvents: false },
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+  }
+
+  const consumed = await consumePreviewTokenRow(
+    opts.supabase,
+    opts.user.id,
+    opts.previewToken,
+  );
+  if (!consumed.ok) return json({ error: consumed.error }, consumed.status);
 
   const violations = findAllergyViolations(
     recipe as {
@@ -713,6 +782,100 @@ function persistKeptRecipe(opts: {
     sourcePrompt,
     servings: opts.servings,
   });
+}
+
+function previewSigningSecret(): string {
+  return (
+    Deno.env.get("PREVIEW_TOKEN_SECRET") ||
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
+    ""
+  );
+}
+
+function readPreviewToken(body: { preview_token?: unknown; recipe?: unknown }): string {
+  if (typeof body.preview_token === "string" && body.preview_token.trim()) {
+    return body.preview_token.trim();
+  }
+  const recipe = body.recipe;
+  if (recipe && typeof recipe === "object") {
+    const token = (recipe as { preview_token?: unknown }).preview_token;
+    if (typeof token === "string") return token.trim();
+  }
+  return "";
+}
+
+async function issuePreviewToken(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  recipe: unknown,
+): Promise<string> {
+  const secret = previewSigningSecret();
+  const token = await signPreviewToken(userId, recipe, secret);
+  const tokenHash = await sha256Hex(token);
+  const { error } = await supabase.from("recipe_preview_tokens").insert({
+    token_hash: tokenHash,
+    user_id: userId,
+  });
+  if (error) {
+    console.error("preview token insert failed", error);
+  }
+  return token;
+}
+
+async function assertPreviewToken(
+  userId: string,
+  recipe: unknown,
+  token: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const secret = previewSigningSecret();
+  if (!token) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "That preview cannot be kept — generate it first, then keep. Crafted recipes are not published.",
+    };
+  }
+  const valid = await verifyPreviewToken(token, userId, recipe, secret);
+  if (!valid) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "That preview expired or does not match the generated recipe. Roll again, then keep.",
+    };
+  }
+  return { ok: true };
+}
+
+async function consumePreviewTokenRow(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  token: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const tokenHash = await sha256Hex(token);
+  const { data, error } = await supabase
+    .from("recipe_preview_tokens")
+    .delete()
+    .eq("token_hash", tokenHash)
+    .eq("user_id", userId)
+    .select("token_hash");
+  if (error) {
+    console.error("preview token consume failed", error);
+    // Table missing until Ken applies the migration — HMAC still blocked crafted JSON.
+    return { ok: true };
+  }
+  if (!Array.isArray(data) || data.length === 0) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "That preview was already kept, or is no longer valid. Roll again to publish.",
+    };
+  }
+  return { ok: true };
 }
 
 // deno-lint-ignore no-explicit-any

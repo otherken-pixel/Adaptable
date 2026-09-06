@@ -167,6 +167,8 @@ struct Recipe: Codable, Equatable, Identifiable {
     var meal_slot: String? = nil
     var active_prep_minutes: Int? = nil
     var equipment: [String]? = nil
+    /// One-time server token so keep cannot publish crafted JSON. Never persisted.
+    var preview_token: String? = nil
 
     var totalMinutes: Int { (prep_time_minutes ?? 0) + (cook_time_minutes ?? 0) }
 }

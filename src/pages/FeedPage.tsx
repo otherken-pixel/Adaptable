@@ -179,6 +179,7 @@ export default function FeedPage() {
       toFeedChip(activeChip),
       profile?.preferences?.diets ?? [],
       followedIds,
+      profile?.preferences?.allergies ?? [],
     );
   }, [recipes, search, activeChip, profile, followedIds]);
 

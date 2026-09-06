@@ -792,9 +792,9 @@ struct GenerateView: View {
         let vegan = diets.contains { $0.contains("vegan") }
         let vegetarian = vegan || diets.contains { $0.contains("vegetarian") }
         let pescatarian = diets.contains { $0.contains("pescatarian") }
-        let noFish = allergies.contains { $0.contains("fish") }
-        let noEgg = allergies.contains { $0.contains("egg") }
-        let noSoy = allergies.contains { $0.contains("soy") }
+        let noFish = allergies.contains { AllergenLexicon.canonicalKey($0) == "fish" }
+        let noEgg = allergies.contains { AllergenLexicon.canonicalKey($0) == "egg" }
+        let noSoy = allergies.contains { AllergenLexicon.canonicalKey($0) == "soy" }
 
         var options: [PrepBaseOption] = []
         if !vegetarian && !pescatarian {
