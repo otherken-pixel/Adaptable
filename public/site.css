@@ -56,7 +56,13 @@ a:hover { text-decoration: underline; }
 }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--content); font-weight: 800; font-size: 16px; }
 .brand img { width: 32px; height: 32px; border-radius: 8px; }
-.nav-drawer { margin-left: auto; }
+.nav-drawer,
+.nav-drawer::details-content {
+  display: contents;
+}
+.nav-drawer::details-content {
+  content-visibility: visible;
+}
 .nav-toggle {
   display: none;
   list-style: none;
@@ -125,12 +131,9 @@ li strong, p strong, h1, h2 { color: var(--content); }
     box-shadow: 0 -6px 0 currentColor, 0 6px 0 currentColor;
   }
   .nav { display: none; }
-  .nav-drawer[open] {
-    flex: 1 0 100%;
-    margin-left: 0;
-  }
   .nav-drawer[open] .nav {
     display: flex;
+    flex: 1 0 100%;
     flex-direction: column;
     gap: 0;
     padding: 4px 0 12px;
