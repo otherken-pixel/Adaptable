@@ -19,10 +19,34 @@ import { isValidRecipe } from "../supabase/functions/_shared/recipeValidate.ts";
 import {
   allowedSurpriseProteins,
   buildSurpriseBrief,
+  methodLockInstruction,
   parseSurpriseConstraints,
+  recipeHonorsMethodLock,
 } from "../supabase/functions/_shared/surprise.ts";
+import {
+  dailyGenerateLimit,
+  decodeJwsPayload,
+  FREE_DAILY_GENERATE_LIMIT,
+  isPlusActive,
+  isPlusProductId,
+} from "../supabase/functions/_shared/entitlement.ts";
 import { recordRecipeTaste, recordVoteTaste } from "../src/lib/tasteMemory.ts";
 import { isPreviewRecipe } from "../src/lib/surprise.ts";
+import {
+  addQuantities,
+  formatQuantityNumber,
+  scaleQuantity,
+} from "../src/lib/quantity.ts";
+import {
+  fingerprintRecipe,
+  signPreviewToken,
+  verifyPreviewToken,
+} from "../supabase/functions/_shared/previewToken.ts";
+import {
+  isNotificationsWebhook,
+  pushCopy,
+} from "../supabase/functions/_shared/pushCopy.ts";
+import { dailyRecipeUsageAtLimit } from "../supabase/functions/_shared/safety.ts";
 
 // --- aisle ---
 assert.equal(groceryAisle("Chicken thighs"), "Meat & Seafood");
@@ -281,6 +305,12 @@ const crock = buildSurpriseBrief({
 assert.equal(crock.method, "slow_cooker");
 assert.match(crock.prompt, /crock-pot \/ slow-cooker/);
 assert.match(crock.prompt, /15 minutes/);
+assert.match(crock.prompt, /HARD METHOD LOCK/);
+assert.match(crock.prompt, /primary_method MUST be "slow_cooker"/);
+assert.match(methodLockInstruction("slow_cooker"), /HARD METHOD LOCK/);
+assert.equal(recipeHonorsMethodLock({ primary_method: "slow_cooker" }, "slow_cooker"), true);
+assert.equal(recipeHonorsMethodLock({ primary_method: "oven" }, "slow_cooker"), false);
+assert.equal(recipeHonorsMethodLock({ primary_method: "Slow Cooker" }, "slow_cooker"), true);
 
 const veganProteins = allowedSurpriseProteins({
   diets: ["Vegan"],
@@ -301,5 +331,103 @@ const liked = recordRecipeTaste(preview, {});
 assert.ok((liked.learned?.cuisines?.Thai ?? 0) > 0);
 const down = recordVoteTaste(preview, -1, liked);
 assert.ok((down.learned?.cuisines?.Thai ?? 0) < (liked.learned?.cuisines?.Thai ?? 0));
+
+// --- Plus entitlement (server cap; never a client isPlus flag) ---
+assert.equal(FREE_DAILY_GENERATE_LIMIT, 25);
+assert.equal(dailyGenerateLimit(false), 25);
+assert.equal(dailyGenerateLimit(true), null);
+assert.equal(isPlusActive({ is_plus: true }), true);
+assert.equal(isPlusActive({ is_plus: false }), false);
+assert.equal(isPlusActive(null), false);
+assert.equal(
+  isPlusActive({ is_plus: true, expires_at: new Date(Date.now() + 86_400_000).toISOString() }),
+  true,
+);
+assert.equal(
+  isPlusActive({ is_plus: true, expires_at: new Date(Date.now() - 1000).toISOString() }),
+  false,
+);
+assert.equal(isPlusProductId("adaptable_monthly"), true);
+assert.equal(isPlusProductId("adaptable_annual"), true);
+assert.equal(isPlusProductId("com.adaptable.app.plus.monthly"), false);
+
+function fakeJws(payload) {
+  const b64 = (obj) =>
+    Buffer.from(JSON.stringify(obj)).toString("base64url");
+  return `${b64({ alg: "none" })}.${b64(payload)}.sig`;
+}
+const decoded = decodeJwsPayload(
+  fakeJws({ productId: "adaptable_monthly", transactionId: "tx-1" }),
+);
+assert.equal(decoded?.productId, "adaptable_monthly");
+assert.equal(decodeJwsPayload("not-a-jws"), null);
+assert.equal(decodeJwsPayload({ isPlus: true }), null);
+
+// --- serving scaler (mirrors ios Quantity.swift) ---
+assert.equal(scaleQuantity("to taste", 2), "to taste");
+assert.equal(scaleQuantity("a handful", 3), "a handful");
+assert.equal(scaleQuantity("2 × 150 g (5 oz)", 2), "4 × 150 g (5 oz)");
+assert.equal(scaleQuantity("1½", 1.5), "2 ¼");
+assert.equal(scaleQuantity("1 ½", 1.5), "2 ¼");
+assert.equal(scaleQuantity("1 ½ cups", 1.5), "2 ¼ cups");
+assert.equal(scaleQuantity("½ tsp salt plus 2 tbsp oil", 2), "1 tsp salt plus 2 tbsp oil");
+assert.equal(formatQuantityNumber(2.25), "2 ¼");
+assert.equal(addQuantities("1 cup", "½ cup"), "1 ½ cup");
+assert.equal(addQuantities("1 cup", "2 tbsp"), "1 cup + 2 tbsp");
+assert.equal(addQuantities("1 cup", "1 cup"), "1 cup");
+
+// --- preview token: crafted JSON cannot keep without a prior generate ---
+const previewRecipe = {
+  title: "Lemon Garlic Chicken",
+  description: "Bright skillet chicken",
+  ingredients: [
+    { item: "chicken thighs", quantity: "600 g" },
+    { item: "lemon", quantity: "1" },
+    { item: "garlic", quantity: "4 cloves" },
+    { item: "olive oil", quantity: "2 tbsp" },
+  ],
+  steps: [
+    { instruction: "Pat the chicken dry and season both sides with salt." },
+    { instruction: "Sear skin-side down in a hot skillet until deep gold." },
+    { instruction: "Add lemon and garlic, then roast until 165°F at the thickest point." },
+  ],
+  source_prompt: "surprise",
+};
+const tokenSecret = "preview-test-secret";
+const previewToken = await signPreviewToken("user-1", previewRecipe, tokenSecret);
+assert.equal(await verifyPreviewToken(previewToken, "user-1", previewRecipe, tokenSecret), true);
+assert.equal(
+  await verifyPreviewToken(previewToken, "user-1", { ...previewRecipe, title: "Crafted" }, tokenSecret),
+  false,
+);
+assert.equal(await verifyPreviewToken(previewToken, "user-2", previewRecipe, tokenSecret), false);
+assert.ok(fingerprintRecipe(previewRecipe).includes("lemon garlic chicken"));
+
+// keep of unused same-day previews is not blocked by generation events;
+// leftover tokens cannot publish past the published-recipe cap
+assert.equal(dailyRecipeUsageAtLimit(0, 25, 25, { includeGenerationEvents: false }), false);
+assert.equal(dailyRecipeUsageAtLimit(24, 25, 25, { includeGenerationEvents: false }), false);
+assert.equal(dailyRecipeUsageAtLimit(25, 0, 25, { includeGenerationEvents: false }), true);
+assert.equal(dailyRecipeUsageAtLimit(0, 25, 25), true);
+
+// --- push-dispatch webhook copy + payload detect ---
+assert.equal(
+  pushCopy({ type: "vote", actorName: "sam", recipeTitle: "Chili" }).body,
+  "sam liked Chili",
+);
+assert.equal(
+  pushCopy({ type: "comment", actorName: null, recipeTitle: null }).title,
+  "New comment",
+);
+assert.equal(isNotificationsWebhook({
+  type: "INSERT",
+  table: "notifications",
+  record: { user_id: "u1", actor_id: "u2", recipe_id: "r1", type: "cook" },
+}), true);
+assert.equal(isNotificationsWebhook({
+  deviceToken: "abc",
+  title: "Hi",
+  body: "There",
+}), false);
 
 console.log("smoke-tests: all passed");

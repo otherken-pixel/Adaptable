@@ -10,6 +10,7 @@ import {
 } from "@/pages/LegalPages";
 import LandingPage from "@/site/LandingPage";
 import GetAppPage from "@/site/GetAppPage";
+import IosOnlyPage from "@/site/IosOnlyPage";
 import { ChefHat } from "lucide-react";
 
 function ScrollToTop() {
@@ -56,7 +57,10 @@ function Shell() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/recipe/:id" element={<GetAppPage kind="recipe" />} />
         <Route path="/cook/:id" element={<GetAppPage kind="cook" />} />
-        <Route path="/auth" element={<Navigate to="/" replace />} />
+        <Route path="/cook" element={<IosOnlyPage kind="cook" />} />
+        <Route path="/auth" element={<IosOnlyPage kind="auth" />} />
+        <Route path="/create" element={<IosOnlyPage kind="create" />} />
+        <Route path="/discover" element={<IosOnlyPage kind="discover" />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
