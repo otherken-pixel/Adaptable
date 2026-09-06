@@ -9,6 +9,8 @@ final class ShoppingStore: ObservableObject {
 
     private var loadedForProfileId: String?
     private var offlineQueue: [OfflineOp] = []
+    private var isFlushing = false
+    private var flushAgain = false
     /// Legacy unscoped key — removed on load so it cannot be replayed for the wrong user.
     private let legacyQueueKey = "adaptable.shopping.offlineQueue.v1"
 
@@ -345,14 +347,39 @@ final class ShoppingStore: ObservableObject {
     }
 
     private func flushQueue(userId: String) async {
+        if isFlushing {
+            flushAgain = true
+            return
+        }
+        isFlushing = true
+        defer { isFlushing = false }
+        repeat {
+            flushAgain = false
+            await performFlush(userId: userId)
+        } while flushAgain && NetworkMonitor.shared.isOnline && !offlineQueue.isEmpty
+    }
+
+    private func performFlush(userId: String) async {
         guard NetworkMonitor.shared.isOnline, !offlineQueue.isEmpty else { return }
+        let snapshot = offlineQueue
+        // New enqueues during this pass land on a fresh queue so we do not
+        // overwrite them when the snapshot finishes.
+        offlineQueue = []
         var remaining: [OfflineOp] = []
-        for op in offlineQueue {
+        for op in snapshot {
             do {
                 switch op {
                 case .toggle(let id, let checked):
+                    if id.hasPrefix("tmp-") {
+                        updateQueuedInsert(tempId: id, checked: checked, userId: userId)
+                        continue
+                    }
                     try await API.setShoppingItemChecked(userId: userId, id: id, checked: checked)
                 case .remove(let id):
+                    if id.hasPrefix("tmp-") {
+                        dropQueuedInsert(tempId: id, userId: userId)
+                        continue
+                    }
                     try await API.removeShoppingItem(userId: userId, id: id)
                 case .clearChecked:
                     try await API.clearCheckedShoppingItems(userId: userId)
@@ -363,8 +390,6 @@ final class ShoppingStore: ObservableObject {
                         userId: userId,
                         rows: rows.map { ($0.recipeId, $0.recipeTitle, $0.item, $0.quantity) }
                     )
-                    // Insert succeeded — never re-queue it. Apply later edits from
-                    // the live list; a failed check becomes a toggle on the real id.
                     remaining.append(contentsOf: await reconcileCreatedInserts(
                         rows: rows,
                         created: created,
@@ -375,9 +400,9 @@ final class ShoppingStore: ObservableObject {
                 remaining.append(op)
             }
         }
-        offlineQueue = remaining
+        offlineQueue = remaining + offlineQueue
         persistQueue(for: userId)
-        if remaining.count < pendingSync || remaining.isEmpty {
+        if remaining.isEmpty {
             items = (try? await API.fetchShoppingItems(userId: userId)) ?? items
         }
     }
@@ -400,7 +425,7 @@ final class ShoppingStore: ObservableObject {
                 followUp.append(.remove(id: server.id))
                 continue
             }
-            let wantChecked = live?.checked == true || row.checked
+            let wantChecked = live?.checked == true
             if wantChecked {
                 do {
                     try await API.setShoppingItemChecked(userId: userId, id: server.id, checked: true)
