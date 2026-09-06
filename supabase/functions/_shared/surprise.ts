@@ -294,6 +294,9 @@ export function buildSurpriseBrief(opts: {
     `Main protein: ${PROTEIN_LABEL[protein]}.`,
     `Primary method: ${METHOD_LABEL[method]}.`,
   ];
+  if (constraints.method) {
+    parts.push(methodLockInstruction(constraints.method).trim());
+  }
 
   if (constraints.max_minutes !== null) {
     parts.push(
@@ -331,8 +334,10 @@ export function buildSurpriseBrief(opts: {
 
   parts.push("Invent a fresh dish — not a generic 'bowl' with no technique.");
 
+  // Keep method-lock language inside the slice so Gemini cannot drop it.
+  const budget = constraints.method ? 720 : 480;
   return {
-    prompt: parts.join(" ").slice(0, 480),
+    prompt: parts.join(" ").slice(0, budget),
     cuisine,
     protein,
     method,
@@ -411,4 +416,30 @@ export function pickWeighted<T>(
 
 export function cuisineAllowed(value: string): boolean {
   return CUISINE_SET.has(value.trim().toLowerCase());
+}
+
+/** Extra system text so a locked method (Crock pot) is not optional flavor. */
+export function methodLockInstruction(method: CookingMethod | null): string {
+  if (!method) return "";
+  const label = METHOD_LABEL[method];
+  return (
+    ` HARD METHOD LOCK: primary_method MUST be "${method}". ` +
+    `Cook this dish entirely with a ${label}. ` +
+    `Do not switch to oven, stovetop, Instant Pot, air fryer, grill, ` +
+    `or any other appliance as the primary method. ` +
+    `Set equipment to include ${method}. ` +
+    `Every main cook step must use the ${label}.`
+  );
+}
+
+export function recipeHonorsMethodLock(
+  recipe: { primary_method?: unknown },
+  method: CookingMethod | null,
+): boolean {
+  if (!method) return true;
+  const raw = String(recipe.primary_method ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  return raw === method;
 }

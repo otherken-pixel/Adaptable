@@ -5,6 +5,9 @@
 // a preview. Keep requires a token from a prior generate and counts against
 // the same daily cap. Crafted JSON cannot publish. Allergies hard-fail 422.
 //
+// Daily generate/keep cap is server-enforced from plus_entitlements
+// (free = 25/UTC day, Plus = unlimited). Client isPlus is ignored.
+//
 // Secrets (never shipped to the client):
 //   supabase secrets set GEMINI_API_KEY=...
 
@@ -15,6 +18,7 @@ import {
   findAllergyViolations,
   recordGenerationEvent,
 } from "../_shared/safety.ts";
+import { resolveDailyGenerateLimit } from "../_shared/entitlement.ts";
 import {
   sha256Hex,
   signPreviewToken,
@@ -29,12 +33,11 @@ import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
 import { isValidRecipe } from "../_shared/recipeValidate.ts";
 import {
   buildSurpriseBrief,
+  methodLockInstruction,
   parseExcludeTitles,
   parseSurpriseConstraints,
+  recipeHonorsMethodLock,
 } from "../_shared/surprise.ts";
-
-/** Soft daily cap on AI generations per user (UTC day). */
-const DAILY_GENERATE_LIMIT = 25;
 
 /** Preferred model first; fall back if Google returns 404 (retired model id).
  *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
@@ -275,13 +278,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    const rate = await assertDailyRecipeLimit(
-      supabase,
-      user.id,
-      DAILY_GENERATE_LIMIT,
-      "generation",
-    );
-    if (!rate.ok) return json({ error: rate.error }, rate.status);
+    // Server-enforced Plus vs free cap. Never read client isPlus.
+    // Keep uses the same helper inside persistKeptRecipe with reservedSlots
+    // so surprise+keep is not double-counted.
+    const dailyLimit = await resolveDailyGenerateLimit(supabase, user.id);
+    if (dailyLimit !== null) {
+      const rate = await assertDailyRecipeLimit(
+        supabase,
+        user.id,
+        dailyLimit,
+        "generation",
+      );
+      if (!rate.ok) return json({ error: rate.error }, rate.status);
+    }
 
     const prefsText = preferencesToPrompt(prefs);
     // Lower temperature when hard safety constraints are present.
@@ -291,9 +300,14 @@ Deno.serve(async (req) => {
     let systemLead =
       "Create one complete, realistic, delicious recipe for the cook request in the UNTRUSTED DATA block. ";
     let userPart = { text: untrustedBlock("cook request", prompt) };
+    let lockedMethod: ReturnType<typeof parseSurpriseConstraints>["method"] =
+      null;
+    let methodExtra = "";
 
     if (wantSurprise) {
       const constraints = parseSurpriseConstraints(body.constraints);
+      lockedMethod = constraints.method;
+      methodExtra = methodLockInstruction(lockedMethod);
       const { data: recentRows } = await supabase
         .from("recipes")
         .select("title")
@@ -351,7 +365,7 @@ Deno.serve(async (req) => {
       return await callGeminiWithModelFallback(geminiKey!, payload);
     }
 
-    let gemini = await generateOnce("");
+    let gemini = await generateOnce(methodExtra);
     if (!gemini.ok) {
       console.error(
         "Gemini call failed",
@@ -390,6 +404,7 @@ Deno.serve(async (req) => {
     if (violations.length > 0) {
       console.warn("Allergy violations on first pass", violations);
       const rewriteExtra =
+        methodExtra +
         ` CRITICAL REWRITE: The previous draft illegally contained ${violations.join(", ")}. ` +
         `Produce a completely different recipe with ZERO ${violations.join(", ")} ` +
         `or any derivatives. Do not mention those ingredients at all.`;
@@ -411,6 +426,25 @@ Deno.serve(async (req) => {
           422,
         );
       }
+    }
+
+    if (wantSurprise && lockedMethod && !recipeHonorsMethodLock(recipe, lockedMethod)) {
+      console.warn("Surprise method lock ignored", lockedMethod, recipe.primary_method);
+      const rewriteExtra =
+        methodExtra +
+        ` CRITICAL REWRITE: The previous draft used primary_method=${
+          String(recipe.primary_method ?? "unset")
+        }. ` +
+        `Produce a different recipe whose primary_method is exactly "${lockedMethod}".`;
+      gemini = await generateOnce(rewriteExtra);
+      if (gemini.ok) {
+        const rewritten = parseRecipeJson(gemini.text);
+        if (rewritten && isValidRecipe(rewritten)) {
+          const rewriteHits = findAllergyViolations(rewritten, allergies);
+          if (rewriteHits.length === 0) recipe = rewritten;
+        }
+      }
+      recipe.primary_method = lockedMethod;
     }
 
     if (wantSurprise) {
@@ -693,14 +727,17 @@ async function persistKeptRecipe(opts: {
   const verified = await assertPreviewToken(opts.user.id, recipe, opts.previewToken);
   if (!verified.ok) return json({ error: verified.error }, verified.status);
 
-  const rate = await assertDailyRecipeLimit(
-    opts.supabase,
-    opts.user.id,
-    DAILY_GENERATE_LIMIT,
-    "generation",
-    { reservedSlots: 1 },
-  );
-  if (!rate.ok) return json({ error: rate.error }, rate.status);
+  const dailyLimit = await resolveDailyGenerateLimit(opts.supabase, opts.user.id);
+  if (dailyLimit !== null) {
+    const rate = await assertDailyRecipeLimit(
+      opts.supabase,
+      opts.user.id,
+      dailyLimit,
+      "generation",
+      { reservedSlots: 1 },
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+  }
 
   const consumed = await consumePreviewTokenRow(
     opts.supabase,
