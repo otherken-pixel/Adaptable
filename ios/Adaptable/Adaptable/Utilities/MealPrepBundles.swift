@@ -257,10 +257,8 @@ enum MealPrepBundles {
         .joined(separator: " ")
         .lowercased()
 
-        for allergy in prefs.allergies ?? [] {
-            if allergyTerms(allergy).contains(where: { $0.count >= 3 && hay.contains($0) }) {
-                return false
-            }
+        if !AllergenLexicon.violations(in: recipe, allergies: prefs.allergies ?? []).isEmpty {
+            return false
         }
         for dislike in prefs.dislikes ?? [] {
             let key = dislike.lowercased().trimmingCharacters(in: .whitespaces)
@@ -282,21 +280,6 @@ enum MealPrepBundles {
             if meat.contains(protein) { return false }
         }
         return true
-    }
-
-    private static func allergyTerms(_ label: String) -> [String] {
-        switch label.lowercased() {
-        case "peanut", "peanuts": return ["peanut", "peanuts", "groundnut"]
-        case "dairy", "milk": return ["milk", "butter", "cheese", "cream", "yogurt", "yoghurt", "whey"]
-        case "egg", "eggs": return ["egg", "eggs", "mayonnaise"]
-        case "gluten", "wheat": return ["wheat", "barley", "rye", "flour", "breadcrumbs", "pasta"]
-        case "shellfish": return ["shrimp", "prawn", "crab", "lobster", "scallop", "clam", "mussel"]
-        case "fish": return ["fish", "salmon", "tuna", "cod", "anchovy", "sardine"]
-        case "soy": return ["soy", "soya", "tofu", "tempeh", "edamame", "miso"]
-        case "sesame": return ["sesame", "tahini"]
-        case "tree nuts", "tree nut": return ["almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut"]
-        default: return [label.lowercased()]
-        }
     }
 
     // MARK: - Assemble / select

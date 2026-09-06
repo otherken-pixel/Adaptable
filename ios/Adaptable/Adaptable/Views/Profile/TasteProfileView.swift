@@ -1,7 +1,7 @@
 import SwiftUI
 
 private let diets = ["Vegetarian", "Vegan", "Pescatarian", "Keto", "Paleo", "Gluten-free", "Dairy-free", "Halal", "Kosher", "Low-carb"]
-private let allergyOptions = ["Peanuts", "Tree nuts", "Shellfish", "Fish", "Eggs", "Dairy", "Gluten", "Soy", "Sesame"]
+private let allergyOptions = AllergenLexicon.chips
 private let spiceOptions = ["Mild", "Medium", "Hot"]
 private let skillOptions = ["Beginner", "Confident", "Pro"]
 

@@ -6,7 +6,14 @@
 import assert from "node:assert/strict";
 import { groceryAisle, sortAisles } from "../src/lib/aisle.ts";
 import { mergeQuantities, normalizeGroceryKey } from "../src/lib/groceryMerge.ts";
-import { recipeMayContainAllergens } from "../src/lib/allergy.ts";
+import {
+  recipeMayContainAllergens,
+  recipeIngredientsHitAllergens,
+} from "../src/lib/allergy.ts";
+import {
+  findAllergyViolations,
+  findIngredientAllergyViolations,
+} from "../supabase/functions/_shared/allergenLexicon.ts";
 import { filterFeedRecipes } from "../src/lib/feedFilter.ts";
 import { isValidRecipe } from "../supabase/functions/_shared/recipeValidate.ts";
 import {
@@ -42,6 +49,96 @@ const hits = recipeMayContainAllergens(
   ["Peanuts", "Dairy"],
 );
 assert.ok(hits.includes("Peanuts"));
+
+// Token-aware matcher: misses that naive ≥3 substring also missed,
+// plus false positives it used to fire.
+const fishHay = (item) => ({
+  title: "Test",
+  ingredients: [{ item, quantity: "1" }],
+  steps: [{ instruction: "cook" }],
+});
+assert.ok(
+  findAllergyViolations(fishHay("worcestershire sauce"), ["Fish"]).includes("Fish"),
+  "worcestershire is fish (anchovy)",
+);
+assert.ok(
+  findAllergyViolations(fishHay("nam pla"), ["Fish"]).includes("Fish"),
+  "nam pla is fish sauce",
+);
+assert.ok(
+  findAllergyViolations(fishHay("dashi and bonito flakes"), ["Fish"]).includes("Fish"),
+  "dashi/bonito is fish",
+);
+assert.equal(
+  findAllergyViolations(fishHay("shellfish stock"), ["Fish"]).length,
+  0,
+  "fish must not match inside shellfish",
+);
+assert.ok(
+  findAllergyViolations(fishHay("shellfish stock"), ["Shellfish"]).includes("Shellfish"),
+);
+assert.equal(
+  findAllergyViolations(fishHay("creamy coconut sauce"), ["Dairy"]).length,
+  0,
+  "creamy is not cream",
+);
+assert.equal(
+  findAllergyViolations(fishHay("coconut cream"), ["Dairy"]).length,
+  0,
+  "coconut cream is not dairy",
+);
+assert.equal(
+  findAllergyViolations(fishHay("cream of tartar"), ["Dairy"]).length,
+  0,
+  "cream of tartar is not dairy",
+);
+assert.ok(
+  findAllergyViolations(fishHay("heavy cream"), ["Dairy"]).includes("Dairy"),
+);
+assert.equal(
+  findAllergyViolations(fishHay("rice flour"), ["Gluten"]).length,
+  0,
+  "rice flour is not gluten flour",
+);
+assert.equal(
+  findAllergyViolations(fishHay("almond flour"), ["Gluten"]).length,
+  0,
+  "almond flour is not gluten flour",
+);
+assert.ok(
+  findAllergyViolations(fishHay("all-purpose flour"), ["Gluten"]).includes("Gluten"),
+);
+assert.ok(
+  findAllergyViolations(fishHay("dijon"), ["Mustard"]).includes("Mustard"),
+);
+assert.equal(
+  findAllergyViolations(
+    { title: "Shellfish boil", description: "shrimp", ingredients: [], steps: [] },
+    ["Fish"],
+  ).length,
+  0,
+);
+
+// Cook Mode uses ingredients only — title-only mention does not hard-block.
+assert.equal(
+  findIngredientAllergyViolations(
+    { title: "Peanut noodles", ingredients: [{ item: "rice noodles", quantity: "200g" }] },
+    ["Peanuts"],
+  ).length,
+  0,
+);
+assert.ok(
+  recipeIngredientsHitAllergens(
+    { ingredients: [{ item: "nam pla", note: "Thai fish sauce" }] },
+    ["Fish"],
+  ).includes("Fish"),
+);
+
+// Shared path and client helper stay aligned.
+assert.deepEqual(
+  recipeMayContainAllergens(fishHay("worcestershire"), ["Fish"]),
+  findAllergyViolations(fishHay("worcestershire"), ["Fish"]),
+);
 
 // --- feed filter ---
 const recipes = [
@@ -80,6 +177,33 @@ assert.equal(under20[0].id, "1");
 
 const lowCal = filterFeedRecipes(recipes, "", { kind: "cal", maxCalories: 500 }, [], new Set());
 assert.equal(lowCal.length, 1);
+
+const forYouPool = [
+  {
+    ...recipes[0],
+    id: "peanut-salad",
+    title: "Peanut Salad",
+    tags: ["Vegetarian"],
+    ingredients: [{ item: "peanut butter", quantity: "1 tbsp" }],
+  },
+  {
+    ...recipes[0],
+    id: "cucumber-salad",
+    title: "Cucumber Salad",
+    tags: ["Vegetarian"],
+    ingredients: [{ item: "cucumber", quantity: "1" }],
+  },
+];
+const forYouSafe = filterFeedRecipes(
+  forYouPool,
+  "",
+  { kind: "foryou" },
+  ["Vegetarian"],
+  new Set(),
+  ["Peanuts"],
+);
+assert.equal(forYouSafe.length, 1);
+assert.equal(forYouSafe[0].id, "cucumber-salad");
 
 // --- keepable recipe validation ---
 assert.equal(
