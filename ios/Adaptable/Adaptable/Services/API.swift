@@ -473,8 +473,14 @@ enum API {
             let keep: Bool
             let recipe: Recipe
             let servings: Int?
+            let preview_token: String?
         }
-        return try await invoke("generate-recipe", body: Body(keep: true, recipe: recipe, servings: recipe.servings))
+        return try await invoke("generate-recipe", body: Body(
+            keep: true,
+            recipe: recipe,
+            servings: recipe.servings,
+            preview_token: recipe.preview_token
+        ))
     }
 
     private static func invokeGenerate(_ body: some Encodable) async throws -> Recipe {

@@ -148,9 +148,11 @@ export async function assertDailyRecipeLimit(
   userId: string,
   limit: number,
   actionLabel: string,
+  opts: { reservedSlots?: number } = {},
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
+  const reserved = Math.max(0, Math.floor(opts.reservedSlots ?? 0));
 
   const { count, error } = await supabase
     .from("recipes")
@@ -177,12 +179,8 @@ export async function assertDailyRecipeLimit(
     extra = eventCount ?? 0;
   }
 
-  if ((count ?? 0) + extra >= limit) {
-    return {
-      ok: false,
-      status: 429,
-      error: `Daily ${actionLabel} limit reached (${limit}/day). Try again tomorrow — this keeps the AI kitchen fair for everyone.`,
-    };
+  if ((count ?? 0) + extra - reserved >= limit) {
+    return dailyLimitError(actionLabel, limit);
   }
   return { ok: true };
 }
@@ -202,6 +200,23 @@ export async function recordGenerationEvent(
   }
 }
 
+function utcDayStart(): string {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  return start.toISOString();
+}
+
+function dailyLimitError(
+  actionLabel: string,
+  limit: number,
+): { ok: false; status: number; error: string } {
+  return {
+    ok: false,
+    status: 429,
+    error: `Daily ${actionLabel} limit reached (${limit}/day). Try again tomorrow — this keeps the AI kitchen fair for everyone.`,
+  };
+}
+
 /** Soft daily cap for actions that do not insert a recipe (e.g. fridge reads). */
 export async function assertDailyActionLimit(
   // deno-lint-ignore no-explicit-any
@@ -210,16 +225,15 @@ export async function assertDailyActionLimit(
   action: string,
   limit: number,
   actionLabel: string,
+  opts: { consume?: boolean } = {},
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const start = new Date();
-  start.setUTCHours(0, 0, 0, 0);
-
+  const consume = opts.consume !== false;
   const { count, error } = await supabase
     .from("ai_usage_events")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("action", action)
-    .gte("created_at", start.toISOString());
+    .gte("created_at", utcDayStart());
 
   if (error) {
     console.error("action rate limit count failed", error);
@@ -227,19 +241,29 @@ export async function assertDailyActionLimit(
   }
 
   if ((count ?? 0) >= limit) {
-    return {
-      ok: false,
-      status: 429,
-      error: `Daily ${actionLabel} limit reached (${limit}/day). Try again tomorrow — this keeps the AI kitchen fair for everyone.`,
-    };
+    return dailyLimitError(actionLabel, limit);
   }
 
-  const { error: insertError } = await supabase.from("ai_usage_events").insert({
+  if (consume) {
+    const recorded = await recordDailyAction(supabase, userId, action);
+    if (!recorded.ok) return recorded;
+  }
+  return { ok: true };
+}
+
+/** Persist one successful AI action against the daily cap. */
+export async function recordDailyAction(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  action: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const { error } = await supabase.from("ai_usage_events").insert({
     user_id: userId,
     action,
   });
-  if (insertError) {
-    console.error("action rate limit insert failed", insertError);
+  if (error) {
+    console.error("action rate limit insert failed", error);
   }
   return { ok: true };
 }

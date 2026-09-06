@@ -2,6 +2,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
+  assertDailyActionLimit,
   extractAllergies,
   findAllergyViolations,
 } from "../_shared/safety.ts";
@@ -12,6 +13,9 @@ const GEMINI_MODELS = [
   "gemini-2.5-flash-lite",
   "gemini-flash-latest",
 ];
+
+/** Soft daily cap so uncapped in-step adapt cannot burn Gemini. */
+const DAILY_ADAPT_LIMIT = 40;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,6 +69,15 @@ Deno.serve(async (req) => {
     if (!missing || missing.length > 80) {
       return json({ error: "Tell us what you ran out of." }, 400);
     }
+
+    const rate = await assertDailyActionLimit(
+      supabase,
+      user.id,
+      "adapt-step",
+      DAILY_ADAPT_LIMIT,
+      "step adapt",
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) return json({ error: "Recipe engine is not configured." }, 500);
