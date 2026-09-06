@@ -4,10 +4,10 @@ import Supabase
 
 /// StoreKit 2 subscriptions for Adaptable Plus.
 ///
-/// App Store Connect (same subscription group, same rank):
-///   `adaptable_monthly`  — 1 month, $4.99
-///   `adaptable_annual`   — 1 year,  $39.99
-/// Attach a 7-day free intro on yearly in Connect if you want a trial;
+/// App Store Connect group **Adaptable Pro** (do not invent new product IDs):
+///   `adaptable_monthly`  — 1 month, $4.99  (Apple ID 6797548523)
+///   `adaptable_annual`   — 1 year,  $39.99 (Apple ID 6797549037)
+/// Attach a 7-day free intro on annual in Connect if you want a trial;
 /// the paywall reads it from StoreKit and will not claim a trial otherwise.
 @MainActor
 final class SubscriptionStore: ObservableObject {
