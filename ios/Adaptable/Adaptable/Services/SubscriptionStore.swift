@@ -1,5 +1,6 @@
 import Foundation
 import StoreKit
+import Supabase
 
 /// StoreKit 2 subscriptions for Adaptable Plus.
 ///
@@ -37,6 +38,11 @@ final class SubscriptionStore: ObservableObject {
         guard listener == nil else { return }
         listener = Task { await listenForTransactions() }
         Task { await refresh() }
+        // reportEntitlementToServer no-ops without a session. Re-run after
+        // sign-in so an existing Plus subscriber is not stuck on the free cap.
+        if !SupabaseManager.isDemo {
+            Task { await listenForAuthAndReport() }
+        }
     }
 
     /// Opens the StoreKit paywall. Always presents a real UI — never a silent no-op.
@@ -175,6 +181,14 @@ final class SubscriptionStore: ObservableObject {
             if let transaction = try? checkVerified(result) {
                 await transaction.finish()
                 await updateEntitlement()
+            }
+        }
+    }
+
+    private func listenForAuthAndReport() async {
+        for await (_, session) in SupabaseManager.client.auth.authStateChanges {
+            if session != nil {
+                await reportEntitlementToServer()
             }
         }
     }
