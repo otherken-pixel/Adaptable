@@ -42,17 +42,32 @@ export async function notifyReport(payload: {
   }
 }
 
+/**
+ * Whether today's usage is at the shared daily cap.
+ * Generate counts published recipes + unused surprise events.
+ * Keep of a valid preview counts published recipes only — the matching
+ * generate already reserved the Gemini slot via a generation event.
+ */
+export function dailyRecipeUsageAtLimit(
+  recipes: number,
+  generationEvents: number,
+  limit: number,
+  opts: { includeGenerationEvents?: boolean } = {},
+): boolean {
+  const extra = opts.includeGenerationEvents === false ? 0 : generationEvents;
+  return recipes + extra >= limit;
+}
+
 export async function assertDailyRecipeLimit(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   userId: string,
   limit: number,
   actionLabel: string,
-  opts: { reservedSlots?: number } = {},
+  opts: { includeGenerationEvents?: boolean } = {},
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
-  const reserved = Math.max(0, Math.floor(opts.reservedSlots ?? 0));
 
   const { count, error } = await supabase
     .from("recipes")
@@ -79,7 +94,11 @@ export async function assertDailyRecipeLimit(
     extra = eventCount ?? 0;
   }
 
-  if ((count ?? 0) + extra - reserved >= limit) {
+  if (
+    dailyRecipeUsageAtLimit(count ?? 0, extra, limit, {
+      includeGenerationEvents: opts.includeGenerationEvents,
+    })
+  ) {
     return dailyLimitError(actionLabel, limit);
   }
   return { ok: true };

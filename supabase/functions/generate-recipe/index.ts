@@ -698,7 +698,7 @@ async function persistKeptRecipe(opts: {
     opts.user.id,
     DAILY_GENERATE_LIMIT,
     "generation",
-    { reservedSlots: 1 },
+    { includeGenerationEvents: false },
   );
   if (!rate.ok) return json({ error: rate.error }, rate.status);
 

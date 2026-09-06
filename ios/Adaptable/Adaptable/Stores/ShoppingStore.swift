@@ -18,6 +18,7 @@ final class ShoppingStore: ObservableObject {
         var recipeTitle: String
         var item: String
         var quantity: String
+        var checked: Bool = false
     }
 
     private enum OfflineOp: Codable {
@@ -170,6 +171,11 @@ final class ShoppingStore: ObservableObject {
             return i
         }
         Haptics.selection()
+        // Temp rows only exist in the insert queue — never call the API with tmp- ids.
+        if id.hasPrefix("tmp-") {
+            updateQueuedInsert(tempId: id, checked: next, userId: userId)
+            return
+        }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.toggle(id: id, checked: next), userId: userId)
             return
@@ -190,6 +196,10 @@ final class ShoppingStore: ObservableObject {
     func remove(_ id: String, userId: String) {
         let removed = items.first { $0.id == id }
         items.removeAll { $0.id == id }
+        if id.hasPrefix("tmp-") {
+            dropQueuedInsert(tempId: id, userId: userId)
+            return
+        }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.remove(id: id), userId: userId)
             return
@@ -207,6 +217,12 @@ final class ShoppingStore: ObservableObject {
         let removed = items.filter(\.checked)
         guard !removed.isEmpty else { return }
         items = items.filter { !$0.checked }
+        let droppedTemps = removed.filter { $0.id.hasPrefix("tmp-") }
+        for row in droppedTemps {
+            dropQueuedInsert(tempId: row.id, userId: userId)
+        }
+        let serverRemoved = removed.filter { !$0.id.hasPrefix("tmp-") }
+        guard !serverRemoved.isEmpty else { return }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.clearChecked, userId: userId)
             return
@@ -215,7 +231,7 @@ final class ShoppingStore: ObservableObject {
             do {
                 try await API.clearCheckedShoppingItems(userId: userId)
             } catch {
-                items = removed + items
+                items = serverRemoved + items
             }
         }
     }
@@ -261,7 +277,7 @@ final class ShoppingStore: ObservableObject {
                         recipe_title: row.recipeTitle,
                         item: row.item,
                         quantity: row.quantity,
-                        checked: false,
+                        checked: row.checked,
                         created_at: now
                     )
                 )
@@ -270,14 +286,27 @@ final class ShoppingStore: ObservableObject {
         if !extras.isEmpty { items = extras + items }
     }
 
-    private func updateQueuedInsert(tempId: String, quantity: String, userId: String) {
+    private func updateQueuedInsert(tempId: String, quantity: String? = nil, checked: Bool? = nil, userId: String) {
         var changed = false
         offlineQueue = offlineQueue.map { op in
             guard case .insert(var rows) = op else { return op }
             guard let idx = rows.firstIndex(where: { $0.tempId == tempId }) else { return op }
-            rows[idx].quantity = quantity
+            if let quantity { rows[idx].quantity = quantity }
+            if let checked { rows[idx].checked = checked }
             changed = true
             return .insert(rows: rows)
+        }
+        if changed { persistQueue(for: userId) }
+    }
+
+    private func dropQueuedInsert(tempId: String, userId: String) {
+        var changed = false
+        offlineQueue = offlineQueue.compactMap { op -> OfflineOp? in
+            guard case .insert(let rows) = op else { return op }
+            let next = rows.filter { $0.tempId != tempId }
+            if next.count == rows.count { return op }
+            changed = true
+            return next.isEmpty ? nil : .insert(rows: next)
         }
         if changed { persistQueue(for: userId) }
     }
@@ -307,10 +336,14 @@ final class ShoppingStore: ObservableObject {
                 case .updateQuantity(let id, let quantity):
                     try await API.updateShoppingItemQuantity(userId: userId, id: id, quantity: quantity)
                 case .insert(let rows):
-                    let created = try await API.addShoppingItems(
+                    var created = try await API.addShoppingItems(
                         userId: userId,
                         rows: rows.map { ($0.recipeId, $0.recipeTitle, $0.item, $0.quantity) }
                     )
+                    for (index, row) in rows.enumerated() where row.checked && index < created.count {
+                        try await API.setShoppingItemChecked(userId: userId, id: created[index].id, checked: true)
+                        created[index].checked = true
+                    }
                     let tempIds = Set(rows.map(\.tempId))
                     items = created + items.filter { !tempIds.contains($0.id) }
                 }
