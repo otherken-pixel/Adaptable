@@ -852,7 +852,10 @@ struct CookModeView: View {
     }
 
     private func syncCookHardware() {
-        if recipe != nil && allergyHits.isEmpty {
+        // Recipe is still loading — do not treat that as a block or we will
+        // tear down Live Activities before restoreFromLiveActivityIfNeeded.
+        guard recipe != nil else { return }
+        if allergyHits.isEmpty {
             CookModeManager.startCookMode()
         } else {
             voice.stop()
