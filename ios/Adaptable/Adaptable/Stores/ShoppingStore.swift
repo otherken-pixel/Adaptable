@@ -12,13 +12,40 @@ final class ShoppingStore: ObservableObject {
     /// Legacy unscoped key — removed on load so it cannot be replayed for the wrong user.
     private let legacyQueueKey = "adaptable.shopping.offlineQueue.v1"
 
-    private struct QueuedInsert: Codable, Equatable {
+    private struct QueuedInsert: Equatable, Codable {
         var tempId: String
         var recipeId: String?
         var recipeTitle: String
         var item: String
         var quantity: String
-        var checked: Bool = false
+        var checked: Bool
+
+        init(
+            tempId: String,
+            recipeId: String?,
+            recipeTitle: String,
+            item: String,
+            quantity: String,
+            checked: Bool = false
+        ) {
+            self.tempId = tempId
+            self.recipeId = recipeId
+            self.recipeTitle = recipeTitle
+            self.item = item
+            self.quantity = quantity
+            self.checked = checked
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tempId = try c.decode(String.self, forKey: .tempId)
+            recipeId = try c.decodeIfPresent(String.self, forKey: .recipeId)
+            recipeTitle = try c.decode(String.self, forKey: .recipeTitle)
+            item = try c.decode(String.self, forKey: .item)
+            quantity = try c.decode(String.self, forKey: .quantity)
+            // Pre-checked-field queues must still load.
+            checked = try c.decodeIfPresent(Bool.self, forKey: .checked) ?? false
+        }
     }
 
     private enum OfflineOp: Codable {
@@ -140,15 +167,11 @@ final class ShoppingStore: ObservableObject {
                 quantity: row.quantity
             )
         }
-        if !NetworkMonitor.shared.isOnline {
-            enqueue(.insert(rows: queued), userId: userId)
-            return
-        }
-        do {
-            let created = try await API.addShoppingItems(userId: userId, rows: rows)
-            items = created + items.filter { item in !temp.contains { $0.id == item.id } }
-        } catch {
-            enqueue(.insert(rows: queued), userId: userId)
+        // Enqueue before the network call so toggle/remove during an in-flight
+        // add still find the temp rows.
+        enqueue(.insert(rows: queued), userId: userId)
+        if NetworkMonitor.shared.isOnline {
+            await flushQueue(userId: userId)
         }
     }
 
@@ -336,16 +359,17 @@ final class ShoppingStore: ObservableObject {
                 case .updateQuantity(let id, let quantity):
                     try await API.updateShoppingItemQuantity(userId: userId, id: id, quantity: quantity)
                 case .insert(let rows):
-                    var created = try await API.addShoppingItems(
+                    let created = try await API.addShoppingItems(
                         userId: userId,
                         rows: rows.map { ($0.recipeId, $0.recipeTitle, $0.item, $0.quantity) }
                     )
-                    for (index, row) in rows.enumerated() where row.checked && index < created.count {
-                        try await API.setShoppingItemChecked(userId: userId, id: created[index].id, checked: true)
-                        created[index].checked = true
-                    }
-                    let tempIds = Set(rows.map(\.tempId))
-                    items = created + items.filter { !tempIds.contains($0.id) }
+                    // Insert succeeded — never re-queue it. Apply later edits from
+                    // the live list; a failed check becomes a toggle on the real id.
+                    remaining.append(contentsOf: await reconcileCreatedInserts(
+                        rows: rows,
+                        created: created,
+                        userId: userId
+                    ))
                 }
             } catch {
                 remaining.append(op)
@@ -356,5 +380,39 @@ final class ShoppingStore: ObservableObject {
         if remaining.count < pendingSync || remaining.isEmpty {
             items = (try? await API.fetchShoppingItems(userId: userId)) ?? items
         }
+    }
+
+    /// Insert already landed. Never re-queue it. Honor in-flight temp edits
+    /// from the live list; a failed check becomes a toggle on the real id.
+    private func reconcileCreatedInserts(
+        rows: [QueuedInsert],
+        created: [ShoppingItem],
+        userId: String
+    ) async -> [OfflineOp] {
+        var followUp: [OfflineOp] = []
+        var kept: [ShoppingItem] = []
+        let tempIds = Set(rows.map(\.tempId))
+        for (index, row) in rows.enumerated() {
+            guard index < created.count else { break }
+            var server = created[index]
+            let live = items.first(where: { $0.id == row.tempId })
+            if live == nil {
+                followUp.append(.remove(id: server.id))
+                continue
+            }
+            let wantChecked = live?.checked == true || row.checked
+            if wantChecked {
+                do {
+                    try await API.setShoppingItemChecked(userId: userId, id: server.id, checked: true)
+                    server.checked = true
+                } catch {
+                    followUp.append(.toggle(id: server.id, checked: true))
+                    server.checked = true
+                }
+            }
+            kept.append(server)
+        }
+        items = kept + items.filter { !tempIds.contains($0.id) }
+        return followUp
     }
 }
