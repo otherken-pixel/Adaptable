@@ -192,6 +192,28 @@ final class SubscriptionStore: ObservableObject {
         }
         isPlus = entitled
         currentProductID = activeID
+        await reportEntitlementToServer()
+    }
+
+    /// Server generate/keep cap reads plus_entitlements, not this isPlus flag.
+    private func reportEntitlementToServer() async {
+        guard !SupabaseManager.isDemo else { return }
+        guard (try? await SupabaseManager.client.auth.session) != nil else { return }
+
+        var jws: String?
+        for await result in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = result else { continue }
+            guard Self.productIDs.contains(transaction.productID) else { continue }
+            if transaction.revocationDate != nil { continue }
+            jws = result.jwsRepresentation
+            break
+        }
+        guard let jws else { return }
+        do {
+            try await API.reportPlusEntitlement(signedTransactionInfo: jws)
+        } catch {
+            print("[SubscriptionStore] report-plus-entitlement failed: \(error)")
+        }
     }
 
     private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
