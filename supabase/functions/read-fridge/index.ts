@@ -1,7 +1,10 @@
 // Extract visible pantry ingredients from a fridge / counter photo.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { assertDailyActionLimit } from "../_shared/safety.ts";
+import {
+  assertDailyActionLimit,
+  recordDailyAction,
+} from "../_shared/safety.ts";
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
@@ -61,6 +64,7 @@ Deno.serve(async (req) => {
       "read-fridge",
       DAILY_FRIDGE_LIMIT,
       "fridge scan",
+      { consume: false },
     );
     if (!rate.ok) return json({ error: rate.error }, rate.status);
 
@@ -105,6 +109,7 @@ Deno.serve(async (req) => {
         const items = Array.isArray(parsed.ingredients)
           ? parsed.ingredients.map(String).map((s: string) => s.trim()).filter(Boolean).slice(0, 12)
           : [];
+        await recordDailyAction(supabase, user.id, "read-fridge");
         return json({ ingredients: items }, 200);
       }
     }

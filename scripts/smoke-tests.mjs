@@ -32,6 +32,20 @@ import {
 } from "../supabase/functions/_shared/entitlement.ts";
 import { recordRecipeTaste, recordVoteTaste } from "../src/lib/tasteMemory.ts";
 import { isPreviewRecipe } from "../src/lib/surprise.ts";
+import {
+  addQuantities,
+  formatQuantityNumber,
+  scaleQuantity,
+} from "../src/lib/quantity.ts";
+import {
+  fingerprintRecipe,
+  signPreviewToken,
+  verifyPreviewToken,
+} from "../supabase/functions/_shared/previewToken.ts";
+import {
+  isNotificationsWebhook,
+  pushCopy,
+} from "../supabase/functions/_shared/pushCopy.ts";
 
 // --- aisle ---
 assert.equal(groceryAisle("Chicken thighs"), "Meat & Seafood");
@@ -347,5 +361,65 @@ const decoded = decodeJwsPayload(
 assert.equal(decoded?.productId, "adaptable_monthly");
 assert.equal(decodeJwsPayload("not-a-jws"), null);
 assert.equal(decodeJwsPayload({ isPlus: true }), null);
+
+// --- serving scaler (mirrors ios Quantity.swift) ---
+assert.equal(scaleQuantity("to taste", 2), "to taste");
+assert.equal(scaleQuantity("a handful", 3), "a handful");
+assert.equal(scaleQuantity("2 × 150 g (5 oz)", 2), "4 × 150 g (5 oz)");
+assert.equal(scaleQuantity("1½", 1.5), "2 ¼");
+assert.equal(scaleQuantity("1 ½", 1.5), "2 ¼");
+assert.equal(scaleQuantity("1 ½ cups", 1.5), "2 ¼ cups");
+assert.equal(scaleQuantity("½ tsp salt plus 2 tbsp oil", 2), "1 tsp salt plus 2 tbsp oil");
+assert.equal(formatQuantityNumber(2.25), "2 ¼");
+assert.equal(addQuantities("1 cup", "½ cup"), "1 ½ cup");
+assert.equal(addQuantities("1 cup", "2 tbsp"), "1 cup + 2 tbsp");
+assert.equal(addQuantities("1 cup", "1 cup"), "1 cup");
+
+// --- preview token: crafted JSON cannot keep without a prior generate ---
+const previewRecipe = {
+  title: "Lemon Garlic Chicken",
+  description: "Bright skillet chicken",
+  ingredients: [
+    { item: "chicken thighs", quantity: "600 g" },
+    { item: "lemon", quantity: "1" },
+    { item: "garlic", quantity: "4 cloves" },
+    { item: "olive oil", quantity: "2 tbsp" },
+  ],
+  steps: [
+    { instruction: "Pat the chicken dry and season both sides with salt." },
+    { instruction: "Sear skin-side down in a hot skillet until deep gold." },
+    { instruction: "Add lemon and garlic, then roast until 165°F at the thickest point." },
+  ],
+  source_prompt: "surprise",
+};
+const tokenSecret = "preview-test-secret";
+const previewToken = await signPreviewToken("user-1", previewRecipe, tokenSecret);
+assert.equal(await verifyPreviewToken(previewToken, "user-1", previewRecipe, tokenSecret), true);
+assert.equal(
+  await verifyPreviewToken(previewToken, "user-1", { ...previewRecipe, title: "Crafted" }, tokenSecret),
+  false,
+);
+assert.equal(await verifyPreviewToken(previewToken, "user-2", previewRecipe, tokenSecret), false);
+assert.ok(fingerprintRecipe(previewRecipe).includes("lemon garlic chicken"));
+
+// --- push-dispatch webhook copy + payload detect ---
+assert.equal(
+  pushCopy({ type: "vote", actorName: "sam", recipeTitle: "Chili" }).body,
+  "sam liked Chili",
+);
+assert.equal(
+  pushCopy({ type: "comment", actorName: null, recipeTitle: null }).title,
+  "New comment",
+);
+assert.equal(isNotificationsWebhook({
+  type: "INSERT",
+  table: "notifications",
+  record: { user_id: "u1", actor_id: "u2", recipe_id: "r1", type: "cook" },
+}), true);
+assert.equal(isNotificationsWebhook({
+  deviceToken: "abc",
+  title: "Hi",
+  body: "There",
+}), false);
 
 console.log("smoke-tests: all passed");

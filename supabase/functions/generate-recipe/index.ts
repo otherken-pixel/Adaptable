@@ -1,9 +1,9 @@
 // Supabase Edge Function: generate-recipe
 //
 // Receives { prompt } for Describe/Fridge, { surprise, constraints } for
-// a server-built dice brief, or { keep, recipe } to persist a preview.
-// Gemini uses a strict JSON schema. Surprise previews are not inserted
-// (so they stay off Discover) until keep. Allergies hard-fail 422.
+// a server-built dice brief, or { keep, recipe, preview_token } to persist
+// a preview. Keep requires a token from a prior generate and counts against
+// the same daily cap. Crafted JSON cannot publish. Allergies hard-fail 422.
 //
 // Daily generate/keep cap is server-enforced from plus_entitlements
 // (free = 25/UTC day, Plus = unlimited). Client isPlus is ignored.
@@ -19,6 +19,11 @@ import {
   recordGenerationEvent,
 } from "../_shared/safety.ts";
 import { resolveDailyGenerateLimit } from "../_shared/entitlement.ts";
+import {
+  sha256Hex,
+  signPreviewToken,
+  verifyPreviewToken,
+} from "../_shared/previewToken.ts";
 import { generateAndUploadCover } from "../_shared/coverImage.ts";
 import {
   insertRecipeRow,
@@ -260,7 +265,22 @@ Deno.serve(async (req) => {
         ? household
         : null);
 
+    if (wantKeep) {
+      const previewToken = readPreviewToken(body);
+      return await persistKeptRecipe({
+        supabase,
+        geminiKey,
+        user,
+        recipe: body.recipe,
+        previewToken,
+        allergies,
+        servings: servingsForRecipe,
+      });
+    }
+
     // Server-enforced Plus vs free cap. Never read client isPlus.
+    // Keep uses the same helper inside persistKeptRecipe with reservedSlots
+    // so surprise+keep is not double-counted.
     const dailyLimit = await resolveDailyGenerateLimit(supabase, user.id);
     if (dailyLimit !== null) {
       const rate = await assertDailyRecipeLimit(
@@ -270,17 +290,6 @@ Deno.serve(async (req) => {
         "generation",
       );
       if (!rate.ok) return json({ error: rate.error }, rate.status);
-    }
-
-    if (wantKeep) {
-      return await persistKeptRecipe({
-        supabase,
-        geminiKey,
-        user,
-        recipe: body.recipe,
-        allergies,
-        servings: servingsForRecipe,
-      });
     }
 
     const prefsText = preferencesToPrompt(prefs);
@@ -447,7 +456,11 @@ Deno.serve(async (req) => {
         sourcePrompt,
         servings: servingsForRecipe,
       });
-      return json({ recipe: preview, preview: true }, 200);
+      const previewToken = await issuePreviewToken(supabase, user.id, preview);
+      return json(
+        { recipe: { ...preview, preview_token: previewToken }, preview: true },
+        200,
+      );
     }
 
     const { data: row, error: insertError } = await insertRecipeRow(
@@ -691,11 +704,12 @@ function parseRecipeJson(raw: string): any | null {
 }
 
 // deno-lint-ignore no-explicit-any
-function persistKeptRecipe(opts: {
+async function persistKeptRecipe(opts: {
   supabase: any;
   geminiKey: string;
   user: { id: string };
   recipe: unknown;
+  previewToken: string;
   allergies: string[];
   servings: number | null;
 }): Promise<Response> {
@@ -709,6 +723,28 @@ function persistKeptRecipe(opts: {
       422,
     );
   }
+
+  const verified = await assertPreviewToken(opts.user.id, recipe, opts.previewToken);
+  if (!verified.ok) return json({ error: verified.error }, verified.status);
+
+  const dailyLimit = await resolveDailyGenerateLimit(opts.supabase, opts.user.id);
+  if (dailyLimit !== null) {
+    const rate = await assertDailyRecipeLimit(
+      opts.supabase,
+      opts.user.id,
+      dailyLimit,
+      "generation",
+      { reservedSlots: 1 },
+    );
+    if (!rate.ok) return json({ error: rate.error }, rate.status);
+  }
+
+  const consumed = await consumePreviewTokenRow(
+    opts.supabase,
+    opts.user.id,
+    opts.previewToken,
+  );
+  if (!consumed.ok) return json({ error: consumed.error }, consumed.status);
 
   const violations = findAllergyViolations(
     recipe as {
@@ -745,6 +781,100 @@ function persistKeptRecipe(opts: {
     sourcePrompt,
     servings: opts.servings,
   });
+}
+
+function previewSigningSecret(): string {
+  return (
+    Deno.env.get("PREVIEW_TOKEN_SECRET") ||
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
+    ""
+  );
+}
+
+function readPreviewToken(body: { preview_token?: unknown; recipe?: unknown }): string {
+  if (typeof body.preview_token === "string" && body.preview_token.trim()) {
+    return body.preview_token.trim();
+  }
+  const recipe = body.recipe;
+  if (recipe && typeof recipe === "object") {
+    const token = (recipe as { preview_token?: unknown }).preview_token;
+    if (typeof token === "string") return token.trim();
+  }
+  return "";
+}
+
+async function issuePreviewToken(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  recipe: unknown,
+): Promise<string> {
+  const secret = previewSigningSecret();
+  const token = await signPreviewToken(userId, recipe, secret);
+  const tokenHash = await sha256Hex(token);
+  const { error } = await supabase.from("recipe_preview_tokens").insert({
+    token_hash: tokenHash,
+    user_id: userId,
+  });
+  if (error) {
+    console.error("preview token insert failed", error);
+  }
+  return token;
+}
+
+async function assertPreviewToken(
+  userId: string,
+  recipe: unknown,
+  token: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const secret = previewSigningSecret();
+  if (!token) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "That preview cannot be kept — generate it first, then keep. Crafted recipes are not published.",
+    };
+  }
+  const valid = await verifyPreviewToken(token, userId, recipe, secret);
+  if (!valid) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "That preview expired or does not match the generated recipe. Roll again, then keep.",
+    };
+  }
+  return { ok: true };
+}
+
+async function consumePreviewTokenRow(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  token: string,
+): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const tokenHash = await sha256Hex(token);
+  const { data, error } = await supabase
+    .from("recipe_preview_tokens")
+    .delete()
+    .eq("token_hash", tokenHash)
+    .eq("user_id", userId)
+    .select("token_hash");
+  if (error) {
+    console.error("preview token consume failed", error);
+    // Table missing until Ken applies the migration — HMAC still blocked crafted JSON.
+    return { ok: true };
+  }
+  if (!Array.isArray(data) || data.length === 0) {
+    return {
+      ok: false,
+      status: 422,
+      error:
+        "That preview was already kept, or is no longer valid. Roll again to publish.",
+    };
+  }
+  return { ok: true };
 }
 
 // deno-lint-ignore no-explicit-any

@@ -33,6 +33,10 @@ export const PUBLIC_EXACT = [
   "/terms",
   "/community",
   "/reset-password",
+  "/auth",
+  "/create",
+  "/discover",
+  "/cook",
 ] as const;
 
 /** Marketing / legal pages — no app chrome, public without a session. */
