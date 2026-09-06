@@ -75,7 +75,7 @@ async function dispatchWebhook(record: {
 
   const { data: tokens, error: tokenError } = await supabaseAdmin
     .from("device_tokens")
-    .select("token, platform")
+    .select("token, platform, is_sandbox")
     .eq("user_id", userId);
 
   if (tokenError) {
@@ -84,8 +84,15 @@ async function dispatchWebhook(record: {
   }
 
   const iosTokens = (tokens ?? [])
-    .map((row: { token?: string }) => String(row.token ?? "").trim())
-    .filter(Boolean);
+    .filter((row: { platform?: string }) => {
+      const platform = String(row.platform ?? "ios").toLowerCase();
+      return platform === "ios" || platform === "unknown";
+    })
+    .map((row: { token?: string; is_sandbox?: boolean }) => ({
+      token: String(row.token ?? "").trim(),
+      isSandbox: row.is_sandbox === true,
+    }))
+    .filter((row: { token: string }) => row.token);
 
   if (iosTokens.length === 0) {
     return json({ success: true, sent: 0 }, 200);
@@ -123,12 +130,12 @@ async function dispatchWebhook(record: {
   let sent = 0;
   let lastStatus = 200;
   let lastError: string | undefined;
-  for (const deviceToken of iosTokens) {
+  for (const { token: deviceToken, isSandbox } of iosTokens) {
     const result = await sendApns({
       deviceToken,
       title: copy.title,
       body: copy.body,
-      isSandbox: false,
+      isSandbox,
       customData,
     });
     if (result.status === 200) sent += 1;
@@ -150,6 +157,7 @@ async function sendApns(opts: {
   body: string;
   isSandbox: boolean;
   customData: Record<string, unknown>;
+  retriedOpposite?: boolean;
 }): Promise<{ status: number; body: Record<string, unknown> }> {
   const privateKey =
     Deno.env.get("APNS_PRIVATE_KEY") || Deno.env.get("APNS_AUTH_KEY") || "";
@@ -195,6 +203,15 @@ async function sendApns(opts: {
 
   if (apnsResponse.status === 200) {
     return { status: 200, body: { success: true } };
+  }
+
+  // Wrong APNs environment (sandbox vs production) often comes back 400.
+  if (apnsResponse.status === 400 && !opts.retriedOpposite) {
+    return await sendApns({
+      ...opts,
+      isSandbox: !opts.isSandbox,
+      retriedOpposite: true,
+    });
   }
 
   if (apnsResponse.status === 410) {

@@ -127,7 +127,15 @@ export default function FeedPage() {
       .map(([t]) => t);
 
     const list: Chip[] = [{ id: "all", kind: "all", label: "All" }];
-    if (profile?.preferences?.diets?.length) {
+    const prefs = profile?.preferences;
+    const hasTaste = Boolean(
+      prefs?.diets?.length ||
+        prefs?.allergies?.length ||
+        (prefs?.learned &&
+          (Object.keys(prefs.learned.cuisines ?? {}).length ||
+            Object.keys(prefs.learned.proteins ?? {}).length)),
+    );
+    if (hasTaste) {
       list.push({ id: "foryou", kind: "foryou", label: "✨ For you" });
     }
     if (followedIds.size > 0) {

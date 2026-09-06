@@ -354,6 +354,7 @@ struct FeedView: View {
         var list = [Chip(id: "all", label: "All", kind: .all)]
         let prefs = authStore.profile?.preferences
         let hasTaste = !(prefs?.diets ?? []).isEmpty
+            || !(prefs?.allergies ?? []).isEmpty
             || !(prefs?.learned?.cuisines ?? [:]).isEmpty
             || !(prefs?.learned?.proteins ?? [:]).isEmpty
         if hasTaste {

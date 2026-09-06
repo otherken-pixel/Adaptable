@@ -297,11 +297,12 @@ export async function registerDeviceToken(
   userId: string,
   token: string,
   platform: "ios" | "android" | "web" | "unknown",
+  isSandbox = false,
 ): Promise<void> {
   if (isDemo) return;
   const { error } = await supabase!
     .from("device_tokens")
-    .upsert({ token, user_id: userId, platform });
+    .upsert({ token, user_id: userId, platform, is_sandbox: isSandbox });
   if (error) throw error;
 }
 

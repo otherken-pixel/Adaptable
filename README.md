@@ -222,8 +222,31 @@ Plus is granted only by:
          updated_at = now();
    ```
 
-Apply migration `20260906160000_plus_entitlements.sql` before relying
-on either path. Gemini stays server-side only.
+Apply these migrations before relying on either path:
+
+- `20260906160000_plus_entitlements.sql`
+- `20260906170000_plus_entitlements_unique_txn.sql`
+- `20260906180000_device_token_sandbox.sql`
+
+Also confirm `ai_usage_events` exists (`20260821100000_household_rpc_harden.sql`).
+Gemini stays server-side only.
+
+Ken ops after merge (this repo cannot claim dashboard status):
+
+```bash
+supabase db push
+supabase functions deploy report-plus-entitlement
+supabase functions deploy generate-recipe
+supabase functions deploy import-recipe
+supabase functions deploy complete-bundle
+supabase functions deploy adapt-step
+supabase functions deploy read-fridge
+supabase functions deploy push-dispatch --no-verify-jwt
+```
+
+Set `VITE_APP_STORE_ID` on Vercel when the App Store listing exists,
+then rebuild the marketing site. Set `APPLE_IAP_*` and `APNS_*` /
+`PUSH_WEBHOOK_SECRET`, and create the `notifications` INSERT webhook.
 
 ### Schema at a glance
 

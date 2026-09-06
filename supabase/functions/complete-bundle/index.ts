@@ -10,6 +10,7 @@ import {
   extractAllergies,
   findAllergyViolations,
 } from "../_shared/safety.ts";
+import { resolveDailyGenerateLimit } from "../_shared/entitlement.ts";
 import { generateAndUploadCover } from "../_shared/coverImage.ts";
 import {
   classifyRecipe,
@@ -24,8 +25,6 @@ import {
   type MealSlot,
 } from "../_shared/mealPrep.ts";
 import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
-
-const DAILY_GENERATE_LIMIT = 25;
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
@@ -221,13 +220,16 @@ Deno.serve(async (req) => {
       return json({ error: "That bundle is already complete." }, 400);
     }
 
-    const rate = await assertDailyRecipeLimit(
-      supabase,
-      user.id,
-      DAILY_GENERATE_LIMIT - (missing - 1),
-      "generation",
-    );
-    if (!rate.ok) return json({ error: rate.error }, rate.status);
+    const dailyLimit = await resolveDailyGenerateLimit(supabase, user.id);
+    if (dailyLimit !== null) {
+      const rate = await assertDailyRecipeLimit(
+        supabase,
+        user.id,
+        dailyLimit - (missing - 1),
+        "generation",
+      );
+      if (!rate.ok) return json({ error: rate.error }, rate.status);
+    }
 
     const { data: profileRow } = await supabase
       .from("profiles")

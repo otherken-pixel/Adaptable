@@ -160,9 +160,7 @@ export default function MarketingLayout({
   );
 }
 
-const DESKTOP_NAV = NAV.filter((item) =>
-  item.hash || item.to === "/support" || item.to === "/privacy",
-);
+const DESKTOP_NAV = NAV;
 
 function DesktopLinks() {
   return (

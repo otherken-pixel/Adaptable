@@ -8,7 +8,7 @@
     "legal": "node --experimental-strip-types scripts/render-legal-html.mjs",
     "build": "npm run legal && tsc -b && vite build",
     "preview": "vite preview",
-    "test": "node --experimental-strip-types scripts/smoke-tests.mjs",
+    "test": "node --experimental-strip-types scripts/smoke-tests.mjs && node scripts/quantity-swift-smoke.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:ios": "npm run cap:sync && npx cap open ios",
     "cap:android": "npm run cap:sync && npx cap open android"
