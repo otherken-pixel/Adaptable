@@ -134,7 +134,12 @@ supabase functions deploy delete-account
 # 3. iOS device push (optional, see "Notifications" below):
 #    --no-verify-jwt is required for Database Webhooks; the function
 #    still rejects callers that lack PUSH_WEBHOOK_SECRET or the service role.
+#    Ken must deploy edge functions and apply migrations after merge —
+#    this repo does not claim dashboard/deploy status.
 supabase functions deploy push-dispatch --no-verify-jwt
+supabase functions deploy generate-recipe
+supabase functions deploy read-fridge
+supabase functions deploy adapt-step
 
 # 4. Cover backfill (ops only — service-role Bearer or BACKFILL_SECRET):
 supabase secrets set BACKFILL_SECRET=$(openssl rand -hex 24)
@@ -207,6 +212,9 @@ Setup for device push (iOS):
 3. Create a Database Webhook (Dashboard → Database → Webhooks) on
    `INSERT` into `public.notifications`, pointing at the `push-dispatch`
    function URL, with header `x-webhook-secret: <PUSH_WEBHOOK_SECRET>`.
+   The function reads the webhook `{ type, table, record }` payload,
+   looks up `device_tokens` for `record.user_id`, and sends APNs.
+   Expired tokens (APNs 410) are pruned from `device_tokens`.
    The function returns 401 without that header (or a service-role Bearer).
 
 Android note: Google only allows background push through its FCM

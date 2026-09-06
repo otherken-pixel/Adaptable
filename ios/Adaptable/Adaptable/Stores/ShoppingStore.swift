@@ -12,11 +12,20 @@ final class ShoppingStore: ObservableObject {
     /// Legacy unscoped key — removed on load so it cannot be replayed for the wrong user.
     private let legacyQueueKey = "adaptable.shopping.offlineQueue.v1"
 
+    private struct QueuedInsert: Codable, Equatable {
+        var tempId: String
+        var recipeId: String?
+        var recipeTitle: String
+        var item: String
+        var quantity: String
+    }
+
     private enum OfflineOp: Codable {
         case toggle(id: String, checked: Bool)
         case remove(id: String)
         case clearChecked
         case updateQuantity(id: String, quantity: String)
+        case insert(rows: [QueuedInsert])
     }
 
     private func queueKey(for userId: String) -> String {
@@ -37,6 +46,7 @@ final class ShoppingStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: legacyQueueKey)
         loadQueue(for: profile.id)
         if loadedForProfileId == profile.id {
+            rehydratePendingInserts()
             await flushQueue(userId: profile.id)
             return
         }
@@ -47,6 +57,7 @@ final class ShoppingStore: ObservableObject {
             // Don't mark loaded — a failed fetch used to look like an empty
             // list forever because the next load() bailed out.
         }
+        rehydratePendingInserts()
         await flushQueue(userId: profile.id)
     }
 
@@ -76,7 +87,9 @@ final class ShoppingStore: ObservableObject {
                     copy.quantity = merged
                     return copy
                 }
-                if !hit.id.hasPrefix("tmp-") {
+                if hit.id.hasPrefix("tmp-") {
+                    updateQueuedInsert(tempId: hit.id, quantity: merged, userId: userId)
+                } else {
                     mergedIds.append((hit.id, merged))
                 }
                 if let updated = items.first(where: { $0.id == hit.id }) {
@@ -117,11 +130,24 @@ final class ShoppingStore: ObservableObject {
         items = temp + items
         Haptics.success()
 
+        let queued = zip(temp, rows).map { item, row in
+            QueuedInsert(
+                tempId: item.id,
+                recipeId: row.recipeId,
+                recipeTitle: row.recipeTitle,
+                item: row.item,
+                quantity: row.quantity
+            )
+        }
+        if !NetworkMonitor.shared.isOnline {
+            enqueue(.insert(rows: queued), userId: userId)
+            return
+        }
         do {
             let created = try await API.addShoppingItems(userId: userId, rows: rows)
             items = created + items.filter { item in !temp.contains { $0.id == item.id } }
         } catch {
-            items = items.filter { item in !temp.contains { $0.id == item.id } }
+            enqueue(.insert(rows: queued), userId: userId)
         }
     }
 
@@ -220,6 +246,42 @@ final class ShoppingStore: ObservableObject {
         pendingSync = ops.count
     }
 
+    /// Rebuild optimistic temp rows from queued inserts so they survive relaunch.
+    private func rehydratePendingInserts() {
+        let now = ISO8601DateFormatter().string(from: Date())
+        var extras: [ShoppingItem] = []
+        for op in offlineQueue {
+            guard case .insert(let rows) = op else { continue }
+            for row in rows {
+                if items.contains(where: { $0.id == row.tempId }) { continue }
+                extras.append(
+                    ShoppingItem(
+                        id: row.tempId,
+                        recipe_id: row.recipeId,
+                        recipe_title: row.recipeTitle,
+                        item: row.item,
+                        quantity: row.quantity,
+                        checked: false,
+                        created_at: now
+                    )
+                )
+            }
+        }
+        if !extras.isEmpty { items = extras + items }
+    }
+
+    private func updateQueuedInsert(tempId: String, quantity: String, userId: String) {
+        var changed = false
+        offlineQueue = offlineQueue.map { op in
+            guard case .insert(var rows) = op else { return op }
+            guard let idx = rows.firstIndex(where: { $0.tempId == tempId }) else { return op }
+            rows[idx].quantity = quantity
+            changed = true
+            return .insert(rows: rows)
+        }
+        if changed { persistQueue(for: userId) }
+    }
+
     private func persistQueue(for userId: String) {
         let key = queueKey(for: userId)
         if offlineQueue.isEmpty {
@@ -244,6 +306,13 @@ final class ShoppingStore: ObservableObject {
                     try await API.clearCheckedShoppingItems(userId: userId)
                 case .updateQuantity(let id, let quantity):
                     try await API.updateShoppingItemQuantity(userId: userId, id: id, quantity: quantity)
+                case .insert(let rows):
+                    let created = try await API.addShoppingItems(
+                        userId: userId,
+                        rows: rows.map { ($0.recipeId, $0.recipeTitle, $0.item, $0.quantity) }
+                    )
+                    let tempIds = Set(rows.map(\.tempId))
+                    items = created + items.filter { !tempIds.contains($0.id) }
                 }
             } catch {
                 remaining.append(op)

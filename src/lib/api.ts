@@ -623,7 +623,12 @@ export async function keepGeneratedRecipe(recipe: Recipe): Promise<Recipe> {
   if (isDemo) return demoKeep(recipe);
   if (!isPreviewRecipe(recipe)) return recipe;
   const { data, error } = await supabase!.functions.invoke("generate-recipe", {
-    body: { keep: true, recipe, servings: recipe.servings },
+    body: {
+      keep: true,
+      recipe,
+      servings: recipe.servings,
+      preview_token: recipe.preview_token,
+    },
   });
   if (error) throw new Error(error.message ?? "Could not keep that recipe");
   if (data?.error) throw new Error(data.error);

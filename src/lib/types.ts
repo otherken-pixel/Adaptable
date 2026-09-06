@@ -91,6 +91,8 @@ export interface Recipe {
   created_at: string;
   /** Joined author profile (select `author:profiles(...)`). */
   author?: Pick<Profile, "id" | "username" | "avatar_url"> | null;
+  /** One-time server token so keep cannot publish crafted JSON. Never persisted. */
+  preview_token?: string;
 }
 
 export interface Comment {
