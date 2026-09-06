@@ -693,12 +693,17 @@ async function persistKeptRecipe(opts: {
   const verified = await assertPreviewToken(opts.user.id, recipe, opts.previewToken);
   if (!verified.ok) return json({ error: verified.error }, verified.status);
 
+  const previewCreatedAt = await peekPreviewTokenCreatedAt(
+    opts.supabase,
+    opts.user.id,
+    opts.previewToken,
+  );
   const rate = await assertDailyRecipeLimit(
     opts.supabase,
     opts.user.id,
     DAILY_GENERATE_LIMIT,
     "generation",
-    { reservedSlots: 1 },
+    { previewCreatedAt },
   );
   if (!rate.ok) return json({ error: rate.error }, rate.status);
 
@@ -809,6 +814,27 @@ async function assertPreviewToken(
     };
   }
   return { ok: true };
+}
+
+async function peekPreviewTokenCreatedAt(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  token: string,
+): Promise<string | null> {
+  if (!token) return null;
+  const tokenHash = await sha256Hex(token);
+  const { data, error } = await supabase
+    .from("recipe_preview_tokens")
+    .select("created_at")
+    .eq("token_hash", tokenHash)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.error("preview token peek failed", error);
+    return null;
+  }
+  return typeof data?.created_at === "string" ? data.created_at : null;
 }
 
 async function consumePreviewTokenRow(

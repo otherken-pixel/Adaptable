@@ -148,11 +148,11 @@ export async function assertDailyRecipeLimit(
   userId: string,
   limit: number,
   actionLabel: string,
-  opts: { reservedSlots?: number } = {},
+  opts: { reservedSlots?: number; previewCreatedAt?: string | null } = {},
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
-  const reserved = Math.max(0, Math.floor(opts.reservedSlots ?? 0));
+  let reserved = Math.max(0, Math.floor(opts.reservedSlots ?? 0));
 
   const { count, error } = await supabase
     .from("recipes")
@@ -177,6 +177,16 @@ export async function assertDailyRecipeLimit(
     console.error("rate limit event count failed", eventError);
   } else {
     extra = eventCount ?? 0;
+  }
+
+  // Same-day surprise previews already incremented `extra`. Credit all of
+  // those events so every unused roll can be kept without double-counting.
+  // A leftover token from a prior day must not waive today's cap.
+  if (opts.previewCreatedAt !== undefined) {
+    const minted = Date.parse(opts.previewCreatedAt ?? "");
+    reserved = Number.isFinite(minted) && minted >= start.getTime()
+      ? extra
+      : 0;
   }
 
   if ((count ?? 0) + extra - reserved >= limit) {

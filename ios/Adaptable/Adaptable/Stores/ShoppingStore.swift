@@ -170,7 +170,7 @@ final class ShoppingStore: ObservableObject {
             return i
         }
         Haptics.selection()
-        if !NetworkMonitor.shared.isOnline {
+        if !NetworkMonitor.shared.isOnline || id.hasPrefix("tmp-") {
             enqueue(.toggle(id: id, checked: next), userId: userId)
             return
         }
@@ -190,6 +190,10 @@ final class ShoppingStore: ObservableObject {
     func remove(_ id: String, userId: String) {
         let removed = items.first { $0.id == id }
         items.removeAll { $0.id == id }
+        if id.hasPrefix("tmp-") {
+            dropQueuedTemp(id, userId: userId)
+            return
+        }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.remove(id: id), userId: userId)
             return
@@ -282,6 +286,46 @@ final class ShoppingStore: ObservableObject {
         if changed { persistQueue(for: userId) }
     }
 
+    /// Drop a temp row from a queued insert (and any follow-up ops on that id)
+    /// so flush never creates a deleted item or calls the API with `tmp-`.
+    private func dropQueuedTemp(_ tempId: String, userId: String) {
+        var changed = false
+        offlineQueue = offlineQueue.compactMap { op in
+            switch op {
+            case .insert(var rows):
+                let before = rows.count
+                rows.removeAll { $0.tempId == tempId }
+                if rows.count != before { changed = true }
+                return rows.isEmpty ? nil : .insert(rows: rows)
+            case .toggle(let id, _) where id == tempId:
+                changed = true
+                return nil
+            case .remove(let id) where id == tempId:
+                changed = true
+                return nil
+            case .updateQuantity(let id, _) where id == tempId:
+                changed = true
+                return nil
+            default:
+                return op
+            }
+        }
+        if changed { persistQueue(for: userId) }
+    }
+
+    private func remapOp(_ op: OfflineOp, idMap: [String: String]) -> OfflineOp {
+        switch op {
+        case .toggle(let id, let checked):
+            return .toggle(id: idMap[id] ?? id, checked: checked)
+        case .remove(let id):
+            return .remove(id: idMap[id] ?? id)
+        case .updateQuantity(let id, let quantity):
+            return .updateQuantity(id: idMap[id] ?? id, quantity: quantity)
+        default:
+            return op
+        }
+    }
+
     private func persistQueue(for userId: String) {
         let key = queueKey(for: userId)
         if offlineQueue.isEmpty {
@@ -295,7 +339,9 @@ final class ShoppingStore: ObservableObject {
     private func flushQueue(userId: String) async {
         guard NetworkMonitor.shared.isOnline, !offlineQueue.isEmpty else { return }
         var remaining: [OfflineOp] = []
-        for op in offlineQueue {
+        var idMap: [String: String] = [:]
+        for original in offlineQueue {
+            let op = remapOp(original, idMap: idMap)
             do {
                 switch op {
                 case .toggle(let id, let checked):
@@ -312,6 +358,9 @@ final class ShoppingStore: ObservableObject {
                         rows: rows.map { ($0.recipeId, $0.recipeTitle, $0.item, $0.quantity) }
                     )
                     let tempIds = Set(rows.map(\.tempId))
+                    for (row, item) in zip(rows, created) {
+                        idMap[row.tempId] = item.id
+                    }
                     items = created + items.filter { !tempIds.contains($0.id) }
                 }
             } catch {
