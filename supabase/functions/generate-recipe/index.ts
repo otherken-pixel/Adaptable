@@ -279,8 +279,9 @@ Deno.serve(async (req) => {
     }
 
     // Server-enforced Plus vs free cap. Never read client isPlus.
-    // Keep uses the same helper inside persistKeptRecipe with reservedSlots
-    // so surprise+keep is not double-counted.
+    // Keep uses the same helper inside persistKeptRecipe with
+    // includeGenerationEvents: false so unused surprise rolls do not
+    // block keep, and leftover tokens cannot publish past the cap.
     const dailyLimit = await resolveDailyGenerateLimit(supabase, user.id);
     if (dailyLimit !== null) {
       const rate = await assertDailyRecipeLimit(
@@ -734,7 +735,7 @@ async function persistKeptRecipe(opts: {
       opts.user.id,
       dailyLimit,
       "generation",
-      { reservedSlots: 1 },
+      { includeGenerationEvents: false },
     );
     if (!rate.ok) return json({ error: rate.error }, rate.status);
   }

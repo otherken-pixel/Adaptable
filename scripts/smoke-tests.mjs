@@ -46,6 +46,7 @@ import {
   isNotificationsWebhook,
   pushCopy,
 } from "../supabase/functions/_shared/pushCopy.ts";
+import { dailyRecipeUsageAtLimit } from "../supabase/functions/_shared/safety.ts";
 
 // --- aisle ---
 assert.equal(groceryAisle("Chicken thighs"), "Meat & Seafood");
@@ -401,6 +402,13 @@ assert.equal(
 );
 assert.equal(await verifyPreviewToken(previewToken, "user-2", previewRecipe, tokenSecret), false);
 assert.ok(fingerprintRecipe(previewRecipe).includes("lemon garlic chicken"));
+
+// keep of unused same-day previews is not blocked by generation events;
+// leftover tokens cannot publish past the published-recipe cap
+assert.equal(dailyRecipeUsageAtLimit(0, 25, 25, { includeGenerationEvents: false }), false);
+assert.equal(dailyRecipeUsageAtLimit(24, 25, 25, { includeGenerationEvents: false }), false);
+assert.equal(dailyRecipeUsageAtLimit(25, 0, 25, { includeGenerationEvents: false }), true);
+assert.equal(dailyRecipeUsageAtLimit(0, 25, 25), true);
 
 // --- push-dispatch webhook copy + payload detect ---
 assert.equal(

@@ -9,15 +9,45 @@ final class ShoppingStore: ObservableObject {
 
     private var loadedForProfileId: String?
     private var offlineQueue: [OfflineOp] = []
+    private var isFlushing = false
+    private var flushAgain = false
     /// Legacy unscoped key — removed on load so it cannot be replayed for the wrong user.
     private let legacyQueueKey = "adaptable.shopping.offlineQueue.v1"
 
-    private struct QueuedInsert: Codable, Equatable {
+    private struct QueuedInsert: Equatable, Codable {
         var tempId: String
         var recipeId: String?
         var recipeTitle: String
         var item: String
         var quantity: String
+        var checked: Bool
+
+        init(
+            tempId: String,
+            recipeId: String?,
+            recipeTitle: String,
+            item: String,
+            quantity: String,
+            checked: Bool = false
+        ) {
+            self.tempId = tempId
+            self.recipeId = recipeId
+            self.recipeTitle = recipeTitle
+            self.item = item
+            self.quantity = quantity
+            self.checked = checked
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            tempId = try c.decode(String.self, forKey: .tempId)
+            recipeId = try c.decodeIfPresent(String.self, forKey: .recipeId)
+            recipeTitle = try c.decode(String.self, forKey: .recipeTitle)
+            item = try c.decode(String.self, forKey: .item)
+            quantity = try c.decode(String.self, forKey: .quantity)
+            // Pre-checked-field queues must still load.
+            checked = try c.decodeIfPresent(Bool.self, forKey: .checked) ?? false
+        }
     }
 
     private enum OfflineOp: Codable {
@@ -139,15 +169,11 @@ final class ShoppingStore: ObservableObject {
                 quantity: row.quantity
             )
         }
-        if !NetworkMonitor.shared.isOnline {
-            enqueue(.insert(rows: queued), userId: userId)
-            return
-        }
-        do {
-            let created = try await API.addShoppingItems(userId: userId, rows: rows)
-            items = created + items.filter { item in !temp.contains { $0.id == item.id } }
-        } catch {
-            enqueue(.insert(rows: queued), userId: userId)
+        // Enqueue before the network call so toggle/remove during an in-flight
+        // add still find the temp rows.
+        enqueue(.insert(rows: queued), userId: userId)
+        if NetworkMonitor.shared.isOnline {
+            await flushQueue(userId: userId)
         }
     }
 
@@ -170,6 +196,11 @@ final class ShoppingStore: ObservableObject {
             return i
         }
         Haptics.selection()
+        // Temp rows only exist in the insert queue — never call the API with tmp- ids.
+        if id.hasPrefix("tmp-") {
+            updateQueuedInsert(tempId: id, checked: next, userId: userId)
+            return
+        }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.toggle(id: id, checked: next), userId: userId)
             return
@@ -190,6 +221,10 @@ final class ShoppingStore: ObservableObject {
     func remove(_ id: String, userId: String) {
         let removed = items.first { $0.id == id }
         items.removeAll { $0.id == id }
+        if id.hasPrefix("tmp-") {
+            dropQueuedInsert(tempId: id, userId: userId)
+            return
+        }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.remove(id: id), userId: userId)
             return
@@ -207,6 +242,12 @@ final class ShoppingStore: ObservableObject {
         let removed = items.filter(\.checked)
         guard !removed.isEmpty else { return }
         items = items.filter { !$0.checked }
+        let droppedTemps = removed.filter { $0.id.hasPrefix("tmp-") }
+        for row in droppedTemps {
+            dropQueuedInsert(tempId: row.id, userId: userId)
+        }
+        let serverRemoved = removed.filter { !$0.id.hasPrefix("tmp-") }
+        guard !serverRemoved.isEmpty else { return }
         if !NetworkMonitor.shared.isOnline {
             enqueue(.clearChecked, userId: userId)
             return
@@ -215,7 +256,7 @@ final class ShoppingStore: ObservableObject {
             do {
                 try await API.clearCheckedShoppingItems(userId: userId)
             } catch {
-                items = removed + items
+                items = serverRemoved + items
             }
         }
     }
@@ -261,7 +302,7 @@ final class ShoppingStore: ObservableObject {
                         recipe_title: row.recipeTitle,
                         item: row.item,
                         quantity: row.quantity,
-                        checked: false,
+                        checked: row.checked,
                         created_at: now
                     )
                 )
@@ -270,14 +311,27 @@ final class ShoppingStore: ObservableObject {
         if !extras.isEmpty { items = extras + items }
     }
 
-    private func updateQueuedInsert(tempId: String, quantity: String, userId: String) {
+    private func updateQueuedInsert(tempId: String, quantity: String? = nil, checked: Bool? = nil, userId: String) {
         var changed = false
         offlineQueue = offlineQueue.map { op in
             guard case .insert(var rows) = op else { return op }
             guard let idx = rows.firstIndex(where: { $0.tempId == tempId }) else { return op }
-            rows[idx].quantity = quantity
+            if let quantity { rows[idx].quantity = quantity }
+            if let checked { rows[idx].checked = checked }
             changed = true
             return .insert(rows: rows)
+        }
+        if changed { persistQueue(for: userId) }
+    }
+
+    private func dropQueuedInsert(tempId: String, userId: String) {
+        var changed = false
+        offlineQueue = offlineQueue.compactMap { op -> OfflineOp? in
+            guard case .insert(let rows) = op else { return op }
+            let next = rows.filter { $0.tempId != tempId }
+            if next.count == rows.count { return op }
+            changed = true
+            return next.isEmpty ? nil : .insert(rows: next)
         }
         if changed { persistQueue(for: userId) }
     }
@@ -293,14 +347,39 @@ final class ShoppingStore: ObservableObject {
     }
 
     private func flushQueue(userId: String) async {
+        if isFlushing {
+            flushAgain = true
+            return
+        }
+        isFlushing = true
+        defer { isFlushing = false }
+        repeat {
+            flushAgain = false
+            await performFlush(userId: userId)
+        } while flushAgain && NetworkMonitor.shared.isOnline && !offlineQueue.isEmpty
+    }
+
+    private func performFlush(userId: String) async {
         guard NetworkMonitor.shared.isOnline, !offlineQueue.isEmpty else { return }
+        let snapshot = offlineQueue
+        // New enqueues during this pass land on a fresh queue so we do not
+        // overwrite them when the snapshot finishes.
+        offlineQueue = []
         var remaining: [OfflineOp] = []
-        for op in offlineQueue {
+        for op in snapshot {
             do {
                 switch op {
                 case .toggle(let id, let checked):
+                    if id.hasPrefix("tmp-") {
+                        updateQueuedInsert(tempId: id, checked: checked, userId: userId)
+                        continue
+                    }
                     try await API.setShoppingItemChecked(userId: userId, id: id, checked: checked)
                 case .remove(let id):
+                    if id.hasPrefix("tmp-") {
+                        dropQueuedInsert(tempId: id, userId: userId)
+                        continue
+                    }
                     try await API.removeShoppingItem(userId: userId, id: id)
                 case .clearChecked:
                     try await API.clearCheckedShoppingItems(userId: userId)
@@ -311,17 +390,54 @@ final class ShoppingStore: ObservableObject {
                         userId: userId,
                         rows: rows.map { ($0.recipeId, $0.recipeTitle, $0.item, $0.quantity) }
                     )
-                    let tempIds = Set(rows.map(\.tempId))
-                    items = created + items.filter { !tempIds.contains($0.id) }
+                    remaining.append(contentsOf: await reconcileCreatedInserts(
+                        rows: rows,
+                        created: created,
+                        userId: userId
+                    ))
                 }
             } catch {
                 remaining.append(op)
             }
         }
-        offlineQueue = remaining
+        offlineQueue = remaining + offlineQueue
         persistQueue(for: userId)
-        if remaining.count < pendingSync || remaining.isEmpty {
+        if remaining.isEmpty {
             items = (try? await API.fetchShoppingItems(userId: userId)) ?? items
         }
+    }
+
+    /// Insert already landed. Never re-queue it. Honor in-flight temp edits
+    /// from the live list; a failed check becomes a toggle on the real id.
+    private func reconcileCreatedInserts(
+        rows: [QueuedInsert],
+        created: [ShoppingItem],
+        userId: String
+    ) async -> [OfflineOp] {
+        var followUp: [OfflineOp] = []
+        var kept: [ShoppingItem] = []
+        let tempIds = Set(rows.map(\.tempId))
+        for (index, row) in rows.enumerated() {
+            guard index < created.count else { break }
+            var server = created[index]
+            let live = items.first(where: { $0.id == row.tempId })
+            if live == nil {
+                followUp.append(.remove(id: server.id))
+                continue
+            }
+            let wantChecked = live?.checked == true
+            if wantChecked {
+                do {
+                    try await API.setShoppingItemChecked(userId: userId, id: server.id, checked: true)
+                    server.checked = true
+                } catch {
+                    followUp.append(.toggle(id: server.id, checked: true))
+                    server.checked = true
+                }
+            }
+            kept.append(server)
+        }
+        items = kept + items.filter { !tempIds.contains($0.id) }
+        return followUp
     }
 }
