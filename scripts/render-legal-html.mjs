@@ -65,9 +65,15 @@ function page(doc) {
   <header class="site-header">
     <div class="wrap">
       <a class="brand" href="/"><img src="/icon.svg" width="32" height="32" alt="" />Adaptable</a>
-      <nav class="nav">
+      <details class="nav-drawer">
+        <summary class="nav-toggle">
+          <span class="nav-toggle-bars" aria-hidden="true"></span>
+          <span class="sr-only">Menu</span>
+        </summary>
+        <nav class="nav">
         ${nav(doc.slug)}
-      </nav>
+        </nav>
+      </details>
     </div>
   </header>
   <main class="wrap">
@@ -86,7 +92,7 @@ function page(doc) {
         <a href="/terms">Terms</a>
         <a href="/support">Support</a>
         <a href="/community">Community</a>
-        <a href="/auth">Sign in</a>
+        <a href="/auth">Get the app</a>
       </nav>
       <p class="note">Apple, the Apple logo, and App Store are trademarks of Apple Inc.</p>
     </div>

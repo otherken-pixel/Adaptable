@@ -171,7 +171,7 @@ export default function LandingPage() {
 
 function PhonePreview() {
   return (
-    <div className="mx-auto w-full max-w-[320px]" aria-hidden>
+    <div className="mx-auto w-full max-w-[320px] min-h-[28rem]" aria-hidden>
       <div className="rounded-[2.4rem] border border-line bg-content p-3 shadow-2xl shadow-accent/10">
         <div className="overflow-hidden rounded-[1.9rem] bg-surface">
           <div className="px-5 pt-8 pb-4">
@@ -186,6 +186,9 @@ function PhonePreview() {
               imageUrl="/marketing/hero-pasta.jpg"
               cuisine="Italian"
               heightClass="h-40"
+              width={1152}
+              height={864}
+              priority
             />
             <div className="space-y-3 p-4">
               <div>
