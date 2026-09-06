@@ -84,16 +84,41 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    const originalTransactionId = verified.transaction.originalTransactionId;
+    if (originalTransactionId) {
+      const { data: claimed, error: claimedError } = await admin
+        .from("plus_entitlements")
+        .select("user_id")
+        .eq("original_transaction_id", originalTransactionId)
+        .maybeSingle();
+      if (claimedError) {
+        console.error("plus_entitlements lookup failed", claimedError);
+        return json({ error: "Could not save Plus status. Try again." }, 500);
+      }
+      if (claimed && claimed.user_id !== user.id) {
+        return json(
+          { error: "This Plus purchase is already linked to another account." },
+          409,
+        );
+      }
+    }
+
     const { error: upsertError } = await admin.from("plus_entitlements").upsert({
       user_id: user.id,
       is_plus: verified.transaction.entitled,
       product_id: verified.transaction.productId,
-      original_transaction_id: verified.transaction.originalTransactionId,
+      original_transaction_id: originalTransactionId,
       expires_at: verified.transaction.expiresAt,
       environment: verified.transaction.environment,
       updated_at: new Date().toISOString(),
     });
     if (upsertError) {
+      if (upsertError.code === "23505") {
+        return json(
+          { error: "This Plus purchase is already linked to another account." },
+          409,
+        );
+      }
       console.error("plus_entitlements upsert failed", upsertError);
       return json({ error: "Could not save Plus status. Try again." }, 500);
     }
