@@ -28,7 +28,9 @@ struct ProfileView: View {
                 header
                 if let profile = authStore.profile {
                     identityCard(profile)
-                    plusCard
+                    if !authStore.isDemo {
+                        plusCard
+                    }
                     statsRow
                     if !mine.isEmpty {
                         creationsSection
@@ -37,7 +39,9 @@ struct ProfileView: View {
                     }
                     tasteProfileLink(profile)
                     HouseholdCard()
-                    pushSection
+                    if !authStore.isDemo {
+                        pushSection
+                    }
                     if !authStore.isDemo {
                         signOutButton
                         dangerZone

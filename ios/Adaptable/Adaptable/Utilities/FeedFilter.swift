@@ -25,6 +25,8 @@ enum FeedFilter {
         let q = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let diets = dietTags.map { $0.lowercased() }
 
+        let allergies = preferences?.allergies ?? []
+
         let filtered = recipes.filter { r in
             if !q.isEmpty {
                 let haystack = (
@@ -33,6 +35,12 @@ enum FeedFilter {
                 .joined(separator: " ")
                 .lowercased()
                 if !haystack.contains(q) { return false }
+            }
+
+            // Every Discover chip hides Taste Profile allergens — All included.
+            if !allergies.isEmpty,
+               !AllergenLexicon.violations(in: r, allergies: allergies).isEmpty {
+                return false
             }
 
             switch chip {
@@ -48,11 +56,6 @@ enum FeedFilter {
                 if let protein = r.protein_g, protein >= min { return true }
                 return (r.tags ?? []).contains { $0.lowercased() == "high-protein" }
             case .forYou:
-                let allergies = preferences?.allergies ?? []
-                if !allergies.isEmpty,
-                   !AllergenLexicon.violations(in: r, allergies: allergies).isEmpty {
-                    return false
-                }
                 if diets.isEmpty { return true }
                 return (r.tags ?? []).contains { diets.contains($0.lowercased()) }
             case .following:

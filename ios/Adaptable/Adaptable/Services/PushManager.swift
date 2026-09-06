@@ -71,6 +71,16 @@ final class PushManager: ObservableObject {
         status = .denied
     }
 
+    /// Xcode / development builds talk to APNs sandbox. TestFlight and
+    /// App Store builds use production. Matches `device_tokens.is_sandbox`.
+    private static var apnsSandbox: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
     private var deviceToken: String? {
         // Apple accepts either case; uppercase matches many server examples.
         deviceTokenData?.map { String(format: "%02hhx", $0) }.joined().uppercased()
@@ -100,7 +110,12 @@ final class PushManager: ObservableObject {
         guard let token = deviceToken, let userId = currentUserId, !SupabaseManager.isDemo else { return }
         print("[Push] registration attempt #\(attempt) user=\(userId) token=\(token.prefix(16))…")
         do {
-            try await API.registerDeviceToken(userId: userId, token: token, platform: "ios")
+            try await API.registerDeviceToken(
+                userId: userId,
+                token: token,
+                platform: "ios",
+                isSandbox: Self.apnsSandbox
+            )
             status = .enabled
             print("[Push] registration successful")
         } catch {

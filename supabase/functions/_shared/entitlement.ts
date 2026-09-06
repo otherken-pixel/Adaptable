@@ -79,3 +79,12 @@ export async function resolveDailyGenerateLimit(
   }
   return dailyGenerateLimit(isPlusActive(data));
 }
+
+/** Plus after Apple verify (or ops grant). Fail closed on read errors. */
+export async function resolveIsPlus(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+): Promise<boolean> {
+  return (await resolveDailyGenerateLimit(supabase, userId)) === null;
+}

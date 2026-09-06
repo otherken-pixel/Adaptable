@@ -34,6 +34,11 @@ export function filterFeedRecipes(
       if (!haystack.includes(q)) return false;
     }
 
+    // Every Discover chip hides Taste Profile allergens — All included.
+    if (allergies.length && recipeMayContainAllergens(r, allergies).length) {
+      return false;
+    }
+
     switch (chip.kind) {
       case "time":
         return r.prep_time_minutes + r.cook_time_minutes <= chip.maxMinutes;
@@ -46,10 +51,7 @@ export function filterFeedRecipes(
           r.tags.some((t) => t.toLowerCase() === "high-protein")
         );
       case "foryou":
-        if (allergies.length && recipeMayContainAllergens(r, allergies).length) {
-          return false;
-        }
-        if (diets.length === 0) return false;
+        if (diets.length === 0) return true;
         return r.tags.some((t) => diets.includes(t.toLowerCase()));
       case "following":
         return followedAuthorIds.has(r.author_id);

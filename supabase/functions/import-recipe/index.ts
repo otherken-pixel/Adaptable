@@ -7,7 +7,8 @@
 //
 // The page/photo/text is parsed by Gemini against the same strict JSON
 // schema used for generation, inserted under the caller's identity
-// (RLS enforced), and returned. Import is free and unlimited by design.
+// (RLS enforced), and returned. Free accounts have a soft daily cap;
+// Plus is unlimited, matching the paywall.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
@@ -15,6 +16,7 @@ import {
   extractAllergies,
   findAllergyViolations,
 } from "../_shared/safety.ts";
+import { resolveIsPlus } from "../_shared/entitlement.ts";
 import { generateAndUploadCover } from "../_shared/coverImage.ts";
 import {
   insertRecipeRow,
@@ -28,7 +30,7 @@ import {
   untrustedBlock,
 } from "../_shared/prompt.ts";
 
-/** Soft daily cap on imports per user (UTC day). Free but not infinite. */
+/** Soft daily cap on imports per free user (UTC day). Plus is unlimited. */
 const DAILY_IMPORT_LIMIT = 40;
 
 /** Gemini 2.0 Flash family shut down 2026-06-01 — use 2.5+. */
@@ -153,13 +155,15 @@ Deno.serve(async (req) => {
       return json({ error: "The import engine is not configured. Contact support." }, 500);
     }
 
-    const rate = await assertDailyRecipeLimit(
-      supabase,
-      user.id,
-      DAILY_IMPORT_LIMIT,
-      "import",
-    );
-    if (!rate.ok) return json({ error: rate.error }, rate.status);
+    if (!(await resolveIsPlus(supabase, user.id))) {
+      const rate = await assertDailyRecipeLimit(
+        supabase,
+        user.id,
+        DAILY_IMPORT_LIMIT,
+        "import",
+      );
+      if (!rate.ok) return json({ error: rate.error }, rate.status);
+    }
 
     const { data: profileRow } = await supabase
       .from("profiles")

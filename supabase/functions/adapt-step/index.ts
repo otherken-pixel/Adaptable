@@ -5,6 +5,7 @@ import {
   assertDailyActionLimit,
   extractAllergies,
   findAllergyViolations,
+  recordDailyAction,
 } from "../_shared/safety.ts";
 import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
 
@@ -76,6 +77,7 @@ Deno.serve(async (req) => {
       "adapt-step",
       DAILY_ADAPT_LIMIT,
       "step adapt",
+      { consume: false },
     );
     if (!rate.ok) return json({ error: rate.error }, rate.status);
 
@@ -152,6 +154,7 @@ Deno.serve(async (req) => {
           422,
         );
       }
+      await recordDailyAction(supabase, user.id, "adapt-step");
       return json({ adapt }, 200);
     }
     console.error("adapt-step failed", last.slice(0, 300));

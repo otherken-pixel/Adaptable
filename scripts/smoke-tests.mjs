@@ -229,6 +229,39 @@ const forYouSafe = filterFeedRecipes(
 assert.equal(forYouSafe.length, 1);
 assert.equal(forYouSafe[0].id, "cucumber-salad");
 
+const allHidesAllergen = filterFeedRecipes(
+  forYouPool,
+  "",
+  { kind: "all" },
+  [],
+  new Set(),
+  ["Peanuts"],
+);
+assert.equal(allHidesAllergen.length, 1);
+assert.equal(allHidesAllergen[0].id, "cucumber-salad");
+
+const timeHidesAllergen = filterFeedRecipes(
+  forYouPool,
+  "",
+  { kind: "time", maxMinutes: 20 },
+  [],
+  new Set(),
+  ["Peanuts"],
+);
+assert.equal(timeHidesAllergen.length, 1);
+assert.equal(timeHidesAllergen[0].id, "cucumber-salad");
+
+const forYouAllergyOnly = filterFeedRecipes(
+  forYouPool,
+  "",
+  { kind: "foryou" },
+  [],
+  new Set(),
+  ["Peanuts"],
+);
+assert.equal(forYouAllergyOnly.length, 1);
+assert.equal(forYouAllergyOnly[0].id, "cucumber-salad");
+
 // --- keepable recipe validation ---
 assert.equal(
   isValidRecipe({
@@ -375,6 +408,9 @@ assert.equal(formatQuantityNumber(2.25), "2 ¼");
 assert.equal(addQuantities("1 cup", "½ cup"), "1 ½ cup");
 assert.equal(addQuantities("1 cup", "2 tbsp"), "1 cup + 2 tbsp");
 assert.equal(addQuantities("1 cup", "1 cup"), "1 cup");
+assert.equal(scaleQuantity("3/4", 2), "1 ½");
+assert.equal(scaleQuantity("2,5 tbsp", 2), "5 tbsp");
+assert.equal(scaleQuantity("1 1/2 cups", 2), "3 cups");
 
 // --- preview token: crafted JSON cannot keep without a prior generate ---
 const previewRecipe = {

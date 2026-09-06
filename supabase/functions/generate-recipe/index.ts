@@ -864,8 +864,11 @@ async function consumePreviewTokenRow(
     .select("token_hash");
   if (error) {
     console.error("preview token consume failed", error);
-    // Table missing until Ken applies the migration — HMAC still blocked crafted JSON.
-    return { ok: true };
+    return {
+      ok: false,
+      status: 503,
+      error: "Could not confirm that keep. Try again in a moment.",
+    };
   }
   if (!Array.isArray(data) || data.length === 0) {
     return {

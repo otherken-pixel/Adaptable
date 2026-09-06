@@ -231,10 +231,22 @@ enum API {
 
     // MARK: - Device tokens (push)
 
-    static func registerDeviceToken(userId: String, token: String, platform: String) async throws {
+    static func registerDeviceToken(
+        userId: String,
+        token: String,
+        platform: String,
+        isSandbox: Bool = false
+    ) async throws {
         if SupabaseManager.isDemo { return }
-        struct Payload: Encodable { let token: String; let user_id: String; let platform: String }
-        try await db.from("device_tokens").upsert(Payload(token: token, user_id: userId, platform: platform)).execute()
+        struct Payload: Encodable {
+            let token: String
+            let user_id: String
+            let platform: String
+            let is_sandbox: Bool
+        }
+        try await db.from("device_tokens").upsert(
+            Payload(token: token, user_id: userId, platform: platform, is_sandbox: isSandbox)
+        ).execute()
     }
 
     static func unregisterDeviceToken(userId: String, token: String) async throws {
