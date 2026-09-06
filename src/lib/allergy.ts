@@ -1,28 +1,24 @@
 /**
- * Client-side allergy awareness helpers (UI badges + disclaimers).
- * Server-side hard checks live in supabase/functions/_shared/safety.ts.
+ * Client-side allergy helpers (UI badges + Discover / Cook).
+ * Implementation is the shared table in
+ * `supabase/functions/_shared/allergenLexicon.ts` — same matcher the
+ * edge functions use for 422. Keep iOS `AllergenLexicon.swift` in lockstep.
  */
 
-const ALIASES: Record<string, string[]> = {
-  peanut: ["peanut", "peanuts", "groundnut"],
-  peanuts: ["peanut", "peanuts", "groundnut"],
-  dairy: ["milk", "butter", "cheese", "cream", "yogurt", "yoghurt", "whey"],
-  milk: ["milk", "butter", "cheese", "cream", "yogurt", "whey"],
-  egg: ["egg", "eggs", "mayonnaise"],
-  eggs: ["egg", "eggs", "mayonnaise"],
-  gluten: ["wheat", "barley", "rye", "malt", "flour", "breadcrumbs", "pasta"],
-  wheat: ["wheat", "flour", "breadcrumbs"],
-  shellfish: ["shrimp", "prawn", "crab", "lobster", "scallop", "clam", "mussel"],
-  fish: ["fish", "salmon", "tuna", "cod", "anchovy", "sardine"],
-  soy: ["soy", "soya", "tofu", "tempeh", "edamame", "miso"],
-  sesame: ["sesame", "tahini"],
-};
+export {
+  TASTE_PROFILE_ALLERGY_CHIPS,
+  canonicalAllergyKey,
+  findAllergyViolations,
+  findIngredientAllergyViolations,
+  termsForAllergy,
+} from "../../supabase/functions/_shared/allergenLexicon.ts";
 
-function termsFor(label: string): string[] {
-  const key = label.toLowerCase().trim();
-  return ALIASES[key] ?? ALIASES[key.replace(/s$/, "")] ?? [key];
-}
+import {
+  findAllergyViolations,
+  findIngredientAllergyViolations,
+} from "../../supabase/functions/_shared/allergenLexicon.ts";
 
+/** Full-recipe scan — badges and Discover For you. */
 export function recipeMayContainAllergens(
   recipe: {
     title?: string;
@@ -33,20 +29,16 @@ export function recipeMayContainAllergens(
   allergies: string[] | undefined,
 ): string[] {
   if (!allergies?.length) return [];
-  const hay = [
-    recipe.title ?? "",
-    recipe.description ?? "",
-    ...(recipe.ingredients ?? []).map((i) => `${i.item ?? ""} ${i.note ?? ""}`),
-    ...(recipe.steps ?? []).map((s) => s.instruction ?? ""),
-  ]
-    .join(" ")
-    .toLowerCase();
+  return findAllergyViolations(recipe, allergies);
+}
 
-  const hits: string[] = [];
-  for (const a of allergies) {
-    if (termsFor(a).some((t) => t.length >= 3 && hay.includes(t))) {
-      hits.push(a);
-    }
-  }
-  return [...new Set(hits)];
+/** Ingredient-only scan — Cook Mode hard-block. */
+export function recipeIngredientsHitAllergens(
+  recipe: {
+    ingredients?: Array<{ item?: string; note?: string }>;
+  },
+  allergies: string[] | undefined,
+): string[] {
+  if (!allergies?.length) return [];
+  return findIngredientAllergyViolations(recipe, allergies);
 }

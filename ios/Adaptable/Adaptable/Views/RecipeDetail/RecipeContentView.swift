@@ -27,6 +27,13 @@ struct RecipeContentView: View {
 
     private var factor: Double { Double(servings) / Double(max(1, recipe.servings ?? 1)) }
 
+    private var allergyHits: [String] {
+        AllergenLexicon.ingredientViolations(
+            in: recipe,
+            allergies: authStore.profile?.preferences?.allergies ?? []
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             hero
@@ -35,6 +42,7 @@ struct RecipeContentView: View {
             if recipe.protein_g != nil || recipe.carbs_g != nil || recipe.fat_g != nil {
                 macroBand
             }
+            if !allergyHits.isEmpty { allergyBlockBanner }
             if !preview { actionButtons }
             if !preview, let planned {
                 Text("Planned for \(planned) (\(servings) servings) — see it in Cookbook")
@@ -149,24 +157,53 @@ struct RecipeContentView: View {
         }
     }
 
+    private var startCookBackground: LinearGradient {
+        if allergyHits.isEmpty { return Theme.heroGradient }
+        return LinearGradient(colors: [Theme.down.opacity(0.7), Theme.down.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+    }
+
+    // MARK: - Allergy hard-block
+
+    private var allergyBlockBanner: some View {
+        Label {
+            Text("Blocked: \(Format.list(allergyHits)) in the ingredients matches your Taste Profile. Cook Mode will not start.")
+                .font(.system(size: 13, weight: .semibold))
+        } icon: {
+            Image(systemName: "exclamationmark.shield.fill")
+        }
+        .foregroundStyle(Theme.down)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.down.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.down.opacity(0.28))
+        )
+        .accessibilityLabel("Allergy block. \(Format.list(allergyHits)) found in ingredients.")
+    }
+
     // MARK: - Start cooking + plan
 
     private var actionButtons: some View {
         HStack(spacing: 12) {
             Button {
+                guard allergyHits.isEmpty else { return }
                 deepLinks.openCook(recipe.id, servings: servings)
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "fork.knife")
-                    Text("Start Cooking").font(.system(size: 16, weight: .heavy))
+                    Image(systemName: allergyHits.isEmpty ? "fork.knife" : "exclamationmark.shield.fill")
+                    Text(allergyHits.isEmpty ? "Start Cooking" : "Cooking blocked")
+                        .font(.system(size: 16, weight: .heavy))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 56)
                 .foregroundStyle(.white)
-                .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: Theme.accent.opacity(0.25), radius: 16, y: 6)
+                .background(startCookBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .shadow(color: Theme.accent.opacity(allergyHits.isEmpty ? 0.25 : 0), radius: 16, y: 6)
             }
             .buttonStyle(.pressable)
+            .disabled(!allergyHits.isEmpty)
+            .accessibilityLabel(allergyHits.isEmpty ? "Start Cooking" : "Cooking blocked by allergy match")
 
             Button {
                 planOpen = true

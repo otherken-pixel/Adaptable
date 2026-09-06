@@ -3,16 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { Check, ChevronLeft, Loader2, Minus, Plus, ShieldAlert, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import type { Preferences } from "@/lib/types";
+import { TASTE_PROFILE_ALLERGY_CHIPS } from "@/lib/allergy";
 
 const DIETS = [
   "Vegetarian", "Vegan", "Pescatarian", "Keto", "Paleo",
   "Gluten-free", "Dairy-free", "Halal", "Kosher", "Low-carb",
 ];
 
-const ALLERGIES = [
-  "Peanuts", "Tree nuts", "Shellfish", "Fish", "Eggs",
-  "Dairy", "Gluten", "Soy", "Sesame",
-];
+const ALLERGIES = [...TASTE_PROFILE_ALLERGY_CHIPS];
 
 const SPICE = ["Mild", "Medium", "Hot"] as const;
 const SKILL = ["Beginner", "Confident", "Pro"] as const;

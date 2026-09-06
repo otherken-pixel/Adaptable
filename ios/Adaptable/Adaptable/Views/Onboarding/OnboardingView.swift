@@ -19,10 +19,7 @@ struct OnboardingView: View {
         "Vegetarian", "Vegan", "Pescatarian", "Keto", "Paleo",
         "Gluten-free", "Dairy-free", "Halal", "Kosher",
     ]
-    private let allergyOptions = [
-        "Peanuts", "Tree nuts", "Dairy", "Eggs", "Gluten",
-        "Shellfish", "Fish", "Soy", "Sesame",
-    ]
+    private let allergyOptions = AllergenLexicon.chips
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

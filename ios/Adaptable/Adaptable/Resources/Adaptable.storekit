@@ -58,7 +58,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.adaptable.app.plus.yearly",
+          "productID" : "adaptable_annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Plus Yearly",
           "subscriptionGroupID" : "plus",
@@ -83,7 +83,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.adaptable.app.plus.monthly",
+          "productID" : "adaptable_monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Plus Monthly",
           "subscriptionGroupID" : "plus",

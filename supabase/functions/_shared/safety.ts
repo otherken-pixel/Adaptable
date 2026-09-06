@@ -1,118 +1,18 @@
 /**
  * Shared allergy scanning + daily rate limits for generate/import edge functions.
+ * Allergen table + token matcher live in allergenLexicon.ts (iOS lockstep).
  */
 
-/** Common synonym expansions so "peanut" also matches groundnut oil, etc. */
-const ALLERGEN_ALIASES: Record<string, string[]> = {
-  peanut: ["peanut", "peanuts", "groundnut", "ground nut", "arachis"],
-  peanuts: ["peanut", "peanuts", "groundnut", "ground nut", "arachis"],
-  "tree nut": [
-    "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
-    "brazil nut", "pine nut", "tree nut", "nutella", "marzipan",
-  ],
-  "tree nuts": [
-    "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
-    "brazil nut", "pine nut", "tree nut", "nutella", "marzipan",
-  ],
-  nut: [
-    "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
-    "brazil nut", "pine nut", "peanut", "tree nut",
-  ],
-  nuts: [
-    "almond", "cashew", "walnut", "pecan", "pistachio", "hazelnut", "macadamia",
-    "brazil nut", "pine nut", "peanut", "tree nut",
-  ],
-  dairy: [
-    "milk", "butter", "cheese", "cream", "yogurt", "yoghurt", "whey", "casein",
-    "lactose", "ghee", "paneer", "mozzarella", "cheddar", "parmesan", "parmigiano",
-    "feta", "ricotta", "brie", "gouda", "gruyere", "halloumi", "mascarpone",
-    "cottage cheese", "sour cream", "creme fraiche", "half and half",
-  ],
-  milk: [
-    "milk", "butter", "cheese", "cream", "yogurt", "yoghurt", "whey", "casein",
-    "lactose", "ghee", "paneer", "mozzarella", "cheddar", "parmesan", "parmigiano",
-    "feta", "ricotta", "brie", "gouda", "gruyere", "halloumi", "mascarpone",
-    "cottage cheese", "sour cream",
-  ],
-  egg: ["egg", "eggs", "mayonnaise", "aioli", "meringue"],
-  eggs: ["egg", "eggs", "mayonnaise", "aioli", "meringue"],
-  gluten: [
-    "wheat", "barley", "rye", "malt", "seitan", "flour", "breadcrumbs",
-    "bread crumbs", "soy sauce", "pasta", "couscous", "farro", "spelt",
-  ],
-  wheat: ["wheat", "flour", "breadcrumbs", "bread crumbs", "seitan", "bulgur"],
-  shellfish: [
-    "shrimp", "prawn", "crab", "lobster", "crawfish", "crayfish", "scallop",
-    "clam", "mussel", "oyster", "shellfish", "calamari", "squid",
-  ],
-  fish: [
-    "fish", "salmon", "tuna", "cod", "anchovy", "sardine", "trout", "bass",
-    "halibut", "tilapia", "fish sauce",
-  ],
-  soy: ["soy", "soya", "tofu", "tempeh", "edamame", "miso", "soy sauce", "tamari"],
-  sesame: ["sesame", "tahini", "benne", "hummus"],
-  mustard: ["mustard"],
-};
+export {
+  findAllergyViolations,
+  findIngredientAllergyViolations,
+} from "./allergenLexicon.ts";
 
 export function extractAllergies(prefs: unknown): string[] {
   if (!prefs || typeof prefs !== "object") return [];
   const allergies = (prefs as { allergies?: unknown }).allergies;
   if (!Array.isArray(allergies)) return [];
   return allergies.map(String).map((s) => s.trim()).filter(Boolean);
-}
-
-function termsForAllergy(label: string): string[] {
-  const key = label.toLowerCase().trim();
-  if (ALLERGEN_ALIASES[key]) return ALLERGEN_ALIASES[key];
-  // Also try singular/plural simple forms
-  const bare = key.replace(/s$/, "");
-  if (ALLERGEN_ALIASES[bare]) return ALLERGEN_ALIASES[bare];
-  return [key];
-}
-
-/** Returns allergen labels that appear to be present in the recipe text. */
-export function findAllergyViolations(
-  recipe: {
-    title?: string;
-    description?: string;
-    ingredients?: Array<{ item?: string; note?: string }>;
-    steps?: Array<{ instruction?: string; tip?: string }>;
-  },
-  allergies: string[],
-): string[] {
-  if (!allergies.length) return [];
-
-  const chunks: string[] = [
-    recipe.title ?? "",
-    recipe.description ?? "",
-    ...(recipe.ingredients ?? []).map(
-      (i) => `${i.item ?? ""} ${i.note ?? ""}`,
-    ),
-    ...(recipe.steps ?? []).map(
-      (s) => `${s.instruction ?? ""} ${s.tip ?? ""}`,
-    ),
-  ];
-  const haystack = chunks.join(" \n ").toLowerCase();
-
-  const hits: string[] = [];
-  for (const allergy of allergies) {
-    const terms = termsForAllergy(allergy);
-    const matched = terms.some((t) => {
-      if (t.length < 3) {
-        // Short tokens: word boundary-ish
-        return new RegExp(`(^|[^a-z])${escapeReg(t)}([^a-z]|$)`, "i").test(
-          haystack,
-        );
-      }
-      return haystack.includes(t);
-    });
-    if (matched) hits.push(allergy);
-  }
-  return [...new Set(hits)];
-}
-
-function escapeReg(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /** Action name for surprise / preview generations that do not insert yet. */
