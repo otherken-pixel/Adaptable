@@ -19,8 +19,17 @@ import { isValidRecipe } from "../supabase/functions/_shared/recipeValidate.ts";
 import {
   allowedSurpriseProteins,
   buildSurpriseBrief,
+  methodLockInstruction,
   parseSurpriseConstraints,
+  recipeHonorsMethodLock,
 } from "../supabase/functions/_shared/surprise.ts";
+import {
+  dailyGenerateLimit,
+  decodeJwsPayload,
+  FREE_DAILY_GENERATE_LIMIT,
+  isPlusActive,
+  isPlusProductId,
+} from "../supabase/functions/_shared/entitlement.ts";
 import { recordRecipeTaste, recordVoteTaste } from "../src/lib/tasteMemory.ts";
 import { isPreviewRecipe } from "../src/lib/surprise.ts";
 import {
@@ -296,6 +305,12 @@ const crock = buildSurpriseBrief({
 assert.equal(crock.method, "slow_cooker");
 assert.match(crock.prompt, /crock-pot \/ slow-cooker/);
 assert.match(crock.prompt, /15 minutes/);
+assert.match(crock.prompt, /HARD METHOD LOCK/);
+assert.match(crock.prompt, /primary_method MUST be "slow_cooker"/);
+assert.match(methodLockInstruction("slow_cooker"), /HARD METHOD LOCK/);
+assert.equal(recipeHonorsMethodLock({ primary_method: "slow_cooker" }, "slow_cooker"), true);
+assert.equal(recipeHonorsMethodLock({ primary_method: "oven" }, "slow_cooker"), false);
+assert.equal(recipeHonorsMethodLock({ primary_method: "Slow Cooker" }, "slow_cooker"), true);
 
 const veganProteins = allowedSurpriseProteins({
   diets: ["Vegan"],
@@ -316,6 +331,37 @@ const liked = recordRecipeTaste(preview, {});
 assert.ok((liked.learned?.cuisines?.Thai ?? 0) > 0);
 const down = recordVoteTaste(preview, -1, liked);
 assert.ok((down.learned?.cuisines?.Thai ?? 0) < (liked.learned?.cuisines?.Thai ?? 0));
+
+// --- Plus entitlement (server cap; never a client isPlus flag) ---
+assert.equal(FREE_DAILY_GENERATE_LIMIT, 25);
+assert.equal(dailyGenerateLimit(false), 25);
+assert.equal(dailyGenerateLimit(true), null);
+assert.equal(isPlusActive({ is_plus: true }), true);
+assert.equal(isPlusActive({ is_plus: false }), false);
+assert.equal(isPlusActive(null), false);
+assert.equal(
+  isPlusActive({ is_plus: true, expires_at: new Date(Date.now() + 86_400_000).toISOString() }),
+  true,
+);
+assert.equal(
+  isPlusActive({ is_plus: true, expires_at: new Date(Date.now() - 1000).toISOString() }),
+  false,
+);
+assert.equal(isPlusProductId("adaptable_monthly"), true);
+assert.equal(isPlusProductId("adaptable_annual"), true);
+assert.equal(isPlusProductId("com.adaptable.app.plus.monthly"), false);
+
+function fakeJws(payload) {
+  const b64 = (obj) =>
+    Buffer.from(JSON.stringify(obj)).toString("base64url");
+  return `${b64({ alg: "none" })}.${b64(payload)}.sig`;
+}
+const decoded = decodeJwsPayload(
+  fakeJws({ productId: "adaptable_monthly", transactionId: "tx-1" }),
+);
+assert.equal(decoded?.productId, "adaptable_monthly");
+assert.equal(decodeJwsPayload("not-a-jws"), null);
+assert.equal(decodeJwsPayload({ isPlus: true }), null);
 
 // --- serving scaler (mirrors ios Quantity.swift) ---
 assert.equal(scaleQuantity("to taste", 2), "to taste");

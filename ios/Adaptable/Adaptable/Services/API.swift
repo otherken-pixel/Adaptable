@@ -708,4 +708,28 @@ enum API {
             throw AppError(message ?? "Deletion failed (\(code)).")
         }
     }
+
+    // MARK: - Plus entitlement (server)
+
+    /// Reports a StoreKit 2 JWS so generate/keep can raise the free 25/day cap.
+    /// Demo Mode is a no-op. Failures are the caller's to swallow — local
+    /// `isPlus` UI still comes from StoreKit.
+    static func reportPlusEntitlement(signedTransactionInfo: String) async throws {
+        if SupabaseManager.isDemo { return }
+        struct Body: Encodable { let signedTransactionInfo: String }
+        struct Reply: Decodable {
+            let is_plus: Bool?
+            let error: String?
+            let code: String?
+        }
+        do {
+            let _: Reply = try await SupabaseManager.client.functions.invoke(
+                "report-plus-entitlement",
+                options: FunctionInvokeOptions(body: Body(signedTransactionInfo: signedTransactionInfo))
+            )
+        } catch let FunctionsError.httpError(code, data) {
+            let message = (try? JSONDecoder().decode(EdgeErrorBody.self, from: data))?.error
+            throw AppError(message ?? "Could not sync Plus (\(code)).")
+        }
+    }
 }
