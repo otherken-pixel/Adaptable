@@ -215,33 +215,56 @@ export function recipeGoalScore(recipe: RecipeMacros, goals: NutritionGoals): nu
   return recipeFitsGoals(recipe, goals) ? 3 : 0;
 }
 
-export function nutritionGoalsToPrompt(prefs: unknown): string {
+/** Distinctive phrase used by fill-today so generate-recipe can drop the per-meal split. */
+export const FILL_TODAY_MARKER = "that finishes today's plan";
+
+export function isFillTodayPrompt(text: unknown): boolean {
+  return typeof text === "string" &&
+    text.toLowerCase().includes(FILL_TODAY_MARKER);
+}
+
+export function nutritionGoalsToPrompt(
+  prefs: unknown,
+  opts?: { perServing?: boolean },
+): string {
   const goals = parseNutritionGoals(prefs);
   if (!hasAnyGoal(goals)) return "";
+  const perServing = opts?.perServing !== false;
   const budget = perMealBudget(goals);
   const parts: string[] = [];
   if (goals.calorie_target !== null && budget.calories !== null) {
-    parts.push(
-      `The cook is aiming for about ${goals.calorie_target} calories per day across ${goals.meals_per_day} meals (around ${budget.calories} calories per serving).`,
-    );
+    let line =
+      `The cook is aiming for about ${goals.calorie_target} calories per day`;
+    if (perServing) {
+      line += ` across ${goals.meals_per_day} meals (around ${budget.calories} calories per serving)`;
+    }
+    parts.push(line + ".");
   }
   if (goals.protein_target_g !== null && budget.protein_g !== null) {
-    parts.push(
-      `They want about ${goals.protein_target_g} g protein per day (around ${budget.protein_g} g per serving).`,
-    );
+    let line = `They want about ${goals.protein_target_g} g protein per day`;
+    if (perServing) {
+      line += ` (around ${budget.protein_g} g per serving)`;
+    }
+    parts.push(line + ".");
   }
   if (goals.carbs_target_g !== null && budget.carbs_g !== null) {
-    parts.push(
-      `Daily carb target is about ${goals.carbs_target_g} g (around ${budget.carbs_g} g per serving).`,
-    );
+    let line = `Daily carb target is about ${goals.carbs_target_g} g`;
+    if (perServing) {
+      line += ` (around ${budget.carbs_g} g per serving)`;
+    }
+    parts.push(line + ".");
   }
   if (goals.fat_target_g !== null && budget.fat_g !== null) {
-    parts.push(
-      `Daily fat target is about ${goals.fat_target_g} g (around ${budget.fat_g} g per serving).`,
-    );
+    let line = `Daily fat target is about ${goals.fat_target_g} g`;
+    if (perServing) {
+      line += ` (around ${budget.fat_g} g per serving)`;
+    }
+    parts.push(line + ".");
   }
   parts.push(
-    "Stay close to those planning targets without sacrificing a complete, satisfying meal. These are estimates, not medical requirements.",
+    perServing
+      ? "Stay close to those planning targets without sacrificing a complete, satisfying meal. These are estimates, not medical requirements."
+      : "Size this plate to finish the remaining daily budget in the cook request, not an even per-meal split. These are estimates, not medical requirements.",
   );
   return parts.join(" ") + " ";
 }
@@ -288,7 +311,7 @@ export function fillTodayPrompt(opts: {
   slot?: string | null;
 }): string {
   const slot = opts.slot || suggestedFillSlot();
-  const bits: string[] = [`A complete ${slot} that finishes today's plan`];
+  const bits: string[] = [`A complete ${slot} ${FILL_TODAY_MARKER}`];
   if (opts.remaining.calories !== null) {
     if (opts.remaining.calories >= FILL_MIN_CALORIES) {
       bits.push(`around ${opts.remaining.calories} calories`);

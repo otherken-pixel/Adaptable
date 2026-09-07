@@ -19,6 +19,8 @@ import {
   applyLockConstraintPrompt,
   fillLocksFromRemaining,
   fillTodayPrompt,
+  isFillTodayPrompt,
+  nutritionGoalsToPrompt,
   parseNutritionGoals,
   perMealBudget,
   plateMacros,
@@ -264,6 +266,17 @@ assert.equal(day.totals.calories, 960);
 assert.equal(day.unknownMeals, 1);
 assert.equal(remainingBudget(goals, day.totals).calories, 1040);
 assert.ok(fillTodayPrompt({ remaining: remainingBudget(goals, day.totals), slot: "dinner" }).includes("1040"));
+assert.equal(
+  isFillTodayPrompt(fillTodayPrompt({ remaining: remainingBudget(goals, day.totals), slot: "dinner" })),
+  true,
+);
+assert.equal(isFillTodayPrompt("weeknight pasta with leftover chicken"), false);
+const perMealPrompt = nutritionGoalsToPrompt(goals);
+assert.match(perMealPrompt, /667 calories per serving/);
+const fillGoalsPrompt = nutritionGoalsToPrompt(goals, { perServing: false });
+assert.doesNotMatch(fillGoalsPrompt, /per serving/);
+assert.match(fillGoalsPrompt, /remaining daily budget/);
+assert.match(fillGoalsPrompt, /2000 calories per day/);
 assert.equal(parseNutritionGoals({ calorie_target: 50 }).calorie_target, null);
 
 const overBudget = { calories: -120, protein_g: 20, carbs_g: null, fat_g: null };
