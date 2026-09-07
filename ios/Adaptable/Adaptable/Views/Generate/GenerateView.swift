@@ -724,11 +724,6 @@ struct GenerateView: View {
             if let prepBundle {
                 prepResult(prepBundle)
             } else if let recipe {
-                if let line = Nutrition.fitLine(recipe: recipe, goals: Nutrition.goals(from: authStore.profile?.preferences)) {
-                    Text(line)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.accent)
-                }
                 RecipeContentView(recipe: recipe, preview: isPreview)
             }
         }

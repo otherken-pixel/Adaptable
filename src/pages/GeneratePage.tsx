@@ -47,7 +47,6 @@ import {
   lockConstraintPrompt,
   parseNutritionGoals,
   perMealBudget,
-  recipeFitLine,
 } from "@/lib/nutrition";
 
 const SUGGESTIONS = [
@@ -1005,14 +1004,6 @@ export default function GeneratePage() {
               <Check size={18} strokeWidth={2.6} />
               {keeping ? "Keeping…" : "Keep this recipe"}
             </button>
-          )}
-          {recipeFitLine(
-            recipe,
-            parseNutritionGoals(profile?.preferences),
-          ) && (
-            <p className="mb-3 text-[13px] font-bold text-accent">
-              {recipeFitLine(recipe, parseNutritionGoals(profile?.preferences))}
-            </p>
           )}
           <RecipeView recipe={recipe} preview={isPreviewRecipe(recipe)} />
         </>
