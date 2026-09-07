@@ -42,9 +42,10 @@ import { recordRecipeTaste } from "@/lib/tasteMemory";
 import {
   CALORIE_LOCKS,
   PROTEIN_LOCKS,
+  applyLockConstraintPrompt,
+  fillLocksFromRemaining,
   fillTodayPrompt,
   hasAnyGoal,
-  lockConstraintPrompt,
   parseNutritionGoals,
   perMealBudget,
 } from "@/lib/nutrition";
@@ -241,23 +242,18 @@ export default function GeneratePage() {
     const cal = Number(params.get("cal"));
     const protein = Number(params.get("protein"));
     const slot = params.get("slot");
+    const remaining = {
+      calories: Number.isFinite(cal) ? Math.round(cal) : null,
+      protein_g: Number.isFinite(protein) ? Math.round(protein) : null,
+      carbs_g: null,
+      fat_g: null,
+    };
+    const locks = fillLocksFromRemaining(remaining);
     setLockFitGoals(false);
-    setLockCalorie(Number.isFinite(cal) && cal > 0 ? Math.round(cal) : null);
-    setLockProtein(
-      Number.isFinite(protein) && protein > 0 ? Math.round(protein) : null,
-    );
+    setLockCalorie(locks.maxCalories);
+    setLockProtein(locks.minProtein);
     if (slot) setLockSlot(slot);
-    setPrompt(
-      fillTodayPrompt({
-        remaining: {
-          calories: Number.isFinite(cal) ? Math.round(cal) : null,
-          protein_g: Number.isFinite(protein) ? Math.round(protein) : null,
-          carbs_g: null,
-          fat_g: null,
-        },
-        slot,
-      }),
-    );
+    setPrompt(fillTodayPrompt({ remaining, slot }));
     navigate("/create", { replace: true });
   }, [fillParam, navigate, params]);
 
@@ -295,9 +291,9 @@ export default function GeneratePage() {
           .join(", ");
         apiPrompt =
           `Adapt the recipe "${remixSource.title}" (key ingredients: ${ingredientList}). ` +
-          `Requested change: ${p}`.slice(0, 480);
+          `Requested change: ${p}`;
       }
-      apiPrompt += ` ${lockConstraintPrompt(lockCalorie, lockProtein)}`;
+      apiPrompt = applyLockConstraintPrompt(apiPrompt, lockCalorie, lockProtein);
       const result = await generateRecipe(apiPrompt, serves);
       setRecipe(result);
       setPhase("done");

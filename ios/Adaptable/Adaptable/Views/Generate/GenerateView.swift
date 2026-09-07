@@ -942,9 +942,9 @@ struct GenerateView: View {
             var apiPrompt = p
             if let remixSource {
                 let ingredientList = (remixSource.ingredients ?? []).prefix(10).map(\.item).joined(separator: ", ")
-                apiPrompt = String(("Adapt the recipe \"\(remixSource.title ?? "")\" (key ingredients: \(ingredientList)). Requested change: \(p)").prefix(480))
+                apiPrompt = "Adapt the recipe \"\(remixSource.title ?? "")\" (key ingredients: \(ingredientList)). Requested change: \(p)"
             }
-            apiPrompt += " " + Nutrition.lockConstraintPrompt(maxCalories: effectiveCalorieLock, minProtein: effectiveProteinLock)
+            apiPrompt = Nutrition.applyLockConstraintPrompt(apiPrompt, maxCalories: effectiveCalorieLock, minProtein: effectiveProteinLock)
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result
             phase = .done
@@ -1059,10 +1059,11 @@ struct GenerateView: View {
         recipe = nil
         prepBundle = nil
         lockFitGoals = false
-        lockCalorie = deepLinks.fillCalMax
-        lockProtein = deepLinks.fillProteinMin
-        lockSlot = deepLinks.fillSlot
         let remaining = Nutrition.Macros(calories: deepLinks.fillCalMax, protein_g: deepLinks.fillProteinMin)
+        let locks = Nutrition.fillLocks(from: remaining)
+        lockCalorie = locks.maxCalories
+        lockProtein = locks.minProtein
+        lockSlot = deepLinks.fillSlot
         prompt = Nutrition.fillTodayPrompt(remaining: remaining, slot: deepLinks.fillSlot)
         deepLinks.fillCalMax = nil
         deepLinks.fillProteinMin = nil

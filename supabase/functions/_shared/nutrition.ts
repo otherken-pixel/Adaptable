@@ -22,6 +22,7 @@ export const CALORIE_LOCKS = [400, 500, 650] as const;
 export const PROTEIN_LOCKS = [30, 40] as const;
 export const FILL_MIN_CALORIES = 150;
 export const FILL_MIN_PROTEIN = 10;
+export const GENERATE_PROMPT_MAX = 500;
 
 export interface NutritionGoals {
   calorie_target: number | null;
@@ -259,6 +260,22 @@ export function lockConstraintPrompt(
   return parts.length > 0 ? parts.join(" ") + " " : "";
 }
 
+/** Reserve lock sentences inside the generate-recipe prompt cap. */
+export function applyLockConstraintPrompt(
+  basePrompt: string,
+  maxCalories?: number | null,
+  minProtein?: number | null,
+  limit = GENERATE_PROMPT_MAX,
+): string {
+  const lock = lockConstraintPrompt(maxCalories, minProtein).trim();
+  const base = basePrompt.trim();
+  if (!lock) return base.slice(0, limit);
+  const room = Math.max(0, limit - lock.length - 1);
+  const head = base.slice(0, room).trimEnd();
+  if (!head) return lock.slice(0, limit);
+  return `${head} ${lock}`.slice(0, limit);
+}
+
 export function suggestedFillSlot(now: Date = new Date()): string {
   const hour = now.getHours();
   if (hour < 11) return "breakfast";
@@ -335,8 +352,9 @@ export function recipeFitLine(recipe: RecipeMacros, goals: NutritionGoals): stri
 export function shouldOfferFillToday(
   goals: NutritionGoals,
   remaining: MacroSet,
+  isToday = true,
 ): boolean {
-  if (!hasAnyGoal(goals)) return false;
+  if (!isToday || !hasAnyGoal(goals)) return false;
   if (remaining.calories !== null && remaining.calories >= FILL_MIN_CALORIES) {
     return true;
   }

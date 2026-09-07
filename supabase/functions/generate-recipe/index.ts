@@ -38,7 +38,7 @@ import {
   parseSurpriseConstraints,
   recipeHonorsMethodLock,
 } from "../_shared/surprise.ts";
-import { nutritionGoalsToPrompt } from "../_shared/nutrition.ts";
+import { GENERATE_PROMPT_MAX, nutritionGoalsToPrompt } from "../_shared/nutrition.ts";
 
 /** Preferred model first; fall back if Google returns 404 (retired model id).
  *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     if (wantKeep && wantSurprise) {
       return json({ error: "Invalid request body." }, 400);
     }
-    if (!wantKeep && !wantSurprise && (!prompt || prompt.length > 500)) {
+    if (!wantKeep && !wantSurprise && (!prompt || prompt.length > GENERATE_PROMPT_MAX)) {
       return json(
         { error: "A prompt of up to 500 characters is required." },
         400,

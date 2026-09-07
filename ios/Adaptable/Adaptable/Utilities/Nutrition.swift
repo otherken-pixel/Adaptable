@@ -22,6 +22,7 @@ enum Nutrition {
     static let proteinLocks = [30, 40]
     static let fillMinCalories = 150
     static let fillMinProtein = 10
+    static let generatePromptMax = 500
 
     struct Goals: Equatable {
         var calorie_target: Int?
@@ -178,6 +179,18 @@ enum Nutrition {
         return parts.isEmpty ? "" : parts.joined(separator: " ") + " "
     }
 
+    /// Reserve lock sentences inside the generate-recipe prompt cap.
+    static func applyLockConstraintPrompt(_ basePrompt: String, maxCalories: Int?, minProtein: Int?, limit: Int = generatePromptMax) -> String {
+        let lock = lockConstraintPrompt(maxCalories: maxCalories, minProtein: minProtein)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if lock.isEmpty { return String(base.prefix(limit)) }
+        let room = max(0, limit - lock.count - 1)
+        let head = String(base.prefix(room)).trimmingCharacters(in: .whitespacesAndNewlines)
+        if head.isEmpty { return String(lock.prefix(limit)) }
+        return String("\(head) \(lock)".prefix(limit))
+    }
+
     static func suggestedFillSlot(now: Date = Date()) -> String {
         let hour = Calendar.current.component(.hour, from: now)
         if hour < 11 { return "breakfast" }
@@ -233,8 +246,8 @@ enum Nutrition {
         return nil
     }
 
-    static func shouldOfferFillToday(goals: Goals, remaining: Macros) -> Bool {
-        guard goals.hasAny else { return false }
+    static func shouldOfferFillToday(goals: Goals, remaining: Macros, isToday: Bool = true) -> Bool {
+        guard isToday, goals.hasAny else { return false }
         if let calories = remaining.calories, calories >= fillMinCalories { return true }
         if let protein = remaining.protein_g, protein >= fillMinProtein { return true }
         if let calories = remaining.calories, calories < 0 { return true }

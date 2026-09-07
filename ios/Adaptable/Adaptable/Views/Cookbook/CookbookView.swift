@@ -150,6 +150,7 @@ struct CookbookView: View {
                         DayNutritionStrip(
                             entries: entries,
                             goals: Nutrition.goals(from: authStore.profile?.preferences),
+                            isToday: iso == Format.localISODate(),
                             onFillToday: { remaining in openFillToday(remaining) },
                             onEditGoals: { deepLinks.openTasteProfile() }
                         )
@@ -198,10 +199,9 @@ struct CookbookView: View {
     }
 
     private func openFillToday(_ remaining: Nutrition.Macros) {
-        let locks = Nutrition.fillLocks(from: remaining)
         deepLinks.openFillToday(
-            calories: locks.maxCalories,
-            protein: locks.minProtein,
+            calories: remaining.calories,
+            protein: remaining.protein_g,
             slot: Nutrition.suggestedFillSlot()
         )
     }
@@ -274,6 +274,7 @@ struct CookbookView: View {
 private struct DayNutritionStrip: View {
     let entries: [MealPlanEntry]
     let goals: Nutrition.Goals
+    var isToday: Bool = true
     var onFillToday: (Nutrition.Macros) -> Void
     var onEditGoals: () -> Void
 
@@ -302,7 +303,7 @@ private struct DayNutritionStrip: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.faint)
             }
-            if goals.hasAny && Nutrition.shouldOfferFillToday(goals: goals, remaining: remaining) {
+            if Nutrition.shouldOfferFillToday(goals: goals, remaining: remaining, isToday: isToday) {
                 Button {
                     onFillToday(remaining)
                 } label: {
