@@ -11,6 +11,7 @@ enum FeedFilter {
         case time(maxMinutes: Int)
         case calories(max: Int)
         case protein(min: Int)
+        case goals
         case tag(String)
     }
 
@@ -26,6 +27,7 @@ enum FeedFilter {
         let diets = dietTags.map { $0.lowercased() }
 
         let allergies = preferences?.allergies ?? []
+        let goals = Nutrition.goals(from: preferences)
 
         let filtered = recipes.filter { r in
             if !q.isEmpty {
@@ -63,6 +65,8 @@ enum FeedFilter {
                 return followedAuthorIds.contains(authorId)
             case .tag(let label):
                 return (r.tags ?? []).contains { $0.lowercased() == label.lowercased() }
+            case .goals:
+                return Nutrition.recipeFits(r, goals: goals)
             }
         }
 

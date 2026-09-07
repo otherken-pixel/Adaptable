@@ -71,6 +71,8 @@ export interface SurpriseConstraints {
   pantry_mode?: string | null;
   ingredients?: string[] | null;
   method?: string | null;
+  max_calories?: number | null;
+  min_protein?: number | null;
 }
 
 export interface ParsedSurpriseConstraints {
@@ -80,6 +82,8 @@ export interface ParsedSurpriseConstraints {
   pantry_mode: PantryMode | null;
   ingredients: string[];
   method: CookingMethod | null;
+  max_calories: number | null;
+  min_protein: number | null;
 }
 
 export interface SurpriseBrief {
@@ -165,7 +169,28 @@ export function parseSurpriseConstraints(
 
   const ingredients = sanitizeIngredientLocks(obj.ingredients);
 
-  return { max_minutes, meal_slot, cuisine, pantry_mode, ingredients, method };
+  let max_calories: number | null = null;
+  if (typeof obj.max_calories === "number" && Number.isFinite(obj.max_calories)) {
+    const n = Math.round(obj.max_calories);
+    if (n >= 150 && n <= 2000) max_calories = n;
+  }
+
+  let min_protein: number | null = null;
+  if (typeof obj.min_protein === "number" && Number.isFinite(obj.min_protein)) {
+    const n = Math.round(obj.min_protein);
+    if (n >= 10 && n <= 100) min_protein = n;
+  }
+
+  return {
+    max_minutes,
+    meal_slot,
+    cuisine,
+    pantry_mode,
+    ingredients,
+    method,
+    max_calories,
+    min_protein,
+  };
 }
 
 export function sanitizeIngredientLocks(raw: unknown): string[] {
@@ -304,6 +329,17 @@ export function buildSurpriseBrief(opts: {
     );
   }
 
+  if (constraints.max_calories !== null) {
+    parts.push(
+      `Keep this at or under ${constraints.max_calories} calories per serving.`,
+    );
+  }
+  if (constraints.min_protein !== null) {
+    parts.push(
+      `Include at least ${constraints.min_protein} g protein per serving.`,
+    );
+  }
+
   if (constraints.pantry_mode === "leftover") {
     parts.push(
       constraints.ingredients.length > 0
@@ -334,8 +370,10 @@ export function buildSurpriseBrief(opts: {
 
   parts.push("Invent a fresh dish — not a generic 'bowl' with no technique.");
 
-  // Keep method-lock language inside the slice so Gemini cannot drop it.
-  const budget = constraints.method ? 720 : 480;
+  // Keep method-lock / nutrition-lock language inside the slice.
+  const budget = constraints.method || constraints.max_calories || constraints.min_protein
+    ? 780
+    : 480;
   return {
     prompt: parts.join(" ").slice(0, budget),
     cuisine,

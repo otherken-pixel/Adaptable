@@ -17,6 +17,13 @@ export interface Preferences {
   spice?: "Mild" | "Medium" | "Hot";
   skill?: "Beginner" | "Confident" | "Pro";
   learned?: LearnedTaste;
+  /** Optional daily calorie target. Planner counts one plate per meal. */
+  calorie_target?: number | null;
+  protein_target_g?: number | null;
+  carbs_target_g?: number | null;
+  fat_target_g?: number | null;
+  /** How many plates the daily targets are split across. Default 3. */
+  meals_per_day?: number | null;
 }
 
 export interface Profile {
@@ -116,7 +123,11 @@ export interface MealPlanEntry {
   /** ISO date (yyyy-mm-dd). */
   plan_date: string;
   servings: number;
+  /** Plates counted toward daily goals. Independent of cook yield. */
+  eat_servings?: number;
   created_at: string;
+  leftover_of?: string | null;
+  leftover_focus?: string | null;
   recipe?: Recipe | null;
 }
 

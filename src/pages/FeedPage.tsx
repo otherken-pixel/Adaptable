@@ -12,6 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useEngagement } from "@/context/EngagementContext";
 import { useOnline } from "@/hooks/useOnline";
+import { hasAnyGoal, parseNutritionGoals } from "@/lib/nutrition";
 
 type Chip =
   | { id: string; kind: "all"; label: string }
@@ -20,6 +21,7 @@ type Chip =
   | { id: string; kind: "time"; label: string; maxMinutes: number }
   | { id: string; kind: "cal"; label: string; maxCalories: number }
   | { id: string; kind: "protein"; label: string; minProtein: number }
+  | { id: string; kind: "goals"; label: string }
   | { id: string; kind: "tag"; label: string };
 
 function toFeedChip(chip: Chip): FeedChip {
@@ -36,6 +38,8 @@ function toFeedChip(chip: Chip): FeedChip {
       return { kind: "cal", maxCalories: chip.maxCalories };
     case "protein":
       return { kind: "protein", minProtein: chip.minProtein };
+    case "goals":
+      return { kind: "goals" };
     case "tag":
       return { kind: "tag", label: chip.label };
   }
@@ -141,6 +145,9 @@ export default function FeedPage() {
     if (followedIds.size > 0) {
       list.push({ id: "following", kind: "following", label: "Following" });
     }
+    if (hasAnyGoal(parseNutritionGoals(prefs))) {
+      list.push({ id: "goals", kind: "goals", label: "Fits my goals" });
+    }
     list.push(
       { id: "time20", kind: "time", label: "Under 20 min", maxMinutes: 20 },
       { id: "cal500", kind: "cal", label: "Low-cal", maxCalories: 500 },
@@ -188,11 +195,16 @@ export default function FeedPage() {
       profile?.preferences?.diets ?? [],
       followedIds,
       profile?.preferences?.allergies ?? [],
+      parseNutritionGoals(profile?.preferences),
     );
   }, [recipes, search, activeChip, profile, followedIds]);
 
   const filteredEmpty = filtered !== null && filtered.length === 0;
   const isForYouEmpty = filteredEmpty && activeChip.kind === "foryou";
+  const showProtein =
+    parseNutritionGoals(profile?.preferences).protein_target_g !== null ||
+    activeChip.kind === "protein" ||
+    activeChip.kind === "goals";
 
   return (
     <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
@@ -328,6 +340,22 @@ export default function FeedPage() {
         />
       )}
 
+      {!error && filteredEmpty && activeChip.kind === "goals" && (
+        <EmptyState
+          emoji="🎯"
+          title="Nothing fits your goals yet"
+          body="Generate a plate that hits your calorie or protein target — or loosen the numbers in Taste Profile."
+          action={
+            <Link
+              to="/create"
+              className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+            >
+              Generate one that fits
+            </Link>
+          }
+        />
+      )}
+
       {!error &&
         filteredEmpty &&
         !isForYouEmpty &&
@@ -367,7 +395,8 @@ export default function FeedPage() {
       {!error &&
         filteredEmpty &&
         !isForYouEmpty &&
-        activeChip.kind !== "following" && (
+        activeChip.kind !== "following" &&
+        activeChip.kind !== "goals" && (
         <EmptyState
           emoji={search || activeChip.kind !== "all" ? "🔍" : "🍳"}
           title={
@@ -407,7 +436,7 @@ export default function FeedPage() {
       {!error && filtered !== null && filtered.length > 0 && (
         <div className="space-y-4">
           {filtered.map((r, i) => (
-            <RecipeCard key={r.id} recipe={r} index={i} />
+            <RecipeCard key={r.id} recipe={r} index={i} showProtein={showProtein} />
           ))}
         </div>
       )}

@@ -28,6 +28,7 @@ private let suggestions = [
 private let remixSuggestions = [
     "Make it vegan 🌱", "Gluten-free version 🌾", "Twice as spicy 🔥",
     "Halve the cook time ⏱️", "Budget-friendly swaps 💸", "Air-fryer version 💨",
+    "Fit my macros 🥗", "Lighter — fewer calories 🔥", "More protein 💪",
 ]
 
 private let pantryStaples = [
@@ -82,6 +83,9 @@ struct GenerateView: View {
     @State private var lockSlot: String?
     @State private var lockCuisine: String?
     @State private var lockPantry: String?
+    @State private var lockCalorie: Int?
+    @State private var lockProtein: Int?
+    @State private var lockFitGoals = false
     @State private var lockMethod: String?
     @State private var lockItems: [String] = []
     @State private var lockDraft = ""
@@ -138,10 +142,15 @@ struct GenerateView: View {
         .onAppear {
             consumePendingImport()
             consumePendingPrep()
+            consumePendingFill()
         }
         .onChange(of: deepLinks.pendingPrep) { _, on in
             guard on else { return }
             consumePendingPrep()
+        }
+        .onChange(of: deepLinks.pendingFillToday) { _, on in
+            guard on else { return }
+            consumePendingFill()
         }
         .onChange(of: prepCount) { _, n in
             if n >= 3 { prepSlots.insert("lunch") }
@@ -343,6 +352,33 @@ struct GenerateView: View {
                 ForEach(SurpriseOptions.methods, id: \.id) { method in
                     lockChip(title: method.label, selected: lockMethod == method.id) {
                         lockMethod = lockMethod == method.id ? nil : method.id
+                    }
+                }
+            }
+            FlowLayout(spacing: 8) {
+                if Nutrition.goals(from: authStore.profile?.preferences).hasAny {
+                    lockChip(title: "Fit my goals", selected: lockFitGoals) {
+                        lockFitGoals.toggle()
+                        if lockFitGoals {
+                            let budget = Nutrition.perMealBudget(Nutrition.goals(from: authStore.profile?.preferences))
+                            lockCalorie = budget.calories
+                            lockProtein = budget.protein_g
+                        } else if lockCalorie == Nutrition.perMealBudget(Nutrition.goals(from: authStore.profile?.preferences)).calories {
+                            lockCalorie = nil
+                            lockProtein = nil
+                        }
+                    }
+                }
+                ForEach(Nutrition.calorieLocks, id: \.self) { cal in
+                    lockChip(title: "Under \(cal)", selected: lockCalorie == cal && !lockFitGoals) {
+                        lockFitGoals = false
+                        lockCalorie = lockCalorie == cal ? nil : cal
+                    }
+                }
+                ForEach(Nutrition.proteinLocks, id: \.self) { grams in
+                    lockChip(title: "\(grams)g+ protein", selected: lockProtein == grams && !lockFitGoals) {
+                        lockFitGoals = false
+                        lockProtein = lockProtein == grams ? nil : grams
                     }
                 }
             }
@@ -688,6 +724,11 @@ struct GenerateView: View {
             if let prepBundle {
                 prepResult(prepBundle)
             } else if let recipe {
+                if let line = Nutrition.fitLine(recipe: recipe, goals: Nutrition.goals(from: authStore.profile?.preferences)) {
+                    Text(line)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                }
                 RecipeContentView(recipe: recipe, preview: isPreview)
             }
         }
@@ -908,6 +949,7 @@ struct GenerateView: View {
                 let ingredientList = (remixSource.ingredients ?? []).prefix(10).map(\.item).joined(separator: ", ")
                 apiPrompt = String(("Adapt the recipe \"\(remixSource.title ?? "")\" (key ingredients: \(ingredientList)). Requested change: \(p)").prefix(480))
             }
+            apiPrompt += " " + Nutrition.lockConstraintPrompt(maxCalories: effectiveCalorieLock, minProtein: effectiveProteinLock)
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result
             phase = .done
@@ -954,7 +996,9 @@ struct GenerateView: View {
                     cuisine: lockCuisine,
                     pantry_mode: lockPantry,
                     ingredients: lockItems,
-                    method: lockMethod
+                    method: lockMethod,
+                    max_calories: effectiveCalorieLock,
+                    min_protein: effectiveProteinLock
                 ),
                 excludeTitles: exclude
             )
@@ -1006,6 +1050,28 @@ struct GenerateView: View {
         addedPrep = false
         prepError = nil
         sanitizePrepBase()
+    }
+
+    private var effectiveCalorieLock: Int? { lockCalorie }
+    private var effectiveProteinLock: Int? { lockProtein }
+
+    private func consumePendingFill() {
+        guard deepLinks.pendingFillToday else { return }
+        deepLinks.pendingFillToday = false
+        remixSource = nil
+        mode = .describe
+        phase = .idle
+        recipe = nil
+        prepBundle = nil
+        lockFitGoals = false
+        lockCalorie = deepLinks.fillCalMax
+        lockProtein = deepLinks.fillProteinMin
+        lockSlot = deepLinks.fillSlot
+        let remaining = Nutrition.Macros(calories: deepLinks.fillCalMax, protein_g: deepLinks.fillProteinMin)
+        prompt = Nutrition.fillTodayPrompt(remaining: remaining, slot: deepLinks.fillSlot)
+        deepLinks.fillCalMax = nil
+        deepLinks.fillProteinMin = nil
+        deepLinks.fillSlot = nil
     }
 
     private func buildPrep() async {

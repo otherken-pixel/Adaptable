@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Clock, CookingPot, Flame, Gauge, MessageCircle } from "lucide-react";
+import { Beef, Clock, CookingPot, Flame, Gauge, MessageCircle } from "lucide-react";
 import { compactCount } from "@/lib/format";
 import type { Recipe } from "@/lib/types";
 import { coverGradient } from "@/lib/gradients";
@@ -11,9 +11,11 @@ import RecipeCover from "./RecipeCover";
 export default function RecipeCard({
   recipe,
   index = 0,
+  showProtein = false,
 }: {
   recipe: Recipe;
   index?: number;
+  showProtein?: boolean;
 }) {
   return (
     <Link
@@ -47,6 +49,9 @@ export default function RecipeCard({
           <Meta icon={Clock} label={totalMinutes(recipe.prep_time_minutes, recipe.cook_time_minutes)} />
           <Meta icon={Gauge} label={recipe.difficulty} />
           {recipe.calories ? <Meta icon={Flame} label={`${recipe.calories} cal`} /> : null}
+          {showProtein && recipe.protein_g != null ? (
+            <Meta icon={Beef} label={`${recipe.protein_g}g P`} />
+          ) : null}
           {recipe.cook_count > 0 && (
             <Meta icon={CookingPot} label={`${compactCount(recipe.cook_count)} cooked`} accent />
           )}

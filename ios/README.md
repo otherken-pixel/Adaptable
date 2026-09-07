@@ -55,7 +55,7 @@ persisted to `UserDefaults`, explorable with zero setup.
 Every screen and feature in the web app has a native counterpart:
 
 - **Discover feed** — Hot (time-decayed trending)/Top/New, search, filter
-  chips (For you, Following, time, calories, protein, tags), deterministic
+  chips (For you, Following, Fits my goals, time, calories, protein, tags), deterministic
   gradient covers.
 - **Create** — Describe / Fridge (pantry) / Import (link, camera photo,
   library photo, pasted text) modes, party-size stepper, remix flow,
@@ -73,8 +73,10 @@ Every screen and feature in the web app has a native counterpart:
   that feeds Trending. Regular-width scenes (iPad / large Split View) use
   a two-column inspector so the extra space shows ingredients and the dish
   photo instead of empty chrome.
-- **Cookbook** — Saved recipes + Meal Planner tabs; "send the week to
-  Groceries" in one tap.
+- **Cookbook** — Saved recipes + Meal Planner tabs; per-day calorie/macro
+  strip (one plate per meal); "send the week to Groceries" in one tap.
+- **Taste Profile** — diets, allergies, optional daily calorie and macro
+  goals (editable anytime from You).
 - **Groceries** — grouped by source recipe, check-off, clear done.
 - **Activity** — notification inbox, live via Supabase Realtime
   (`postgres_changes` on `public.notifications`).

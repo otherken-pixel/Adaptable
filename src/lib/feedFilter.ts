@@ -1,5 +1,11 @@
-import type { Recipe } from "./types";
+import type { Preferences, Recipe } from "./types";
 import { recipeMayContainAllergens } from "./allergy.ts";
+import {
+  parseNutritionGoals,
+  recipeFitsGoals,
+  recipeGoalScore,
+  type NutritionGoals,
+} from "./nutrition.ts";
 
 /** Chip kinds that drive Discover filtering. Mirrors iOS `FeedFilter.Chip`. */
 export type FeedChip =
@@ -9,6 +15,7 @@ export type FeedChip =
   | { kind: "time"; maxMinutes: number }
   | { kind: "cal"; maxCalories: number }
   | { kind: "protein"; minProtein: number }
+  | { kind: "goals" }
   | { kind: "tag"; label: string };
 
 /**
@@ -22,11 +29,12 @@ export function filterFeedRecipes(
   dietTags: string[],
   followedAuthorIds: Set<string>,
   allergies: string[] = [],
+  goals?: NutritionGoals | null,
 ): Recipe[] {
   const q = search.trim().toLowerCase();
   const diets = dietTags.map((d) => d.toLowerCase());
 
-  return recipes.filter((r) => {
+  const filtered = recipes.filter((r) => {
     if (q) {
       const haystack = [r.title, r.description, r.cuisine, ...r.tags]
         .join(" ")
@@ -59,8 +67,25 @@ export function filterFeedRecipes(
         return r.tags.some(
           (t) => t.toLowerCase() === chip.label.toLowerCase(),
         );
+      case "goals":
+        return goals ? recipeFitsGoals(r, goals) : false;
       default:
         return true;
     }
   });
+
+  if (chip.kind === "foryou" && goals && hasGoalBoost(goals)) {
+    return [...filtered].sort(
+      (a, b) => recipeGoalScore(b, goals) - recipeGoalScore(a, goals),
+    );
+  }
+  return filtered;
+}
+
+function hasGoalBoost(goals: NutritionGoals): boolean {
+  return goals.calorie_target !== null || goals.protein_target_g !== null;
+}
+
+export function goalsFromPreferences(prefs?: Preferences | null): NutritionGoals {
+  return parseNutritionGoals(prefs);
 }

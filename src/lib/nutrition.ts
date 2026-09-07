@@ -1,0 +1,51 @@
+/**
+ * Client nutrition helpers. Canonical math lives in the shared edge module
+ * so generate-recipe / complete-bundle stay aligned with the UI.
+ */
+export {
+  CALORIE_LOCKS,
+  CALORIE_PRESETS,
+  DEFAULT_MEALS_PER_DAY,
+  FILL_MIN_CALORIES,
+  FILL_MIN_PROTEIN,
+  GOAL_SLACK,
+  MAX_CALORIE_TARGET,
+  MAX_EAT_SERVINGS,
+  MAX_MACRO_G,
+  MAX_MEALS_PER_DAY,
+  MIN_CALORIE_TARGET,
+  MIN_EAT_SERVINGS,
+  MIN_MACRO_G,
+  MIN_MEALS_PER_DAY,
+  PROTEIN_LOCKS,
+  PROTEIN_PRESETS,
+  clampCalorieTarget,
+  clampEatServings,
+  clampMacroGrams,
+  clampMealsPerDay,
+  fillLocksFromRemaining,
+  fillTodayPrompt,
+  formatPlateMeta,
+  hasAnyGoal,
+  lockConstraintPrompt,
+  nutritionGoalsToPrompt,
+  parseNutritionGoals,
+  perMealBudget,
+  plateMacros,
+  recipeFitLine,
+  recipeFitsGoals,
+  recipeGoalScore,
+  remainingBudget,
+  shouldOfferFillToday,
+  suggestedFillSlot,
+  summarizeGoals,
+  sumDayPlates,
+} from "../../supabase/functions/_shared/nutrition.ts";
+
+export type {
+  DayNutrition,
+  MacroSet,
+  NutritionGoals,
+  PlannedPlate,
+  RecipeMacros,
+} from "../../supabase/functions/_shared/nutrition.ts";

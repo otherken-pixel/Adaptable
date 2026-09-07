@@ -28,6 +28,11 @@ struct Preferences: Codable, Equatable {
     var spice: String?
     var skill: String?
     var learned: LearnedTaste?
+    var calorie_target: Int?
+    var protein_target_g: Int?
+    var carbs_target_g: Int?
+    var fat_target_g: Int?
+    var meals_per_day: Int?
 
     init(
         diets: [String]? = nil,
@@ -36,7 +41,12 @@ struct Preferences: Codable, Equatable {
         household_size: Int? = nil,
         spice: String? = nil,
         skill: String? = nil,
-        learned: LearnedTaste? = nil
+        learned: LearnedTaste? = nil,
+        calorie_target: Int? = nil,
+        protein_target_g: Int? = nil,
+        carbs_target_g: Int? = nil,
+        fat_target_g: Int? = nil,
+        meals_per_day: Int? = nil
     ) {
         self.diets = diets
         self.allergies = allergies
@@ -45,6 +55,11 @@ struct Preferences: Codable, Equatable {
         self.spice = spice
         self.skill = skill
         self.learned = learned
+        self.calorie_target = calorie_target
+        self.protein_target_g = protein_target_g
+        self.carbs_target_g = carbs_target_g
+        self.fat_target_g = fat_target_g
+        self.meals_per_day = meals_per_day
     }
 
     static let empty = Preferences()
@@ -54,7 +69,9 @@ struct Preferences: Codable, Equatable {
         if let diets, !diets.isEmpty { bits.append(diets.joined(separator: ", ")) }
         if let allergies, !allergies.isEmpty { bits.append("no " + allergies.joined(separator: ", ")) }
         if let household_size, household_size > 0 { bits.append("cooks for \(household_size)") }
-        return bits.isEmpty ? "Diets, allergies, dislikes — the AI cooks around you" : bits.joined(separator: " · ")
+        let goals = Nutrition.goals(from: self)
+        if goals.hasAny { bits.append(goals.summary) }
+        return bits.isEmpty ? "Diets, allergies, macros — the AI cooks around you" : bits.joined(separator: " · ")
     }
 }
 
@@ -180,6 +197,8 @@ struct SurpriseConstraints: Encodable, Equatable {
     var pantry_mode: String?
     var ingredients: [String]?
     var method: String?
+    var max_calories: Int?
+    var min_protein: Int?
 }
 
 enum SurpriseOptions {
@@ -298,6 +317,8 @@ struct MealPlanEntry: Codable, Equatable, Identifiable {
     var created_at: String
     var leftover_of: String? = nil
     var leftover_focus: String? = nil
+    /// Plates counted toward daily goals. Independent of cook yield.
+    var eat_servings: Int? = 1
     var recipe: Recipe?
 }
 

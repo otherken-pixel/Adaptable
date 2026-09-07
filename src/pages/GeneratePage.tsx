@@ -39,6 +39,16 @@ import {
   type SurpriseConstraints,
 } from "@/lib/surprise";
 import { recordRecipeTaste } from "@/lib/tasteMemory";
+import {
+  CALORIE_LOCKS,
+  PROTEIN_LOCKS,
+  fillTodayPrompt,
+  hasAnyGoal,
+  lockConstraintPrompt,
+  parseNutritionGoals,
+  perMealBudget,
+  recipeFitLine,
+} from "@/lib/nutrition";
 
 const SUGGESTIONS = [
   "High-protein vegan dinner in 20 minutes 💪",
@@ -56,6 +66,9 @@ const REMIX_SUGGESTIONS = [
   "Halve the cook time ⏱️",
   "Budget-friendly swaps 💸",
   "Air-fryer version 💨",
+  "Fit my macros 🥗",
+  "Lighter — fewer calories 🔥",
+  "More protein 💪",
 ];
 
 const PANTRY_STAPLES = [
@@ -131,6 +144,9 @@ export default function GeneratePage() {
   const [lockTime, setLockTime] = useState<number | null>(null);
   const [lockSlot, setLockSlot] = useState<string | null>(null);
   const [lockCuisine, setLockCuisine] = useState<string | null>(null);
+  const [lockCalorie, setLockCalorie] = useState<number | null>(null);
+  const [lockProtein, setLockProtein] = useState<number | null>(null);
+  const [lockFitGoals, setLockFitGoals] = useState(false);
   const [lockPantry, setLockPantry] = useState<PantryMode | null>(null);
   const [lockItems, setLockItems] = useState<string[]>([]);
   const [lockDraft, setLockDraft] = useState("");
@@ -220,6 +236,32 @@ export default function GeneratePage() {
     };
   }, [remixId]);
 
+  const fillParam = params.get("fill");
+  useEffect(() => {
+    if (fillParam !== "1") return;
+    const cal = Number(params.get("cal"));
+    const protein = Number(params.get("protein"));
+    const slot = params.get("slot");
+    setLockFitGoals(false);
+    setLockCalorie(Number.isFinite(cal) && cal > 0 ? Math.round(cal) : null);
+    setLockProtein(
+      Number.isFinite(protein) && protein > 0 ? Math.round(protein) : null,
+    );
+    if (slot) setLockSlot(slot);
+    setPrompt(
+      fillTodayPrompt({
+        remaining: {
+          calories: Number.isFinite(cal) ? Math.round(cal) : null,
+          protein_g: Number.isFinite(protein) ? Math.round(protein) : null,
+          carbs_g: null,
+          fat_g: null,
+        },
+        slot,
+      }),
+    );
+    navigate("/create", { replace: true });
+  }, [fillParam, navigate, params]);
+
   useEffect(() => {
     if (phase !== "loading") return;
     setLineIdx(0);
@@ -256,6 +298,7 @@ export default function GeneratePage() {
           `Adapt the recipe "${remixSource.title}" (key ingredients: ${ingredientList}). ` +
           `Requested change: ${p}`.slice(0, 480);
       }
+      apiPrompt += ` ${lockConstraintPrompt(lockCalorie, lockProtein)}`;
       const result = await generateRecipe(apiPrompt, serves);
       setRecipe(result);
       setPhase("done");
@@ -277,6 +320,8 @@ export default function GeneratePage() {
     cuisine: lockCuisine,
     pantry_mode: lockPantry,
     ingredients: lockItems,
+    max_calories: lockCalorie,
+    min_protein: lockProtein,
   });
 
   const addLockItem = (raw: string) => {
@@ -555,6 +600,52 @@ export default function GeneratePage() {
                     setLockPantry((cur) => (cur === "fridge" ? null : "fridge"))
                   }
                 />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {hasAnyGoal(parseNutritionGoals(profile?.preferences)) && (
+                  <LockChip
+                    label="Fit my goals"
+                    selected={lockFitGoals}
+                    onClick={() => {
+                      setLockFitGoals((on) => {
+                        const next = !on;
+                        if (next) {
+                          const budget = perMealBudget(
+                            parseNutritionGoals(profile?.preferences),
+                          );
+                          setLockCalorie(budget.calories);
+                          setLockProtein(budget.protein_g);
+                        } else {
+                          setLockCalorie(null);
+                          setLockProtein(null);
+                        }
+                        return next;
+                      });
+                    }}
+                  />
+                )}
+                {CALORIE_LOCKS.map((cal) => (
+                  <LockChip
+                    key={cal}
+                    label={`Under ${cal}`}
+                    selected={lockCalorie === cal && !lockFitGoals}
+                    onClick={() => {
+                      setLockFitGoals(false);
+                      setLockCalorie((cur) => (cur === cal ? null : cal));
+                    }}
+                  />
+                ))}
+                {PROTEIN_LOCKS.map((grams) => (
+                  <LockChip
+                    key={grams}
+                    label={`${grams}g+ protein`}
+                    selected={lockProtein === grams && !lockFitGoals}
+                    onClick={() => {
+                      setLockFitGoals(false);
+                      setLockProtein((cur) => (cur === grams ? null : grams));
+                    }}
+                  />
+                ))}
               </div>
               {lockPantry && (
                 <div className="mt-3">
@@ -914,6 +1005,14 @@ export default function GeneratePage() {
               <Check size={18} strokeWidth={2.6} />
               {keeping ? "Keeping…" : "Keep this recipe"}
             </button>
+          )}
+          {recipeFitLine(
+            recipe,
+            parseNutritionGoals(profile?.preferences),
+          ) && (
+            <p className="mb-3 text-[13px] font-bold text-accent">
+              {recipeFitLine(recipe, parseNutritionGoals(profile?.preferences))}
+            </p>
           )}
           <RecipeView recipe={recipe} preview={isPreviewRecipe(recipe)} />
         </>

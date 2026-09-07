@@ -384,14 +384,18 @@ function summarizePrefs(prefs?: {
   diets?: string[];
   allergies?: string[];
   household_size?: number;
+  calorie_target?: number | null;
+  protein_target_g?: number | null;
 }): string {
   const bits: string[] = [];
   if (prefs?.diets?.length) bits.push(prefs.diets.join(", "));
   if (prefs?.allergies?.length) bits.push(`no ${prefs.allergies.join(", ")}`);
   if (prefs?.household_size) bits.push(`cooks for ${prefs.household_size}`);
+  if (prefs?.calorie_target) bits.push(`${prefs.calorie_target} cal`);
+  if (prefs?.protein_target_g) bits.push(`${prefs.protein_target_g}g P`);
   return bits.length > 0
     ? bits.join(" · ")
-    : "Diets, allergies, dislikes — the AI cooks around you";
+    : "Diets, allergies, macros — the AI cooks around you";
 }
 
 function StatCard({

@@ -1,8 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, Minus, Plus, ShoppingBasket, X } from "lucide-react";
-import { fetchMealPlans, fetchSavedRecipes, removeMealPlan, updateMealPlanServings } from "@/lib/api";
+import {
+  fetchMealPlans,
+  fetchSavedRecipes,
+  removeMealPlan,
+  updateMealPlanEatServings,
+  updateMealPlanServings,
+} from "@/lib/api";
 import type { MealPlanEntry, Recipe } from "@/lib/types";
+import {
+  clampEatServings,
+  fillLocksFromRemaining,
+  formatPlateMeta,
+  hasAnyGoal,
+  parseNutritionGoals,
+  remainingBudget,
+  shouldOfferFillToday,
+  suggestedFillSlot,
+  sumDayPlates,
+} from "@/lib/nutrition";
 import RecipeCard from "@/components/RecipeCard";
 import EmptyState from "@/components/EmptyState";
 import { FeedSkeleton } from "@/components/Skeletons";
@@ -73,6 +90,30 @@ export default function CookbookPage() {
       month: "short",
       day: "numeric",
     });
+  };
+
+  const goals = parseNutritionGoals(profile?.preferences);
+
+  const fillHref = (remaining: ReturnType<typeof remainingBudget>) => {
+    const locks = fillLocksFromRemaining(remaining);
+    const slot = suggestedFillSlot();
+    const params = new URLSearchParams({ fill: "1", slot });
+    if (locks.maxCalories) params.set("cal", String(locks.maxCalories));
+    if (locks.minProtein) params.set("protein", String(locks.minProtein));
+    return `/create?${params.toString()}`;
+  };
+
+  const changeEatServings = (entry: MealPlanEntry, delta: number) => {
+    if (!profile) return;
+    const current = clampEatServings(entry.eat_servings);
+    const next = clampEatServings(current + delta);
+    if (next === current) return;
+    setPlans((prev) =>
+      prev
+        ? prev.map((p) => (p.id === entry.id ? { ...p, eat_servings: next } : p))
+        : prev,
+    );
+    updateMealPlanEatServings(profile.id, entry.id, next).catch(loadPlans);
   };
 
   const changeServings = (entry: MealPlanEntry, delta: number) => {
@@ -174,12 +215,27 @@ export default function CookbookPage() {
               title="Nothing planned yet"
               body="Open any recipe and tap the calendar button to plan your week — then send the whole week to Groceries in one tap."
               action={
-                <Link
-                  to="/"
-                  className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
-                >
-                  Find something delicious
-                </Link>
+                <div className="flex flex-col items-center gap-2">
+                  <Link
+                    to="/"
+                    className="pressable rounded-full bg-content px-5 py-2 text-sm font-bold text-surface"
+                  >
+                    Find something delicious
+                  </Link>
+                  {hasAnyGoal(goals) && (
+                    <Link
+                      to={fillHref(remainingBudget(goals, {
+                        calories: null,
+                        protein_g: null,
+                        carbs_g: null,
+                        fat_g: null,
+                      }))}
+                      className="pressable rounded-full bg-accent-soft px-5 py-2 text-sm font-bold text-accent"
+                    >
+                      Generate a plate for today
+                    </Link>
+                  )}
+                </div>
               }
             />
           )}
@@ -217,12 +273,21 @@ export default function CookbookPage() {
                     <h2 className="mb-2 px-1 text-[15px] font-extrabold tracking-tight">
                       {dayLabel(iso)}
                     </h2>
+                    <DayNutritionCard
+                      entries={entries}
+                      goals={goals}
+                      fillHref={fillHref}
+                    />
                     <div className="space-y-2.5">
-                      {entries.map((entry) => (
+                      {entries.map((entry) => {
+                        const eat = clampEatServings(entry.eat_servings);
+                        const macros = formatPlateMeta(entry.recipe ?? {}, eat);
+                        return (
                         <div
                           key={entry.id}
-                          className="flex items-center gap-3 rounded-2xl border border-line bg-raised p-3"
+                          className="rounded-2xl border border-line bg-raised p-3"
                         >
+                          <div className="flex items-center gap-3">
                           <Link
                             to={`/recipe/${entry.recipe_id}`}
                             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-2xl"
@@ -238,30 +303,16 @@ export default function CookbookPage() {
                               {entry.recipe?.title ?? "Recipe"}
                             </p>
                             <p className="text-xs text-faint">
-                              {entry.recipe
-                                ? `${entry.recipe.prep_time_minutes + entry.recipe.cook_time_minutes} min`
-                                : ""}
+                              {[
+                                entry.recipe
+                                  ? `${entry.recipe.prep_time_minutes + entry.recipe.cook_time_minutes} min`
+                                  : "",
+                                macros,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
                             </p>
                           </Link>
-                          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-sunken p-0.5">
-                            <button
-                              aria-label="Fewer servings"
-                              onClick={() => changeServings(entry, -1)}
-                              className="pressable flex h-7 w-7 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
-                            >
-                              <Minus size={13} strokeWidth={2.6} />
-                            </button>
-                            <span className="min-w-6 text-center text-xs font-extrabold tabular-nums">
-                              {entry.servings}
-                            </span>
-                            <button
-                              aria-label="More servings"
-                              onClick={() => changeServings(entry, 1)}
-                              className="pressable flex h-7 w-7 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
-                            >
-                              <Plus size={13} strokeWidth={2.6} />
-                            </button>
-                          </div>
                           <button
                             aria-label="Remove from plan"
                             onClick={() => remove(entry)}
@@ -269,8 +320,22 @@ export default function CookbookPage() {
                           >
                             <X size={15} strokeWidth={2.4} />
                           </button>
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <MiniStepper
+                              label="Cook"
+                              value={entry.servings}
+                              onChange={(d) => changeServings(entry, d)}
+                            />
+                            <MiniStepper
+                              label="Eat"
+                              value={eat}
+                              onChange={(d) => changeEatServings(entry, d)}
+                            />
+                          </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </section>
                 ))}
@@ -279,6 +344,115 @@ export default function CookbookPage() {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function DayNutritionCard({
+  entries,
+  goals,
+  fillHref,
+}: {
+  entries: MealPlanEntry[];
+  goals: ReturnType<typeof parseNutritionGoals>;
+  fillHref: (remaining: ReturnType<typeof remainingBudget>) => string;
+}) {
+  const day = sumDayPlates(entries);
+  const remaining = remainingBudget(goals, day.totals);
+  const bits: string[] = [];
+  if (day.totals.calories != null) {
+    bits.push(
+      goals.calorie_target
+        ? `${day.totals.calories} / ${goals.calorie_target} cal`
+        : `${day.totals.calories} cal planned`,
+    );
+  }
+  if (day.totals.protein_g != null) {
+    bits.push(
+      goals.protein_target_g
+        ? `${day.totals.protein_g} / ${goals.protein_target_g}g P`
+        : `${day.totals.protein_g}g P`,
+    );
+  }
+  const progress =
+    goals.calorie_target && goals.calorie_target > 0
+      ? Math.min(1, (day.totals.calories ?? 0) / goals.calorie_target)
+      : 0;
+  const fillLabel =
+    remaining.calories != null && remaining.calories < 0
+      ? "Generate a lighter plate"
+      : remaining.calories != null && remaining.calories >= 150
+        ? `Generate something ~${remaining.calories} cal to finish today`
+        : "Generate a plate that finishes today";
+
+  return (
+    <div className="mb-2.5 rounded-2xl bg-sunken px-3 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[12px] font-bold text-muted">
+          {bits.join(" · ") || "No nutrition estimates yet"}
+        </p>
+        {!hasAnyGoal(goals) && (
+          <Link to="/taste" className="text-[12px] font-extrabold text-accent">
+            Set goals
+          </Link>
+        )}
+      </div>
+      {hasAnyGoal(goals) && goals.calorie_target ? (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-raised">
+          <div
+            className="h-full rounded-full bg-accent"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+      ) : null}
+      {day.unknownMeals > 0 && (
+        <p className="mt-1.5 text-[11px] font-semibold text-faint">
+          {day.unknownMeals === 1
+            ? "1 meal has no estimate"
+            : `${day.unknownMeals} meals have no estimate`}
+        </p>
+      )}
+      {shouldOfferFillToday(goals, remaining) && (
+        <Link
+          to={fillHref(remaining)}
+          className="mt-2 inline-block text-[13px] font-extrabold text-accent"
+        >
+          {fillLabel}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function MiniStepper({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (delta: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-full bg-sunken p-0.5">
+      <span className="pl-2 text-[11px] font-bold text-faint">{label}</span>
+      <button
+        aria-label={`Fewer ${label.toLowerCase()} servings`}
+        onClick={() => onChange(-1)}
+        className="pressable flex h-7 w-7 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+      >
+        <Minus size={13} strokeWidth={2.6} />
+      </button>
+      <span className="min-w-6 text-center text-xs font-extrabold tabular-nums">
+        {value}
+      </span>
+      <button
+        aria-label={`More ${label.toLowerCase()} servings`}
+        onClick={() => onChange(1)}
+        className="pressable flex h-7 w-7 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+      >
+        <Plus size={13} strokeWidth={2.6} />
+      </button>
     </div>
   );
 }

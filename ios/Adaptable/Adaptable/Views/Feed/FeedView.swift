@@ -5,6 +5,7 @@ private enum ChipKind: Equatable {
     case time(maxMinutes: Int)
     case calories(max: Int)
     case protein(min: Int)
+    case goals
     case tag(String)
 
     var filterChip: FeedFilter.Chip {
@@ -15,6 +16,7 @@ private enum ChipKind: Equatable {
         case .time(let maxMinutes): return .time(maxMinutes: maxMinutes)
         case .calories(let max): return .calories(max: max)
         case .protein(let min): return .protein(min: min)
+        case .goals: return .goals
         case .tag(let label): return .tag(label)
         }
     }
@@ -71,7 +73,7 @@ struct FeedView: View {
                         } else {
                             LazyVStack(spacing: 16) {
                                 ForEach(Array(filteredRecipes.enumerated()), id: \.element.id) { index, recipe in
-                                    RecipeCardView(recipe: recipe, index: index)
+                                    RecipeCardView(recipe: recipe, index: index, showProtein: showProteinOnCards)
                                 }
                             }
                         }
@@ -280,6 +282,13 @@ struct FeedView: View {
         recipes != nil && filteredRecipes.isEmpty && activeChip.kind == .forYou
     }
 
+    private var showProteinOnCards: Bool {
+        if Nutrition.goals(from: authStore.profile?.preferences).protein_target_g != nil { return true }
+        if case .protein = activeChip.kind { return true }
+        if case .goals = activeChip.kind { return true }
+        return false
+    }
+
     private var emptyView: some View {
         Group {
             if isForYouEmpty {
@@ -288,6 +297,14 @@ struct FeedView: View {
                     message: "Generate a recipe that fits you — the more you cook and remix, the sharper this filter gets."
                 ) {
                     PillButton(title: "Generate one for my diet") { deepLinks.activeTab = .create }
+                }
+            } else if recipes != nil && filteredRecipes.isEmpty && activeChip.kind == .goals {
+                EmptyStateView(
+                    emoji: "🎯",
+                    title: "Nothing fits your goals yet",
+                    message: "Generate a plate that hits your calorie or protein target — or loosen the numbers in Taste Profile."
+                ) {
+                    PillButton(title: "Generate one that fits") { deepLinks.activeTab = .create }
                 }
             } else if recipes != nil && filteredRecipes.isEmpty && activeChip.kind == .following {
                 EmptyStateView(
@@ -362,6 +379,9 @@ struct FeedView: View {
         }
         if !engagement.followedIds.isEmpty {
             list.append(Chip(id: "following", label: "Following", kind: .following))
+        }
+        if Nutrition.goals(from: prefs).hasAny {
+            list.append(Chip(id: "goals", label: "Fits my goals", kind: .goals))
         }
         list.append(contentsOf: [
             Chip(id: "time20", label: "Under 20 min", kind: .time(maxMinutes: 20)),
