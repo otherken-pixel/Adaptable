@@ -46,17 +46,19 @@ enum TasteMemory {
 
     static func rank(_ recipes: [Recipe], prefs: Preferences) -> [Recipe] {
         let learned = prefs.learned ?? LearnedTaste()
-        guard !learned.cuisines.isEmpty || !learned.proteins.isEmpty else { return recipes }
+        let goals = Nutrition.goals(from: prefs)
+        guard !learned.cuisines.isEmpty || !learned.proteins.isEmpty || goals.hasAny else { return recipes }
         return recipes.sorted { a, b in
-            score(a, learned: learned) > score(b, learned: learned)
+            score(a, learned: learned, goals: goals) > score(b, learned: learned, goals: goals)
         }
     }
 
-    static func score(_ recipe: Recipe, learned: LearnedTaste) -> Int {
+    static func score(_ recipe: Recipe, learned: LearnedTaste, goals: Nutrition.Goals = Nutrition.Goals(calorie_target: nil, protein_target_g: nil, carbs_target_g: nil, fat_target_g: nil, meals_per_day: 3)) -> Int {
         var n = 0
         if let c = recipe.cuisine { n += learned.cuisines[c] ?? 0 }
         let protein = recipe.base_protein ?? protein(from: recipe)
         if let protein { n += (learned.proteins[protein] ?? 0) * 2 }
+        n += Nutrition.goalScore(recipe, goals: goals)
         return n
     }
 

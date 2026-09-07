@@ -226,6 +226,11 @@ struct MainTabView: View {
                 deepLinks.requestFeedRefresh()
             }
         }
+        .onChange(of: deepLinks.pendingTasteProfile) { _, on in
+            guard on else { return }
+            deepLinks.pendingTasteProfile = false
+            profilePath.append(Route.tasteProfile)
+        }
         .fullScreenCover(item: $deepLinks.cookSession) { session in
             CookModeView(recipeId: session.recipeId, servings: session.servings)
         }

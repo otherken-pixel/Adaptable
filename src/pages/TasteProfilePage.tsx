@@ -4,6 +4,16 @@ import { Check, ChevronLeft, Loader2, Minus, Plus, ShieldAlert, X } from "lucide
 import { useAuth } from "@/context/AuthContext";
 import type { Preferences } from "@/lib/types";
 import { TASTE_PROFILE_ALLERGY_CHIPS } from "@/lib/allergy";
+import {
+  CALORIE_PRESETS,
+  MAX_MEALS_PER_DAY,
+  MIN_MEALS_PER_DAY,
+  PROTEIN_PRESETS,
+  clampCalorieTarget,
+  clampMacroGrams,
+  clampMealsPerDay,
+  parseNutritionGoals,
+} from "@/lib/nutrition";
 
 const DIETS = [
   "Vegetarian", "Vegan", "Pescatarian", "Keto", "Paleo",
@@ -31,6 +41,23 @@ export default function TasteProfilePage() {
   const [household, setHousehold] = useState(initial.household_size ?? 4);
   const [spice, setSpice] = useState<Preferences["spice"]>(initial.spice);
   const [skill, setSkill] = useState<Preferences["skill"]>(initial.skill);
+  const initialGoals = parseNutritionGoals(initial);
+  const [calorieTarget, setCalorieTarget] = useState<number | null>(
+    initialGoals.calorie_target,
+  );
+  const [proteinTarget, setProteinTarget] = useState<number | null>(
+    initialGoals.protein_target_g,
+  );
+  const [carbsTarget, setCarbsTarget] = useState<number | null>(
+    initialGoals.carbs_target_g,
+  );
+  const [fatTarget, setFatTarget] = useState<number | null>(
+    initialGoals.fat_target_g,
+  );
+  const [mealsPerDay, setMealsPerDay] = useState(initialGoals.meals_per_day);
+  const [showExtraMacros, setShowExtraMacros] = useState(
+    initialGoals.carbs_target_g !== null || initialGoals.fat_target_g !== null,
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -58,6 +85,11 @@ export default function TasteProfilePage() {
         household_size: household,
         spice,
         skill,
+        calorie_target: clampCalorieTarget(calorieTarget),
+        protein_target_g: clampMacroGrams(proteinTarget),
+        carbs_target_g: clampMacroGrams(carbsTarget),
+        fat_target_g: clampMacroGrams(fatTarget),
+        meals_per_day: clampMealsPerDay(mealsPerDay),
       });
       setSaved(true);
       // Explicit destination: navigate(-1) could leave the app when this
@@ -89,6 +121,7 @@ export default function TasteProfilePage() {
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           Every recipe the AI creates for you respects this — automatically.
+          Change calorie or macro targets anytime.
         </p>
       </header>
 
@@ -150,6 +183,156 @@ export default function TasteProfilePage() {
             <Plus size={17} strokeWidth={2.6} />
           </button>
         </div>
+      </Section>
+
+      <Section
+        title="Daily goals"
+        badge={
+          <span className="rounded-full bg-sunken px-2.5 py-1 text-[11px] font-bold text-muted">
+            Optional
+          </span>
+        }
+      >
+        <p className="mb-3 text-[13px] leading-relaxed text-muted">
+          Used to generate, filter, and plan meals. Estimates only — not
+          medical or dietetic advice. Planner counts one plate per meal, not
+          the household cook yield.
+        </p>
+        <p className="mb-2 text-[13px] font-bold">Calories</p>
+        <ChipGrid
+          items={[...CALORIE_PRESETS.map(String), "Off"]}
+          selected={
+            calorieTarget
+              ? CALORIE_PRESETS.includes(calorieTarget as (typeof CALORIE_PRESETS)[number])
+                ? [String(calorieTarget)]
+                : []
+              : ["Off"]
+          }
+          onToggle={(item) => {
+            if (item === "Off") setCalorieTarget(null);
+            else setCalorieTarget(Number(item));
+          }}
+        />
+        <label className="mt-2 mb-4 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+          <span className="text-[13px] font-bold text-muted">Custom kcal</span>
+          <input
+            type="number"
+            min={800}
+            max={5000}
+            inputMode="numeric"
+            placeholder="e.g. 1850"
+            value={calorieTarget ?? ""}
+            onChange={(e) =>
+              setCalorieTarget(
+                e.target.value === "" ? null : Number(e.target.value),
+              )
+            }
+            className="h-10 w-28 rounded-xl bg-sunken px-3 text-right text-[15px] font-extrabold outline-none"
+          />
+        </label>
+        <p className="mb-2 text-[13px] font-bold">Protein</p>
+        <ChipGrid
+          items={[...PROTEIN_PRESETS.map((n) => `${n}g`), "Off"]}
+          selected={
+            proteinTarget
+              ? PROTEIN_PRESETS.includes(proteinTarget as (typeof PROTEIN_PRESETS)[number])
+                ? [`${proteinTarget}g`]
+                : []
+              : ["Off"]
+          }
+          onToggle={(item) => {
+            if (item === "Off") setProteinTarget(null);
+            else setProteinTarget(Number(item.replace("g", "")));
+          }}
+        />
+        <label className="mt-2 mb-4 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+          <span className="text-[13px] font-bold text-muted">Custom grams</span>
+          <input
+            type="number"
+            min={10}
+            max={400}
+            inputMode="numeric"
+            placeholder="e.g. 140"
+            value={proteinTarget ?? ""}
+            onChange={(e) =>
+              setProteinTarget(
+                e.target.value === "" ? null : Number(e.target.value),
+              )
+            }
+            className="h-10 w-28 rounded-xl bg-sunken px-3 text-right text-[15px] font-extrabold outline-none"
+          />
+        </label>
+        <div className="mb-4 flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+          <span className="text-[14px] font-bold">Meals I track</span>
+          <div className="flex items-center gap-1 rounded-full bg-sunken p-1">
+            <button
+              aria-label="Fewer meals"
+              onClick={() =>
+                setMealsPerDay((n) => Math.max(MIN_MEALS_PER_DAY, n - 1))
+              }
+              className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+            >
+              <Minus size={15} strokeWidth={2.6} />
+            </button>
+            <span className="min-w-16 text-center text-[13px] font-extrabold">
+              {mealsPerDay} / day
+            </span>
+            <button
+              aria-label="More meals"
+              onClick={() =>
+                setMealsPerDay((n) => Math.min(MAX_MEALS_PER_DAY, n + 1))
+              }
+              className="pressable flex h-8 w-8 items-center justify-center rounded-full bg-raised text-muted shadow-sm"
+            >
+              <Plus size={15} strokeWidth={2.6} />
+            </button>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowExtraMacros((v) => !v)}
+          className="mb-2 text-[13px] font-bold text-accent"
+        >
+          {showExtraMacros ? "Hide carbs & fat" : "Add carbs & fat targets"}
+        </button>
+        {showExtraMacros && (
+          <div className="space-y-2">
+            <label className="flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+              <span className="text-[13px] font-bold">Carbs (g)</span>
+              <input
+                type="number"
+                min={10}
+                max={400}
+                inputMode="numeric"
+                placeholder="Off"
+                value={carbsTarget ?? ""}
+                onChange={(e) =>
+                  setCarbsTarget(
+                    e.target.value === "" ? null : Number(e.target.value),
+                  )
+                }
+                className="h-10 w-24 rounded-xl bg-sunken px-3 text-right text-[15px] font-extrabold outline-none"
+              />
+            </label>
+            <label className="flex items-center justify-between rounded-2xl border border-line bg-raised px-4 py-2.5">
+              <span className="text-[13px] font-bold">Fat (g)</span>
+              <input
+                type="number"
+                min={10}
+                max={400}
+                inputMode="numeric"
+                placeholder="Off"
+                value={fatTarget ?? ""}
+                onChange={(e) =>
+                  setFatTarget(
+                    e.target.value === "" ? null : Number(e.target.value),
+                  )
+                }
+                className="h-10 w-24 rounded-xl bg-sunken px-3 text-right text-[15px] font-extrabold outline-none"
+              />
+            </label>
+          </div>
+        )}
       </Section>
 
       <Section title="Household size">

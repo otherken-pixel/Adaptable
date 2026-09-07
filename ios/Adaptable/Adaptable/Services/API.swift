@@ -357,6 +357,12 @@ enum API {
         try await db.from("meal_plans").update(Payload(servings: servings)).eq("id", value: id).execute()
     }
 
+    static func updateMealPlanEatServings(userId: String, id: String, eatServings: Int) async throws {
+        if SupabaseManager.isDemo { return await DemoStore.shared.updatePlanEatServings(id, eatServings: eatServings) }
+        struct Payload: Encodable { let eat_servings: Int }
+        try await db.from("meal_plans").update(Payload(eat_servings: eatServings)).eq("id", value: id).execute()
+    }
+
     static func removeMealPlan(userId: String, id: String) async throws {
         if SupabaseManager.isDemo { return await DemoStore.shared.removePlan(id) }
         try await db.from("meal_plans").delete().eq("id", value: id).execute()

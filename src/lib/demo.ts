@@ -287,6 +287,7 @@ export const demoStore = {
       recipe_id: recipeId,
       plan_date: planDate,
       servings,
+      eat_servings: 1,
       created_at: new Date().toISOString(),
     };
     state.plans = [...state.plans, entry];
@@ -295,6 +296,12 @@ export const demoStore = {
   },
   updatePlanServings(id: string, servings: number) {
     state.plans = state.plans.map((p) => (p.id === id ? { ...p, servings } : p));
+    persist();
+  },
+  updatePlanEatServings(id: string, eatServings: number) {
+    state.plans = state.plans.map((p) =>
+      p.id === id ? { ...p, eat_servings: eatServings } : p,
+    );
     persist();
   },
   removePlan(id: string) {

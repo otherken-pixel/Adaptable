@@ -452,6 +452,23 @@ export async function updateMealPlanServings(
   if (error) throw error;
 }
 
+export async function updateMealPlanEatServings(
+  userId: string,
+  id: string,
+  eatServings: number,
+): Promise<void> {
+  if (isDemo) {
+    demoStore.updatePlanEatServings(id, eatServings);
+    return;
+  }
+  const { error } = await supabase!
+    .from("meal_plans")
+    .update({ eat_servings: eatServings })
+    .eq("user_id", userId)
+    .eq("id", id);
+  if (error) throw error;
+}
+
 export async function removeMealPlan(userId: string, id: string): Promise<void> {
   if (isDemo) {
     demoStore.removePlan(id);

@@ -25,6 +25,7 @@ import {
   type MealSlot,
 } from "../_shared/mealPrep.ts";
 import { geminiIsolatedPayload, untrustedBlock } from "../_shared/prompt.ts";
+import { nutritionGoalsToPrompt } from "../_shared/nutrition.ts";
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
@@ -437,6 +438,8 @@ function preferencesToPrompt(prefs: any): string {
   if (typeof prefs.skill === "string" && prefs.skill) {
     parts.push(`The cook's skill level is ${prefs.skill}.`);
   }
+  const nutrition = nutritionGoalsToPrompt(prefs);
+  if (nutrition) parts.push(nutrition.trim());
   return parts.length > 0 ? parts.join(" ") + " " : "";
 }
 

@@ -7,6 +7,8 @@ struct RecipeCardView: View {
     /// Discover/Profile can use the implicit link. Cookbook must not —
     /// appearing/disappearing links auto-push a recipe when the parent list changes.
     var asLink: Bool = true
+    /// Show protein when the cook has a protein goal or a protein filter is on.
+    var showProtein: Bool = false
 
     var body: some View {
         Group {
@@ -52,6 +54,9 @@ struct RecipeCardView: View {
                         MetaPill(icon: "gauge.medium", label: recipe.difficulty?.rawValue ?? "")
                         if let cal = recipe.calories {
                             MetaPill(icon: "flame", label: "\(cal) cal")
+                        }
+                        if showProtein, let protein = recipe.protein_g {
+                            MetaPill(icon: "dumbbell", label: "\(protein)g P")
                         }
                         if (recipe.cook_count ?? 0) > 0 {
                             MetaPill(icon: "flame.fill", label: "\(Format.compactCount(recipe.cook_count ?? 0)) cooked", accent: true)

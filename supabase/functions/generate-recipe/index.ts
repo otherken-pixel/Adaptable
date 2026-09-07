@@ -38,6 +38,7 @@ import {
   parseSurpriseConstraints,
   recipeHonorsMethodLock,
 } from "../_shared/surprise.ts";
+import { nutritionGoalsToPrompt } from "../_shared/nutrition.ts";
 
 /** Preferred model first; fall back if Google returns 404 (retired model id).
  *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
@@ -1024,11 +1025,13 @@ function preferencesToPrompt(prefs: any): string {
   if (typeof prefs.spice === "string" && prefs.spice) {
     parts.push(`Preferred spice level: ${prefs.spice}.`);
   }
-  if (typeof prefs.skill === "string" && prefs.skill) {
+    if (typeof prefs.skill === "string" && prefs.skill) {
     parts.push(
       `The cook's skill level is ${prefs.skill} — pitch technique accordingly.`,
     );
   }
+  const nutrition = nutritionGoalsToPrompt(prefs);
+  if (nutrition) parts.push(nutrition.trim());
   const learned = prefs.learned;
   if (learned && typeof learned === "object") {
     const top = (map: unknown, n: number) => {

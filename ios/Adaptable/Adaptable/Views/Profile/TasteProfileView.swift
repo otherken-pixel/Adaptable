@@ -18,6 +18,12 @@ struct TasteProfileView: View {
     @State private var household = 4
     @State private var spice: String?
     @State private var skill: String?
+    @State private var calorieTarget: Int?
+    @State private var proteinTarget: Int?
+    @State private var carbsTarget: Int?
+    @State private var fatTarget: Int?
+    @State private var mealsPerDay = Nutrition.defaultMealsPerDay
+    @State private var showExtraMacros = false
     @State private var saving = false
     @State private var saved = false
 
@@ -35,6 +41,15 @@ struct TasteProfileView: View {
                 }
                 section("Ingredients you dislike") {
                     dislikesEditor
+                }
+                section("Daily goals") {
+                    Label("Optional", systemImage: "target")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.muted)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(Theme.sunken, in: Capsule())
+                } content: {
+                    goalsEditor
                 }
                 section("Household size") {
                     householdStepper
@@ -62,7 +77,7 @@ struct TasteProfileView: View {
             }
             Text("PERSONALIZATION").font(.system(size: 12, weight: .heavy)).tracking(1.5).foregroundStyle(Theme.accent)
             Text("Taste Profile").font(.system(size: 32, weight: .heavy))
-            Text("Every recipe the AI creates for you respects this — automatically.")
+            Text("Every recipe the AI creates for you respects this — automatically. Change calorie or macro targets anytime.")
                 .font(.system(size: 14)).foregroundStyle(Theme.muted)
         }
         .padding(.top, 12)
@@ -110,6 +125,113 @@ struct TasteProfileView: View {
         guard !item.isEmpty else { return }
         if !dislikes.contains(where: { $0.lowercased() == item.lowercased() }) { dislikes.append(item) }
         dislikeDraft = ""
+    }
+
+    private var goalsEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Used to generate, filter, and plan meals. Estimates only — not medical or dietetic advice. Planner counts one plate per meal, not the household cook yield.")
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.muted)
+            Text("Calories").font(.system(size: 13, weight: .bold))
+            ChipGrid(
+                items: Nutrition.caloriePresets.map(String.init) + ["Off"],
+                selected: calorieSelection
+            ) { item in
+                if item == "Off" { calorieTarget = nil }
+                else { calorieTarget = Int(item) }
+            }
+            stepperRow(title: "Custom kcal", value: calorieTarget ?? 0, range: Nutrition.minCalorieTarget...Nutrition.maxCalorieTarget, allowZero: true) { next in
+                calorieTarget = next == 0 ? nil : next
+            }
+            Text("Protein").font(.system(size: 13, weight: .bold))
+            ChipGrid(
+                items: Nutrition.proteinPresets.map { "\($0)g" } + ["Off"],
+                selected: proteinSelection
+            ) { item in
+                if item == "Off" { proteinTarget = nil }
+                else { proteinTarget = Int(item.replacingOccurrences(of: "g", with: "")) }
+            }
+            stepperRow(title: "Custom grams", value: proteinTarget ?? 0, range: Nutrition.minMacroG...Nutrition.maxMacroG, allowZero: true, step: 5) { next in
+                proteinTarget = next == 0 ? nil : next
+            }
+            HStack {
+                Text("Meals I track").font(.system(size: 14, weight: .bold))
+                Spacer()
+                HStack(spacing: 4) {
+                    Button { mealsPerDay = max(Nutrition.minMealsPerDay, mealsPerDay - 1) } label: {
+                        Image(systemName: "minus").frame(width: 32, height: 32).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+                    }
+                    Text("\(mealsPerDay) / day").font(.system(size: 13, weight: .heavy)).frame(minWidth: 64)
+                    Button { mealsPerDay = min(Nutrition.maxMealsPerDay, mealsPerDay + 1) } label: {
+                        Image(systemName: "plus").frame(width: 32, height: 32).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+                    }
+                }
+                .padding(4)
+                .background(Theme.sunken, in: Capsule())
+            }
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line))
+
+            Button {
+                showExtraMacros.toggle()
+            } label: {
+                Text(showExtraMacros ? "Hide carbs & fat" : "Add carbs & fat targets")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+            }
+            if showExtraMacros {
+                stepperRow(title: "Carbs (g)", value: carbsTarget ?? 0, range: Nutrition.minMacroG...Nutrition.maxMacroG, allowZero: true, step: 5) { next in
+                    carbsTarget = next == 0 ? nil : next
+                }
+                stepperRow(title: "Fat (g)", value: fatTarget ?? 0, range: Nutrition.minMacroG...Nutrition.maxMacroG, allowZero: true, step: 5) { next in
+                    fatTarget = next == 0 ? nil : next
+                }
+            }
+        }
+    }
+
+    private var calorieSelection: [String] {
+        if let calorieTarget, Nutrition.caloriePresets.contains(calorieTarget) { return ["\(calorieTarget)"] }
+        if calorieTarget == nil { return ["Off"] }
+        return []
+    }
+
+    private var proteinSelection: [String] {
+        if let proteinTarget, Nutrition.proteinPresets.contains(proteinTarget) { return ["\(proteinTarget)g"] }
+        if proteinTarget == nil { return ["Off"] }
+        return []
+    }
+
+    private func stepperRow(
+        title: String,
+        value: Int,
+        range: ClosedRange<Int>,
+        allowZero: Bool,
+        step: Int = 50,
+        onChange: @escaping (Int) -> Void
+    ) -> some View {
+        HStack {
+            Text(title).font(.system(size: 14, weight: .bold))
+            Spacer()
+            HStack(spacing: 4) {
+                Button {
+                    if value <= range.lowerBound { onChange(allowZero ? 0 : range.lowerBound) }
+                    else { onChange(max(range.lowerBound, value - step)) }
+                } label: {
+                    Image(systemName: "minus").frame(width: 32, height: 32).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+                }
+                Text(value == 0 ? "Off" : "\(value)").font(.system(size: 13, weight: .heavy)).frame(minWidth: 56)
+                Button { onChange(min(range.upperBound, (value == 0 ? range.lowerBound : value) + step)) } label: {
+                    Image(systemName: "plus").frame(width: 32, height: 32).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+                }
+            }
+            .padding(4)
+            .background(Theme.sunken, in: Capsule())
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line))
     }
 
     private var householdStepper: some View {
@@ -167,6 +289,13 @@ struct TasteProfileView: View {
         household = prefs.household_size ?? 4
         spice = prefs.spice
         skill = prefs.skill
+        let goals = Nutrition.goals(from: prefs)
+        calorieTarget = goals.calorie_target
+        proteinTarget = goals.protein_target_g
+        carbsTarget = goals.carbs_target_g
+        fatTarget = goals.fat_target_g
+        mealsPerDay = goals.meals_per_day
+        showExtraMacros = goals.carbs_target_g != nil || goals.fat_target_g != nil
     }
 
     private func save() async {
@@ -180,6 +309,11 @@ struct TasteProfileView: View {
         prefs.household_size = household
         prefs.spice = spice
         prefs.skill = skill
+        prefs.calorie_target = Nutrition.clampCalorieTarget(calorieTarget)
+        prefs.protein_target_g = Nutrition.clampMacroGrams(proteinTarget)
+        prefs.carbs_target_g = Nutrition.clampMacroGrams(carbsTarget)
+        prefs.fat_target_g = Nutrition.clampMacroGrams(fatTarget)
+        prefs.meals_per_day = Nutrition.clampMealsPerDay(mealsPerDay)
         do {
             try await authStore.updatePreferences(prefs)
             saved = true

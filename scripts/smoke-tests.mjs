@@ -15,6 +15,15 @@ import {
   findIngredientAllergyViolations,
 } from "../supabase/functions/_shared/allergenLexicon.ts";
 import { filterFeedRecipes } from "../src/lib/feedFilter.ts";
+import {
+  fillTodayPrompt,
+  parseNutritionGoals,
+  perMealBudget,
+  plateMacros,
+  recipeFitsGoals,
+  remainingBudget,
+  sumDayPlates,
+} from "../src/lib/nutrition.ts";
 import { isValidRecipe } from "../supabase/functions/_shared/recipeValidate.ts";
 import {
   allowedSurpriseProteins,
@@ -201,6 +210,58 @@ assert.equal(under20[0].id, "1");
 
 const lowCal = filterFeedRecipes(recipes, "", { kind: "cal", maxCalories: 500 }, [], new Set());
 assert.equal(lowCal.length, 1);
+
+const goals = parseNutritionGoals({
+  calorie_target: 2000,
+  protein_target_g: 130,
+  meals_per_day: 3,
+});
+const goalPool = [
+  ...recipes,
+  {
+    ...recipes[0],
+    id: "3",
+    title: "Goal Bowl",
+    calories: 600,
+    protein_g: 42,
+    tags: ["High-protein"],
+  },
+];
+const fitsGoals = filterFeedRecipes(
+  goalPool,
+  "",
+  { kind: "goals" },
+  [],
+  new Set(),
+  [],
+  goals,
+);
+assert.equal(fitsGoals.length, 1);
+assert.equal(fitsGoals[0].id, "3");
+
+// --- nutrition goals / planner plates ---
+assert.equal(perMealBudget(goals).calories, 667);
+assert.equal(perMealBudget(goals).protein_g, 43);
+assert.equal(plateMacros({ calories: 560, protein_g: 38 }, 1).calories, 560);
+assert.equal(plateMacros({ calories: 560, protein_g: 38 }, 2).calories, 1120);
+assert.equal(
+  recipeFitsGoals({ calories: 600, protein_g: 40 }, goals),
+  true,
+);
+assert.equal(
+  recipeFitsGoals({ calories: 900, protein_g: 40 }, goals),
+  false,
+);
+const day = sumDayPlates([
+  { recipe: { calories: 560, protein_g: 38 }, eat_servings: 1 },
+  { recipe: { calories: 400, protein_g: 30 }, eat_servings: 1 },
+  { recipe: {}, eat_servings: 1 },
+]);
+assert.equal(day.totals.calories, 960);
+assert.equal(day.unknownMeals, 1);
+assert.equal(remainingBudget(goals, day.totals).calories, 1040);
+assert.ok(fillTodayPrompt({ remaining: remainingBudget(goals, day.totals), slot: "dinner" }).includes("1040"));
+assert.equal(parseNutritionGoals({ calorie_target: 50 }).calorie_target, null);
 
 const forYouPool = [
   {

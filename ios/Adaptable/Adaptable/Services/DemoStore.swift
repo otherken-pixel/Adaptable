@@ -206,6 +206,15 @@ final class DemoStore {
         persist()
     }
 
+    func updatePlanEatServings(_ id: String, eatServings: Int) {
+        state.plans = state.plans.map {
+            var p = $0
+            if p.id == id { p.eat_servings = eatServings }
+            return p
+        }
+        persist()
+    }
+
     func removePlan(_ id: String) {
         state.plans.removeAll { $0.id == id }
         persist()

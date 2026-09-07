@@ -41,6 +41,8 @@ export interface SurpriseConstraints {
   pantry_mode?: PantryMode | null;
   ingredients?: string[] | null;
   method?: string | null;
+  max_calories?: number | null;
+  min_protein?: number | null;
 }
 
 export function isPreviewRecipe(recipe: { id?: string } | null | undefined): boolean {

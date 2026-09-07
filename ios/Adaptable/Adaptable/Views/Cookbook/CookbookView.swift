@@ -117,7 +117,16 @@ struct CookbookView: View {
                     title: "Nothing planned yet",
                     message: "Build leftover-friendly meals that share a base — then drop them on the week."
                 ) {
-                    PillButton(title: "Build this week's prep") { deepLinks.openPrep() }
+                    VStack(spacing: 10) {
+                        PillButton(title: "Build this week's prep") { deepLinks.openPrep() }
+                        if Nutrition.goals(from: authStore.profile?.preferences).hasAny {
+                            PillButton(title: "Generate a plate for today") {
+                                let goals = Nutrition.goals(from: authStore.profile?.preferences)
+                                let remaining = Nutrition.remaining(goals, totals: Nutrition.Macros())
+                                openFillToday(remaining)
+                            }
+                        }
+                    }
                 }
                 .padding(.vertical, 8)
             } else {
@@ -138,12 +147,19 @@ struct CookbookView: View {
                 ForEach(grouped ?? [], id: \.0) { iso, entries in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(dayLabel(iso)).font(.system(size: 15, weight: .heavy))
+                        DayNutritionStrip(
+                            entries: entries,
+                            goals: Nutrition.goals(from: authStore.profile?.preferences),
+                            onFillToday: { remaining in openFillToday(remaining) },
+                            onEditGoals: { deepLinks.openTasteProfile() }
+                        )
                         VStack(spacing: 10) {
                             ForEach(entries) { entry in
                                 PlanRow(
                                     entry: entry,
                                     onOpen: { deepLinks.openCookbookRecipe(entry.recipe_id) },
                                     onServingsChange: { delta in changeServings(entry, delta: delta) },
+                                    onEatChange: { delta in changeEatServings(entry, delta: delta) },
                                     onRemove: { remove(entry) }
                                 )
                             }
@@ -179,6 +195,31 @@ struct CookbookView: View {
         }
         try? await API.updateMealPlanDate(userId: userId, id: entry.id, planDate: iso)
         KitchenSnapshot.refresh(from: plans ?? [])
+    }
+
+    private func openFillToday(_ remaining: Nutrition.Macros) {
+        let locks = Nutrition.fillLocks(from: remaining)
+        deepLinks.openFillToday(
+            calories: locks.maxCalories,
+            protein: locks.minProtein,
+            slot: Nutrition.suggestedFillSlot()
+        )
+    }
+
+    private func changeEatServings(_ entry: MealPlanEntry, delta: Int) {
+        guard let userId = authStore.profile?.id else { return }
+        let current = Nutrition.clampEatServings(entry.eat_servings)
+        let next = Nutrition.clampEatServings(current + delta)
+        guard next != current else { return }
+        plans = plans?.map {
+            var p = $0
+            if p.id == entry.id { p.eat_servings = next }
+            return p
+        }
+        Task {
+            do { try await API.updateMealPlanEatServings(userId: userId, id: entry.id, eatServings: next) }
+            catch { await loadPlans() }
+        }
     }
 
     private func changeServings(_ entry: MealPlanEntry, delta: Int) {
@@ -230,50 +271,150 @@ struct CookbookView: View {
     }
 }
 
+private struct DayNutritionStrip: View {
+    let entries: [MealPlanEntry]
+    let goals: Nutrition.Goals
+    var onFillToday: (Nutrition.Macros) -> Void
+    var onEditGoals: () -> Void
+
+    private var day: Nutrition.Day { Nutrition.sumDay(entries) }
+    private var remaining: Nutrition.Macros { Nutrition.remaining(goals, totals: day.totals) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(summary)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.muted)
+                Spacer()
+                if !goals.hasAny {
+                    Button("Set goals", action: onEditGoals)
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+            if goals.hasAny, let target = goals.calorie_target, target > 0 {
+                ProgressView(value: progress(used: day.totals.calories, target: target))
+                    .tint(Theme.accent)
+            }
+            if day.unknownMeals > 0 {
+                Text(day.unknownMeals == 1 ? "1 meal has no estimate" : "\(day.unknownMeals) meals have no estimate")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.faint)
+            }
+            if goals.hasAny && Nutrition.shouldOfferFillToday(goals: goals, remaining: remaining) {
+                Button {
+                    onFillToday(remaining)
+                } label: {
+                    Text(fillLabel)
+                        .font(.system(size: 13, weight: .heavy))
+                        .foregroundStyle(Theme.accent)
+                }
+            }
+        }
+        .padding(12)
+        .background(Theme.sunken, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var summary: String {
+        var bits: [String] = []
+        if let used = day.totals.calories {
+            if let target = goals.calorie_target {
+                bits.append("\(used) / \(target) cal")
+            } else {
+                bits.append("\(used) cal planned")
+            }
+        }
+        if let used = day.totals.protein_g {
+            if let target = goals.protein_target_g {
+                bits.append("\(used) / \(target)g P")
+            } else {
+                bits.append("\(used)g P")
+            }
+        }
+        return bits.isEmpty ? "No nutrition estimates yet" : bits.joined(separator: " · ")
+    }
+
+    private var fillLabel: String {
+        if let calories = remaining.calories, calories < 0 {
+            return "Generate a lighter plate"
+        }
+        if let calories = remaining.calories, calories >= Nutrition.fillMinCalories {
+            return "Generate something ~\(calories) cal to finish today"
+        }
+        return "Generate a plate that finishes today"
+    }
+
+    private func progress(used: Int?, target: Int) -> Double {
+        min(1, Double(used ?? 0) / Double(target))
+    }
+}
+
 private struct PlanRow: View {
     let entry: MealPlanEntry
     var onOpen: () -> Void
     var onServingsChange: (Int) -> Void
+    var onEatChange: (Int) -> Void
     var onRemove: () -> Void
 
+    private var eatServings: Int { Nutrition.clampEatServings(entry.eat_servings) }
+
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onOpen) {
-                ZStack {
-                    Gradients.cover(for: entry.recipe_id)
-                    Text(entry.recipe?.emoji ?? "🍽️").font(.system(size: 22))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Button(action: onOpen) {
+                    ZStack {
+                        Gradients.cover(for: entry.recipe_id)
+                        Text(entry.recipe?.emoji ?? "🍽️").font(.system(size: 22))
+                    }
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
-                .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.recipe?.title ?? "Recipe").font(.system(size: 14, weight: .bold)).lineLimit(1).foregroundStyle(Theme.content)
-                    if let r = entry.recipe {
-                        Text("\((r.prep_time_minutes ?? 0) + (r.cook_time_minutes ?? 0)) min").font(.system(size: 12)).foregroundStyle(Theme.faint)
+                .buttonStyle(.plain)
+                Button(action: onOpen) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.recipe?.title ?? "Recipe").font(.system(size: 14, weight: .bold)).lineLimit(1).foregroundStyle(Theme.content)
+                        Text(metaLine).font(.system(size: 12)).foregroundStyle(Theme.faint)
                     }
                 }
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            HStack(spacing: 2) {
-                Button { onServingsChange(-1) } label: {
-                    Image(systemName: "minus").frame(width: 26, height: 26).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
-                }
-                Text("\(entry.servings)").font(.system(size: 12, weight: .heavy)).frame(minWidth: 22)
-                Button { onServingsChange(1) } label: {
-                    Image(systemName: "plus").frame(width: 26, height: 26).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+                .buttonStyle(.plain)
+                Spacer()
+                Button(action: onRemove) {
+                    Image(systemName: "xmark").font(.system(size: 13)).foregroundStyle(Theme.faint).frame(width: 32, height: 32)
                 }
             }
-            .padding(2)
-            .background(Theme.sunken, in: Capsule())
-            Button(action: onRemove) {
-                Image(systemName: "xmark").font(.system(size: 13)).foregroundStyle(Theme.faint).frame(width: 32, height: 32)
+            HStack(spacing: 8) {
+                miniStepper(label: "Cook", value: entry.servings, onChange: onServingsChange)
+                miniStepper(label: "Eat", value: eatServings, onChange: onEatChange)
             }
         }
         .padding(10)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.line))
+    }
+
+    private var metaLine: String {
+        var bits: [String] = []
+        if let r = entry.recipe {
+            bits.append("\((r.prep_time_minutes ?? 0) + (r.cook_time_minutes ?? 0)) min")
+        }
+        let macros = Nutrition.formatPlateMeta(entry.recipe, eatServings: eatServings)
+        if !macros.isEmpty { bits.append(macros) }
+        return bits.joined(separator: " · ")
+    }
+
+    private func miniStepper(label: String, value: Int, onChange: @escaping (Int) -> Void) -> some View {
+        HStack(spacing: 4) {
+            Text(label).font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.faint)
+            Button { onChange(-1) } label: {
+                Image(systemName: "minus").frame(width: 26, height: 26).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+            }
+            Text("\(value)").font(.system(size: 12, weight: .heavy)).frame(minWidth: 18)
+            Button { onChange(1) } label: {
+                Image(systemName: "plus").frame(width: 26, height: 26).background(Theme.raised, in: Circle()).foregroundStyle(Theme.muted)
+            }
+        }
+        .padding(2)
+        .background(Theme.sunken, in: Capsule())
     }
 }

@@ -42,6 +42,12 @@ struct RecipeContentView: View {
             if recipe.protein_g != nil || recipe.carbs_g != nil || recipe.fat_g != nil {
                 macroBand
             }
+            if let line = Nutrition.fitLine(recipe: recipe, goals: Nutrition.goals(from: authStore.profile?.preferences)) {
+                Text(line)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+                    .padding(.horizontal, 4)
+            }
             if !allergyHits.isEmpty { allergyBlockBanner }
             if !preview { actionButtons }
             if !preview, let planned {

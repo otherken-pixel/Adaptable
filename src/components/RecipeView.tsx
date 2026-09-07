@@ -28,6 +28,7 @@ import VotePill from "./VotePill";
 import SaveButton from "./SaveButton";
 import RecipeCover from "./RecipeCover";
 import { formatList } from "@/lib/locale";
+import { parseNutritionGoals, recipeFitLine } from "@/lib/nutrition";
 
 function nextDays(count: number): Array<{ iso: string; label: string }> {
   const fmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
@@ -184,6 +185,11 @@ export default function RecipeView({
             Estimated per serving — not a lab analysis.
           </p>
         </div>
+      )}
+      {recipeFitLine(recipe, parseNutritionGoals(profile?.preferences)) && (
+        <p className="mt-3 px-1 text-[13px] font-bold text-accent">
+          {recipeFitLine(recipe, parseNutritionGoals(profile?.preferences))}
+        </p>
       )}
 
       {allergyHits.length > 0 && (

@@ -42,6 +42,11 @@ final class DeepLinkCenter: ObservableObject {
     @Published var cookbookRecipeId: String?
     @Published var createRecipeId: String?
     @Published var pendingPrep = false
+    @Published var pendingFillToday = false
+    @Published var fillCalMax: Int?
+    @Published var fillProteinMin: Int?
+    @Published var fillSlot: String?
+    @Published var pendingTasteProfile = false
     @Published var cookSession: CookSession?
     /// Bump to force Discover (and similar lists) to reload.
     @Published private(set) var feedRefreshToken = UUID()
@@ -102,6 +107,19 @@ final class DeepLinkCenter: ObservableObject {
     func openPrep() {
         pendingPrep = true
         activeTab = .create
+    }
+
+    func openFillToday(calories: Int?, protein: Int?, slot: String?) {
+        fillCalMax = calories
+        fillProteinMin = protein
+        fillSlot = slot
+        pendingFillToday = true
+        activeTab = .create
+    }
+
+    func openTasteProfile() {
+        pendingTasteProfile = true
+        activeTab = .profile
     }
 }
 

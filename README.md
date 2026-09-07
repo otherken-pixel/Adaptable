@@ -33,6 +33,9 @@ The Vercel production branch is configured in the project dashboard
   powering the "✨ For you" feed filter and the default party size.
 - **Macro nutrition** — calories, protein, carbs and fat per serving on
   every recipe, plus Low-cal and High-protein feed filters.
+- **Daily calorie & macro goals** — optional Taste Profile targets used
+  to generate, filter (Fits my goals), and roll up one plate per planned
+  meal on the week canvas. Change them anytime in Profile.
 - **Cook Mode 2.0** — timers persist across steps with a heads-up strip
   (tap to jump back), voice commands ("next", "back", "ingredients",
   "start timer") via SpeechRecognition, wake-lock, and a cooked-it photo
