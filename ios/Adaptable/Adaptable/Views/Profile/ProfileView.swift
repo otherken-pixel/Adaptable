@@ -2,8 +2,8 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
-/// Mirrors `src/pages/ProfilePage.tsx`: avatar, stats, username edit, taste
-/// profile link, push toggle, sign out, delete account.
+/// Mirrors `src/pages/ProfilePage.tsx`: avatar, stats, username edit, then
+/// taste / household / push, then creations, sign out, delete account.
 struct ProfileView: View {
     @EnvironmentObject private var authStore: AuthStore
     @EnvironmentObject private var subscriptions: SubscriptionStore
@@ -32,15 +32,15 @@ struct ProfileView: View {
                         plusCard
                     }
                     statsRow
-                    if !mine.isEmpty {
-                        creationsSection
-                    } else {
-                        emptyCreations
-                    }
                     tasteProfileLink(profile)
                     HouseholdCard()
                     if !authStore.isDemo {
                         pushSection
+                    }
+                    if !mine.isEmpty {
+                        creationsSection
+                    } else {
+                        emptyCreations
                     }
                     if !authStore.isDemo {
                         signOutButton

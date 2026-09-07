@@ -18,6 +18,104 @@ const IMAGE_MODELS = [
   "gemini-2.0-flash-exp-image-generation",
 ];
 
+const COVER_BUCKET = "recipe-covers";
+const COVER_PUBLIC_MARKER = `/object/public/${COVER_BUCKET}/`;
+const COVER_EXTS = new Set(["jpg", "jpeg", "png", "webp"]);
+
+/** Surprise rolls upload to this id so re-rolls overwrite one slot per user. */
+export const PREVIEW_COVER_ID = "preview";
+
+/**
+ * Object path inside recipe-covers if `imageUrl` is this user's public cover.
+ * Rejects other buckets, other users, and path traversal.
+ */
+export function ownedCoverObjectPath(
+  userId: string,
+  imageUrl: string | null | undefined,
+): string | null {
+  if (!imageUrl || !userId) return null;
+  let pathname: string;
+  try {
+    pathname = new URL(imageUrl).pathname;
+  } catch {
+    return null;
+  }
+  const idx = pathname.indexOf(COVER_PUBLIC_MARKER);
+  if (idx < 0) return null;
+  let objectPath: string;
+  try {
+    objectPath = decodeURIComponent(pathname.slice(idx + COVER_PUBLIC_MARKER.length));
+  } catch {
+    return null;
+  }
+  if (!objectPath || objectPath.includes("..") || objectPath.includes("\\")) {
+    return null;
+  }
+  const prefix = `${userId}/`;
+  if (!objectPath.startsWith(prefix) || objectPath.length <= prefix.length) {
+    return null;
+  }
+  return objectPath;
+}
+
+function coverExtFromPath(objectPath: string): string {
+  const dot = objectPath.lastIndexOf(".");
+  const raw = dot >= 0 ? objectPath.slice(dot + 1).toLowerCase() : "";
+  if (raw === "jpeg") return "jpg";
+  return COVER_EXTS.has(raw) ? raw : "jpg";
+}
+
+/**
+ * Copy a preview (or other owned) cover to `{userId}/{toRecipeId}.ext`.
+ * Never leave a kept recipe pointing at the shared `preview` slot — the next
+ * roll would overwrite it. Falls back to download + re-upload when copy is
+ * denied by storage policy.
+ */
+export async function copyOwnedCover(opts: {
+  // deno-lint-ignore no-explicit-any
+  supabase: any;
+  userId: string;
+  fromUrl: string | null | undefined;
+  toRecipeId: string;
+}): Promise<string | null> {
+  const fromPath = ownedCoverObjectPath(opts.userId, opts.fromUrl);
+  if (!fromPath || !opts.toRecipeId) return null;
+  const toPath = `${opts.userId}/${opts.toRecipeId}.${coverExtFromPath(fromPath)}`;
+  if (fromPath === toPath) {
+    const { data } = opts.supabase.storage.from(COVER_BUCKET).getPublicUrl(toPath);
+    return data?.publicUrl ?? opts.fromUrl ?? null;
+  }
+
+  const { error: copyErr } = await opts.supabase.storage
+    .from(COVER_BUCKET)
+    .copy(fromPath, toPath);
+  if (copyErr) {
+    console.warn("cover copy failed; trying download+upload", copyErr);
+    try {
+      const res = await fetch(opts.fromUrl!, {
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) return null;
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf.byteLength < 1000) return null;
+      const mime = res.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+      const { error: upErr } = await opts.supabase.storage
+        .from(COVER_BUCKET)
+        .upload(toPath, buf, { contentType: mime, upsert: true });
+      if (upErr) {
+        console.error("cover copy upload failed", upErr);
+        return null;
+      }
+    } catch (e) {
+      console.error("cover copy fallback failed", e);
+      return null;
+    }
+  }
+
+  const { data } = opts.supabase.storage.from(COVER_BUCKET).getPublicUrl(toPath);
+  return data?.publicUrl ?? null;
+}
+
 export async function generateAndUploadCover(opts: {
   // deno-lint-ignore no-explicit-any
   supabase: any;
@@ -48,7 +146,7 @@ export async function generateAndUploadCover(opts: {
   const bytes = base64ToBytes(image.base64);
 
   const { error: upErr } = await opts.supabase.storage
-    .from("recipe-covers")
+    .from(COVER_BUCKET)
     .upload(path, bytes, {
       contentType: image.mimeType || "image/jpeg",
       upsert: true,
@@ -59,7 +157,7 @@ export async function generateAndUploadCover(opts: {
     return null;
   }
 
-  const { data } = opts.supabase.storage.from("recipe-covers").getPublicUrl(path);
+  const { data } = opts.supabase.storage.from(COVER_BUCKET).getPublicUrl(path);
   return data?.publicUrl ?? null;
 }
 

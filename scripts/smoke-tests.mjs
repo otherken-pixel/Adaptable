@@ -57,6 +57,10 @@ import {
   verifyPreviewToken,
 } from "../supabase/functions/_shared/previewToken.ts";
 import {
+  ownedCoverObjectPath,
+  PREVIEW_COVER_ID,
+} from "../supabase/functions/_shared/coverImage.ts";
+import {
   isNotificationsWebhook,
   pushCopy,
 } from "../supabase/functions/_shared/pushCopy.ts";
@@ -547,6 +551,43 @@ assert.equal(
 );
 assert.equal(await verifyPreviewToken(previewToken, "user-2", previewRecipe, tokenSecret), false);
 assert.ok(fingerprintRecipe(previewRecipe).includes("lemon garlic chicken"));
+assert.equal(
+  fingerprintRecipe({ ...previewRecipe, image_url: "https://example.com/a.jpg" }),
+  fingerprintRecipe(previewRecipe),
+);
+assert.equal(
+  await verifyPreviewToken(
+    previewToken,
+    "user-1",
+    { ...previewRecipe, image_url: "https://example.com/a.jpg" },
+    tokenSecret,
+  ),
+  true,
+);
+
+const previewCoverUrl =
+  `https://ypziulvtfsyrwpotlevp.supabase.co/storage/v1/object/public/recipe-covers/user-1/${PREVIEW_COVER_ID}.jpg`;
+assert.equal(
+  ownedCoverObjectPath("user-1", previewCoverUrl),
+  `user-1/${PREVIEW_COVER_ID}.jpg`,
+);
+assert.equal(ownedCoverObjectPath("user-2", previewCoverUrl), null);
+assert.equal(
+  ownedCoverObjectPath(
+    "user-1",
+    "https://ypziulvtfsyrwpotlevp.supabase.co/storage/v1/object/public/avatars/user-1/a.jpg",
+  ),
+  null,
+);
+assert.equal(
+  ownedCoverObjectPath(
+    "user-1",
+    `https://ypziulvtfsyrwpotlevp.supabase.co/storage/v1/object/public/recipe-covers/user-1/../other.jpg`,
+  ),
+  null,
+);
+assert.equal(ownedCoverObjectPath("user-1", "not-a-url"), null);
+assert.equal(PREVIEW_COVER_ID, "preview");
 
 // keep of unused same-day previews is not blocked by generation events;
 // leftover tokens cannot publish past the published-recipe cap

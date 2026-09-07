@@ -2,7 +2,9 @@
 //
 // Receives { prompt } for Describe/Fridge, { surprise, constraints } for
 // a server-built dice brief, or { keep, recipe, preview_token } to persist
-// a preview. Keep requires a token from a prior generate and counts against
+// a preview. Surprise rolls attach a best-effort dish photo on the preview;
+// Keep copies that cover off the shared preview slot onto the real recipe id.
+// Keep requires a token from a prior generate and counts against
 // the same daily cap. Crafted JSON cannot publish. Allergies hard-fail 422.
 //
 // Daily generate/keep cap is server-enforced from plus_entitlements
@@ -24,7 +26,11 @@ import {
   signPreviewToken,
   verifyPreviewToken,
 } from "../_shared/previewToken.ts";
-import { generateAndUploadCover } from "../_shared/coverImage.ts";
+import {
+  copyOwnedCover,
+  generateAndUploadCover,
+  PREVIEW_COVER_ID,
+} from "../_shared/coverImage.ts";
 import {
   insertRecipeRow,
   recipeInsertPayload,
@@ -463,8 +469,34 @@ Deno.serve(async (req) => {
         servings: servingsForRecipe,
       });
       const previewToken = await issuePreviewToken(supabase, user.id, preview);
+      // Best-effort dish photo on the roll so Create does not show emoji.
+      // Upload to the per-user preview slot; Keep copies to the real id.
+      let imageUrl: string | null = null;
+      try {
+        imageUrl = await generateAndUploadCover({
+          supabase,
+          geminiKey,
+          userId: user.id,
+          recipeId: PREVIEW_COVER_ID,
+          title: String(preview.title ?? recipe.title ?? ""),
+          description: String(preview.description ?? recipe.description ?? ""),
+          cuisine: typeof preview.cuisine === "string"
+            ? preview.cuisine
+            : recipe.cuisine,
+          emoji: typeof preview.emoji === "string" ? preview.emoji : recipe.emoji,
+        });
+      } catch (e) {
+        console.error("cover generation skipped", e);
+      }
       return json(
-        { recipe: { ...preview, preview_token: previewToken }, preview: true },
+        {
+          recipe: {
+            ...preview,
+            preview_token: previewToken,
+            ...(imageUrl ? { image_url: imageUrl } : {}),
+          },
+          preview: true,
+        },
         200,
       );
     }
@@ -938,16 +970,26 @@ async function persistGeneratedRow(opts: {
 
   if (!insertError && row?.id) {
     try {
-      const imageUrl = await generateAndUploadCover({
+      const existing =
+        typeof opts.recipe?.image_url === "string" ? opts.recipe.image_url : null;
+      let imageUrl = await copyOwnedCover({
         supabase: opts.supabase,
-        geminiKey: opts.geminiKey,
         userId: opts.authorId,
-        recipeId: row.id,
-        title: row.title ?? opts.recipe.title,
-        description: row.description ?? opts.recipe.description,
-        cuisine: row.cuisine ?? opts.recipe.cuisine,
-        emoji: row.emoji ?? opts.recipe.emoji,
+        fromUrl: existing,
+        toRecipeId: row.id,
       });
+      if (!imageUrl) {
+        imageUrl = await generateAndUploadCover({
+          supabase: opts.supabase,
+          geminiKey: opts.geminiKey,
+          userId: opts.authorId,
+          recipeId: row.id,
+          title: row.title ?? opts.recipe.title,
+          description: row.description ?? opts.recipe.description,
+          cuisine: row.cuisine ?? opts.recipe.cuisine,
+          emoji: row.emoji ?? opts.recipe.emoji,
+        });
+      }
       if (imageUrl) {
         const { data: updated } = await opts.supabase
           .from("recipes")

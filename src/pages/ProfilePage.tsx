@@ -233,30 +233,6 @@ export default function ProfilePage() {
         />
       </div>
 
-      {mine.length > 0 && (
-        <section className="mt-7">
-          <h2 className="mb-3 text-lg font-extrabold tracking-tight">
-            Your creations
-          </h2>
-          <div className="space-y-4">
-            {mine.map((r, i) => (
-              <RecipeCard key={r.id} recipe={r} index={i} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {mine.length === 0 && (
-        <div className="animate-fade-up mt-7 flex flex-col items-center gap-2 rounded-card border border-dashed border-line px-6 py-10 text-center">
-          <Sparkles size={22} className="text-accent" />
-          <p className="text-sm font-semibold">No creations yet</p>
-          <p className="max-w-60 text-[13px] leading-relaxed text-muted">
-            Head to Create and describe your dream meal — your recipes will show
-            up here.
-          </p>
-        </div>
-      )}
-
       {/* Taste profile */}
       <Link
         to="/taste"
@@ -275,7 +251,7 @@ export default function ProfilePage() {
       </Link>
 
       {/* Push notifications */}
-      <div className="animate-fade-up mt-7 rounded-card border border-line bg-raised p-5">
+      <div className="animate-fade-up mt-4 rounded-card border border-line bg-raised p-5">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent">
             {pushState === "enabled" ? (
@@ -307,6 +283,30 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {mine.length > 0 && (
+        <section className="mt-7">
+          <h2 className="mb-3 text-lg font-extrabold tracking-tight">
+            Your creations
+          </h2>
+          <div className="space-y-4">
+            {mine.map((r, i) => (
+              <RecipeCard key={r.id} recipe={r} index={i} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {mine.length === 0 && (
+        <div className="animate-fade-up mt-7 flex flex-col items-center gap-2 rounded-card border border-dashed border-line px-6 py-10 text-center">
+          <Sparkles size={22} className="text-accent" />
+          <p className="text-sm font-semibold">No creations yet</p>
+          <p className="max-w-60 text-[13px] leading-relaxed text-muted">
+            Head to Create and describe your dream meal — your recipes will show
+            up here.
+          </p>
+        </div>
+      )}
 
       <div className="mt-6 flex justify-center gap-4 text-[13px] font-semibold text-muted">
         <Link to="/support" className="pressable underline-offset-2 hover:underline">
