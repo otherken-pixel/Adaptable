@@ -38,7 +38,11 @@ import {
   parseSurpriseConstraints,
   recipeHonorsMethodLock,
 } from "../_shared/surprise.ts";
-import { nutritionGoalsToPrompt } from "../_shared/nutrition.ts";
+import {
+  GENERATE_PROMPT_MAX,
+  isFillTodayPrompt,
+  nutritionGoalsToPrompt,
+} from "../_shared/nutrition.ts";
 
 /** Preferred model first; fall back if Google returns 404 (retired model id).
  *  Gemini 2.0 Flash family was shut down 2026-06-01 — use 2.5+. */
@@ -213,7 +217,7 @@ Deno.serve(async (req) => {
     if (wantKeep && wantSurprise) {
       return json({ error: "Invalid request body." }, 400);
     }
-    if (!wantKeep && !wantSurprise && (!prompt || prompt.length > 500)) {
+    if (!wantKeep && !wantSurprise && (!prompt || prompt.length > GENERATE_PROMPT_MAX)) {
       return json(
         { error: "A prompt of up to 500 characters is required." },
         400,
@@ -294,7 +298,7 @@ Deno.serve(async (req) => {
       if (!rate.ok) return json({ error: rate.error }, rate.status);
     }
 
-    const prefsText = preferencesToPrompt(prefs);
+    const prefsText = preferencesToPrompt(prefs, prompt);
     // Lower temperature when hard safety constraints are present.
     const temperature = allergies.length > 0 ? 0.45 : 0.85;
 
@@ -1006,7 +1010,7 @@ function sleep(ms: number): Promise<void> {
 
 /** Turns the profile's taste preferences into prompt constraints. */
 // deno-lint-ignore no-explicit-any
-function preferencesToPrompt(prefs: any): string {
+function preferencesToPrompt(prefs: any, sourcePrompt = ""): string {
   if (!prefs || typeof prefs !== "object") return "";
   const parts: string[] = [];
   if (Array.isArray(prefs.diets) && prefs.diets.length > 0) {
@@ -1030,7 +1034,9 @@ function preferencesToPrompt(prefs: any): string {
       `The cook's skill level is ${prefs.skill} — pitch technique accordingly.`,
     );
   }
-  const nutrition = nutritionGoalsToPrompt(prefs);
+  const nutrition = nutritionGoalsToPrompt(prefs, {
+    perServing: !isFillTodayPrompt(sourcePrompt),
+  });
   if (nutrition) parts.push(nutrition.trim());
   const learned = prefs.learned;
   if (learned && typeof learned === "object") {

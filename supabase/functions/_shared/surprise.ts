@@ -6,6 +6,12 @@
  */
 
 import type { BaseProtein, CookingMethod, MealSlot } from "./mealPrep.ts";
+import {
+  FILL_MIN_CALORIES,
+  MAX_CALORIE_TARGET,
+  MAX_MACRO_G,
+  MIN_MACRO_G,
+} from "./nutrition.ts";
 
 export const SURPRISE_CUISINES = [
   "Italian",
@@ -172,13 +178,13 @@ export function parseSurpriseConstraints(
   let max_calories: number | null = null;
   if (typeof obj.max_calories === "number" && Number.isFinite(obj.max_calories)) {
     const n = Math.round(obj.max_calories);
-    if (n >= 150 && n <= 2000) max_calories = n;
+    if (n >= FILL_MIN_CALORIES && n <= MAX_CALORIE_TARGET) max_calories = n;
   }
 
   let min_protein: number | null = null;
   if (typeof obj.min_protein === "number" && Number.isFinite(obj.min_protein)) {
     const n = Math.round(obj.min_protein);
-    if (n >= 10 && n <= 100) min_protein = n;
+    if (n >= MIN_MACRO_G && n <= MAX_MACRO_G) min_protein = n;
   }
 
   return {

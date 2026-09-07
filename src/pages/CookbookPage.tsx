@@ -11,7 +11,6 @@ import {
 import type { MealPlanEntry, Recipe } from "@/lib/types";
 import {
   clampEatServings,
-  fillLocksFromRemaining,
   formatPlateMeta,
   hasAnyGoal,
   parseNutritionGoals,
@@ -95,11 +94,10 @@ export default function CookbookPage() {
   const goals = parseNutritionGoals(profile?.preferences);
 
   const fillHref = (remaining: ReturnType<typeof remainingBudget>) => {
-    const locks = fillLocksFromRemaining(remaining);
     const slot = suggestedFillSlot();
     const params = new URLSearchParams({ fill: "1", slot });
-    if (locks.maxCalories) params.set("cal", String(locks.maxCalories));
-    if (locks.minProtein) params.set("protein", String(locks.minProtein));
+    if (remaining.calories != null) params.set("cal", String(remaining.calories));
+    if (remaining.protein_g != null) params.set("protein", String(remaining.protein_g));
     return `/create?${params.toString()}`;
   };
 
@@ -277,6 +275,7 @@ export default function CookbookPage() {
                       entries={entries}
                       goals={goals}
                       fillHref={fillHref}
+                      isToday={iso === localISODate()}
                     />
                     <div className="space-y-2.5">
                       {entries.map((entry) => {
@@ -352,10 +351,12 @@ function DayNutritionCard({
   entries,
   goals,
   fillHref,
+  isToday,
 }: {
   entries: MealPlanEntry[];
   goals: ReturnType<typeof parseNutritionGoals>;
   fillHref: (remaining: ReturnType<typeof remainingBudget>) => string;
+  isToday: boolean;
 }) {
   const day = sumDayPlates(entries);
   const remaining = remainingBudget(goals, day.totals);
@@ -412,7 +413,7 @@ function DayNutritionCard({
             : `${day.unknownMeals} meals have no estimate`}
         </p>
       )}
-      {shouldOfferFillToday(goals, remaining) && (
+      {shouldOfferFillToday(goals, remaining, isToday) && (
         <Link
           to={fillHref(remaining)}
           className="mt-2 inline-block text-[13px] font-extrabold text-accent"

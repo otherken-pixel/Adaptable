@@ -16,12 +16,17 @@ import {
 } from "../supabase/functions/_shared/allergenLexicon.ts";
 import { filterFeedRecipes } from "../src/lib/feedFilter.ts";
 import {
+  applyLockConstraintPrompt,
+  fillLocksFromRemaining,
   fillTodayPrompt,
+  isFillTodayPrompt,
+  nutritionGoalsToPrompt,
   parseNutritionGoals,
   perMealBudget,
   plateMacros,
   recipeFitsGoals,
   remainingBudget,
+  shouldOfferFillToday,
   sumDayPlates,
 } from "../src/lib/nutrition.ts";
 import { isValidRecipe } from "../supabase/functions/_shared/recipeValidate.ts";
@@ -261,7 +266,37 @@ assert.equal(day.totals.calories, 960);
 assert.equal(day.unknownMeals, 1);
 assert.equal(remainingBudget(goals, day.totals).calories, 1040);
 assert.ok(fillTodayPrompt({ remaining: remainingBudget(goals, day.totals), slot: "dinner" }).includes("1040"));
+assert.equal(
+  isFillTodayPrompt(fillTodayPrompt({ remaining: remainingBudget(goals, day.totals), slot: "dinner" })),
+  true,
+);
+assert.equal(isFillTodayPrompt("weeknight pasta with leftover chicken"), false);
+const perMealPrompt = nutritionGoalsToPrompt(goals);
+assert.match(perMealPrompt, /667 calories per serving/);
+const fillGoalsPrompt = nutritionGoalsToPrompt(goals, { perServing: false });
+assert.doesNotMatch(fillGoalsPrompt, /per serving/);
+assert.match(fillGoalsPrompt, /remaining daily budget/);
+assert.match(fillGoalsPrompt, /2000 calories per day/);
 assert.equal(parseNutritionGoals({ calorie_target: 50 }).calorie_target, null);
+
+const overBudget = { calories: -120, protein_g: 20, carbs_g: null, fat_g: null };
+assert.match(fillTodayPrompt({ remaining: overBudget, slot: "dinner" }), /as light as possible/);
+assert.equal(fillLocksFromRemaining(overBudget).maxCalories, 400);
+assert.doesNotMatch(
+  fillTodayPrompt({ remaining: { calories: 80, protein_g: 5, carbs_g: null, fat_g: null } }),
+  /calories/,
+);
+assert.equal(
+  fillLocksFromRemaining({ calories: 80, protein_g: 5, carbs_g: null, fat_g: null }).maxCalories,
+  150,
+);
+assert.equal(shouldOfferFillToday(goals, remainingBudget(goals, day.totals), false), false);
+assert.equal(shouldOfferFillToday(goals, remainingBudget(goals, day.totals), true), true);
+
+const lockedRemix = applyLockConstraintPrompt(`${"x".repeat(500)} extra`, 400, 30);
+assert.ok(lockedRemix.length <= 500);
+assert.match(lockedRemix, /400 calories/);
+assert.match(lockedRemix, /30 g protein/);
 
 const forYouPool = [
   {
@@ -387,6 +422,19 @@ assert.equal(junk.meal_slot, null);
 assert.equal(junk.pantry_mode, null);
 assert.equal(junk.method, null);
 assert.equal(junk.ingredients.length, 1);
+
+const highLocks = parseSurpriseConstraints({
+  max_calories: 2400,
+  min_protein: 160,
+});
+assert.equal(highLocks.max_calories, 2400);
+assert.equal(highLocks.min_protein, 160);
+const outOfRange = parseSurpriseConstraints({
+  max_calories: 6000,
+  min_protein: 500,
+});
+assert.equal(outOfRange.max_calories, null);
+assert.equal(outOfRange.min_protein, null);
 
 const crock = buildSurpriseBrief({
   constraints: parseSurpriseConstraints({
