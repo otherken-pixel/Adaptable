@@ -71,6 +71,13 @@ const REMIX_SUGGESTIONS = [
   "More protein 💪",
 ];
 
+const NEXT_MEAL_SUGGESTIONS = [
+  "Something lighter tonight 🥗",
+  "Same energy, 20 minutes ⏱️",
+  "High-protein lunch 💪",
+  "Cozy vegetarian dinner 🍲",
+];
+
 const PANTRY_STAPLES = [
   "Eggs",
   "Rice",
@@ -165,6 +172,7 @@ export default function GeneratePage() {
       const result = await importRecipe(source);
       setRecipe(result);
       setPhase("done");
+      setPrompt("");
       setImportUrl("");
       setImportText("");
     } catch (err) {
@@ -276,15 +284,20 @@ export default function GeneratePage() {
       setPhase("error");
       return;
     }
+    const askingNewMeal = phase === "done";
     lastImportRef.current = null;
     lastActionRef.current = "generate";
     setPrompt(p);
     setPhase("loading");
     setRecipe(null);
+    if (askingNewMeal) {
+      setMode("describe");
+      if (remixId) navigate("/create", { replace: true });
+    }
     topRef.current?.scrollIntoView({ behavior: "smooth" });
     try {
       let apiPrompt = p;
-      if (remixSource) {
+      if (remixSource && !askingNewMeal) {
         const ingredientList = remixSource.ingredients
           .slice(0, 10)
           .map((i) => i.item)
@@ -297,6 +310,7 @@ export default function GeneratePage() {
       const result = await generateRecipe(apiPrompt, serves);
       setRecipe(result);
       setPhase("done");
+      setPrompt("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       // Surface auth errors helpfully
@@ -352,6 +366,7 @@ export default function GeneratePage() {
       lastSurpriseTitleRef.current = result.title;
       setRecipe(result);
       setPhase("done");
+      setPrompt("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       if (msg.includes("sign in") || msg.includes("auth")) {
@@ -384,13 +399,29 @@ export default function GeneratePage() {
     setPhase("idle");
     setRecipe(null);
     setPrompt("");
+    setMode("describe");
     lastActionRef.current = "generate";
     if (remixId) navigate("/create", { replace: true });
-    inputRef.current?.focus();
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const showComposer =
+    phase === "error" ||
+    phase === "done" ||
+    (phase === "idle" && (mode === "describe" || remixSource !== null));
+
+  const focusComposer = () => {
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   return (
-    <div className="mx-auto max-w-lg px-4 pt-safe pb-nav">
+    <div
+      className={`mx-auto max-w-lg px-4 pt-safe ${
+        showComposer && phase === "done"
+          ? "pb-[calc(220px+env(safe-area-inset-bottom))]"
+          : "pb-nav"
+      }`}
+    >
       <div ref={topRef} />
       <header className="flex items-end justify-between pt-6 pb-4">
         <div>
@@ -963,25 +994,43 @@ export default function GeneratePage() {
 
       {phase === "done" && recipe && (
         <>
-          <div className="mb-4 flex items-center justify-between gap-2 rounded-2xl bg-accent-soft px-4 py-3">
-            <p className="text-[13px] font-bold text-accent">
-              {isPreviewRecipe(recipe)
-                ? "🎲 Surprise roll — keep it to share on Discover"
-                : "✨ Fresh out of the AI kitchen — it's live on the feed"}
-            </p>
-            <button
-              onClick={
-                isPreviewRecipe(recipe) ? () => void rollSurprise() : reset
-              }
-              className="pressable flex shrink-0 items-center gap-1.5 rounded-full bg-raised px-3 py-1.5 text-xs font-bold shadow-sm"
-            >
-              {isPreviewRecipe(recipe) ? (
-                <Dices size={13} strokeWidth={2.4} />
-              ) : (
-                <RotateCcw size={13} strokeWidth={2.4} />
+          <div className="mb-4 rounded-2xl bg-accent-soft px-4 py-3">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[13px] font-bold text-accent">
+                {isPreviewRecipe(recipe)
+                  ? "🎲 Surprise roll — keep it to share on Discover"
+                  : "✨ Fresh out of the AI kitchen — it's live on the feed"}
+              </p>
+              {isPreviewRecipe(recipe) && (
+                <button
+                  type="button"
+                  onClick={() => void rollSurprise()}
+                  className="pressable flex shrink-0 items-center gap-1.5 rounded-full bg-raised px-3 py-1.5 text-xs font-bold shadow-sm"
+                >
+                  <Dices size={13} strokeWidth={2.4} />
+                  Re-roll
+                </button>
               )}
-              {isPreviewRecipe(recipe) ? "Re-roll" : "New"}
-            </button>
+            </div>
+            {!isPreviewRecipe(recipe) && (
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={focusComposer}
+                  className="pressable flex h-10 flex-1 items-center justify-center rounded-full bg-content text-[13px] font-extrabold text-surface"
+                >
+                  Describe another
+                </button>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="pressable flex h-10 flex-1 items-center justify-center gap-1.5 rounded-full border border-line bg-raised text-[13px] font-extrabold shadow-sm"
+                >
+                  <RotateCcw size={13} strokeWidth={2.4} />
+                  Start over
+                </button>
+              </div>
+            )}
           </div>
           {isPreviewRecipe(recipe) && keepError && (
             <p className="mb-3 text-[13px] font-semibold text-down">{keepError}</p>
@@ -1006,45 +1055,62 @@ export default function GeneratePage() {
       )}
 
       {/* Composer — pinned above the bottom nav (pantry mode has its own CTA) */}
-      {(phase === "idle" || phase === "error") &&
-        (phase === "error" || mode === "describe" || remixSource !== null) && (
-          <div
-            className="fixed inset-x-0 z-30"
-            style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
-          >
-            <div className="mx-auto max-w-lg px-4 pb-3">
-              <div className="flex items-end gap-2 rounded-[26px] border border-line bg-raised p-2 shadow-[0_8px_32px_rgb(0_0_0/0.12)]">
-                <textarea
-                  ref={inputRef}
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      submit();
-                    }
-                  }}
-                  rows={1}
-                  maxLength={500}
-                  placeholder="Describe your perfect meal…"
-                  className="max-h-28 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-faint"
-                />
-                <button
-                  aria-label="Generate recipe"
-                  onClick={() => submit()}
-                  disabled={!prompt.trim()}
-                  className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-opacity disabled:opacity-30"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
-                  }}
-                >
-                  <ArrowUp size={20} strokeWidth={2.6} />
-                </button>
+      {showComposer && (
+        <div
+          className="fixed inset-x-0 z-30"
+          style={{ bottom: "calc(64px + env(safe-area-inset-bottom))" }}
+        >
+          <div className="mx-auto max-w-lg px-4 pb-3">
+            {phase === "done" && (
+              <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+                {NEXT_MEAL_SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void submit(s)}
+                    className="pressable shrink-0 rounded-full border border-line bg-raised px-3 py-2 text-[12px] font-semibold shadow-sm"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
+            )}
+            <div className="flex items-end gap-2 rounded-[26px] border border-line bg-raised p-2 shadow-[0_8px_32px_rgb(0_0_0/0.12)]">
+              <textarea
+                ref={inputRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                  }
+                }}
+                rows={1}
+                maxLength={500}
+                placeholder={
+                  phase === "done"
+                    ? "What else are you craving?"
+                    : "Describe your perfect meal…"
+                }
+                className="max-h-28 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none placeholder:text-faint"
+              />
+              <button
+                aria-label="Generate recipe"
+                onClick={() => submit()}
+                disabled={!prompt.trim()}
+                className="pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-md transition-opacity disabled:opacity-30"
+                style={{
+                  background:
+                    "linear-gradient(135deg, #fb923c 0%, #ea580c 60%, #dc2626 130%)",
+                }}
+              >
+                <ArrowUp size={20} strokeWidth={2.6} />
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 }

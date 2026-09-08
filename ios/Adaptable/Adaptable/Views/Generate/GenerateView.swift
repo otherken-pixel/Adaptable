@@ -31,6 +31,13 @@ private let remixSuggestions = [
     "Fit my macros 🥗", "Lighter — fewer calories 🔥", "More protein 💪",
 ]
 
+private let nextMealSuggestions = [
+    "Something lighter tonight 🥗",
+    "Same energy, 20 minutes ⏱️",
+    "High-protein lunch 💪",
+    "Cozy vegetarian dinner 🍲",
+]
+
 private let pantryStaples = [
     "Eggs", "Rice", "Pasta", "Chicken", "Canned tomatoes", "Onions",
     "Garlic", "Potatoes", "Black beans", "Cheese", "Tortillas", "Frozen spinach",
@@ -93,6 +100,7 @@ struct GenerateView: View {
     @State private var lastSurpriseTitle: String?
     @State private var keeping = false
     @State private var keepError: String?
+    @FocusState private var composerFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -111,11 +119,7 @@ struct GenerateView: View {
         .background(Theme.surface)
         .navigationBarHidden(true)
         .safeAreaInset(edge: .bottom) {
-            if (phase == .idle || phase == .error),
-               mode != .prep,
-               (mode == .describe || remixSource != nil || phase == .error) {
-                composer
-            }
+            if showsComposer { composer }
         }
         .onChange(of: authStore.profile?.preferences?.household_size) { _, size in
             if let size, !servesTouched { serves = size }
@@ -673,32 +677,7 @@ struct GenerateView: View {
 
     private var doneContent: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(bannerText)
-                    .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accent)
-                Spacer()
-                Button {
-                    if isPreview {
-                        Task { await rollSurprise() }
-                    } else {
-                        phase = .idle
-                        recipe = nil
-                        prompt = ""
-                        remixSource = nil
-                        prepBundle = nil
-                        addedPrep = false
-                        prepError = nil
-                        lastAction = "generate"
-                    }
-                } label: {
-                    Label(isPreview ? "Re-roll" : "New", systemImage: isPreview ? "dice" : "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .bold))
-                        .padding(.horizontal, 12).padding(.vertical, 6)
-                        .background(Theme.raised, in: Capsule())
-                }
-            }
-            .padding(14)
-            .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            resultBanner
 
             if isPreview {
                 if let keepError {
@@ -878,26 +857,121 @@ struct GenerateView: View {
         }
     }
 
-    // MARK: - Composer
+    // MARK: - Result banner + composer
+
+    private var showsComposer: Bool {
+        guard mode != .prep else { return false }
+        switch phase {
+        case .done, .error: return true
+        case .idle: return mode == .describe || remixSource != nil
+        case .loading: return false
+        }
+    }
+
+    private var composerPlaceholder: String {
+        phase == .done ? "What else are you craving?" : "Describe your perfect meal…"
+    }
+
+    private var resultBanner: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(bannerText)
+                    .font(.system(size: 13, weight: .bold)).foregroundStyle(Theme.accent)
+                Spacer(minLength: 8)
+                if isPreview {
+                    Button {
+                        Task { await rollSurprise() }
+                    } label: {
+                        Label("Re-roll", systemImage: "dice")
+                            .font(.system(size: 12, weight: .bold))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(Theme.raised, in: Capsule())
+                    }
+                    .buttonStyle(.pressable)
+                }
+            }
+
+            if !isPreview {
+                HStack(spacing: 8) {
+                    if showsComposer {
+                        Button {
+                            composerFocused = true
+                        } label: {
+                            Text("Describe another")
+                                .font(.system(size: 13, weight: .heavy))
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 40)
+                                .foregroundStyle(Theme.surface)
+                                .background(Theme.content, in: Capsule())
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityHint("Jumps to the meal description field")
+                    }
+                    Button {
+                        startOver()
+                    } label: {
+                        Label("Start over", systemImage: "arrow.counterclockwise")
+                            .font(.system(size: 13, weight: .heavy))
+                            .labelStyle(.custom(iconColor: Theme.content))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                            .foregroundStyle(Theme.content)
+                            .background(Theme.raised, in: Capsule())
+                            .overlay(Capsule().stroke(Theme.line))
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityHint("Clears this recipe and returns to the Describe canvas")
+                }
+            }
+        }
+        .padding(14)
+        .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("Describe your perfect meal…", text: $prompt, axis: .vertical)
-                .lineLimit(1...4)
-                .padding(.horizontal, 12).padding(.vertical, 10)
-            Button {
-                Task { await submit() }
-            } label: {
-                Image(systemName: "arrow.up").foregroundStyle(.white)
-                    .frame(width: 44, height: 44).background(Theme.heroGradient, in: Circle())
+        VStack(alignment: .leading, spacing: 8) {
+            if phase == .done {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(nextMealSuggestions, id: \.self) { suggestion in
+                            Button {
+                                Task { await submit(suggestion) }
+                            } label: {
+                                Text(suggestion)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .foregroundStyle(Theme.content)
+                                    .background(Theme.raised, in: Capsule())
+                                    .overlay(Capsule().stroke(Theme.line))
+                            }
+                            .buttonStyle(.pressable)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
             }
-            .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .opacity(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.3 : 1)
+
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(composerPlaceholder, text: $prompt, axis: .vertical)
+                    .lineLimit(1...4)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .focused($composerFocused)
+                Button {
+                    Task { await submit() }
+                } label: {
+                    Image(systemName: "arrow.up").foregroundStyle(.white)
+                        .frame(width: 44, height: 44).background(Theme.heroGradient, in: Circle())
+                }
+                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .opacity(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.3 : 1)
+                .accessibilityLabel("Generate recipe")
+            }
+            .padding(6)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.line))
+            .padding(.horizontal, 16)
         }
-        .padding(6)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.line))
-        .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .background(.ultraThinMaterial)
     }
@@ -919,6 +993,19 @@ struct GenerateView: View {
 
     // MARK: - Actions
 
+    private func startOver() {
+        phase = .idle
+        recipe = nil
+        prompt = ""
+        remixSource = nil
+        prepBundle = nil
+        addedPrep = false
+        prepError = nil
+        lastAction = "generate"
+        mode = .describe
+        composerFocused = true
+    }
+
     private func submit(_ text: String? = nil) async {
         let p = (text ?? prompt).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !p.isEmpty, phase != .loading else { return }
@@ -932,15 +1019,21 @@ struct GenerateView: View {
             phase = .error
             return
         }
+        let askingNewMeal = phase == .done
+        if askingNewMeal {
+            remixSource = nil
+            mode = .describe
+        }
         lastImportSource = nil
         lastAction = "generate"
         prompt = p
         phase = .loading
         recipe = nil
         prepBundle = nil
+        composerFocused = false
         do {
             var apiPrompt = p
-            if let remixSource {
+            if let remixSource, !askingNewMeal {
                 let ingredientList = (remixSource.ingredients ?? []).prefix(10).map(\.item).joined(separator: ", ")
                 apiPrompt = "Adapt the recipe \"\(remixSource.title ?? "")\" (key ingredients: \(ingredientList)). Requested change: \(p)"
             }
@@ -948,6 +1041,7 @@ struct GenerateView: View {
             let result = try await API.generateRecipe(prompt: apiPrompt, servings: serves)
             recipe = result
             phase = .done
+            prompt = ""
             if let prefs = authStore.profile?.preferences {
                 var next = prefs
                 if remixSource != nil { next = TasteMemory.recordRemix(prompt: p, prefs: next) }
@@ -1000,6 +1094,7 @@ struct GenerateView: View {
             lastSurpriseTitle = result.title
             recipe = result
             phase = .done
+            prompt = ""
             Haptics.success()
         } catch {
             print("[GenerateView] Failed to roll surprise: \(error)")
@@ -1194,6 +1289,7 @@ struct GenerateView: View {
             let result = try await API.importRecipe(source)
             recipe = result
             phase = .done
+            prompt = ""
             importUrl = ""; importText = ""
             deepLinks.requestFeedRefresh()
         } catch {
