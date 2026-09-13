@@ -180,15 +180,32 @@ enum Nutrition {
     }
 
     /// Reserve lock sentences inside the generate-recipe prompt cap.
+    /// Length is UTF-16 so it matches generate-recipe's `prompt.length` check.
     static func applyLockConstraintPrompt(_ basePrompt: String, maxCalories: Int?, minProtein: Int?, limit: Int = generatePromptMax) -> String {
         let lock = lockConstraintPrompt(maxCalories: maxCalories, minProtein: minProtein)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let base = basePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if lock.isEmpty { return String(base.prefix(limit)) }
-        let room = max(0, limit - lock.count - 1)
-        let head = String(base.prefix(room)).trimmingCharacters(in: .whitespacesAndNewlines)
-        if head.isEmpty { return String(lock.prefix(limit)) }
-        return String("\(head) \(lock)".prefix(limit))
+        if lock.isEmpty { return utf16Prefix(base, limit) }
+        let room = max(0, limit - lock.utf16.count - 1)
+        let head = utf16Prefix(base, room).trimmingCharacters(in: .whitespacesAndNewlines)
+        if head.isEmpty { return utf16Prefix(lock, limit) }
+        return utf16Prefix("\(head) \(lock)", limit)
+    }
+
+    /// `String.prefix` counts grapheme clusters; generate-recipe caps on JS UTF-16 length.
+    private static func utf16Prefix(_ string: String, _ limit: Int) -> String {
+        guard limit > 0 else { return "" }
+        if string.utf16.count <= limit { return string }
+        var used = 0
+        var end = string.startIndex
+        while end < string.endIndex {
+            let next = string.index(after: end)
+            let extra = string[end..<next].utf16.count
+            if used + extra > limit { break }
+            used += extra
+            end = next
+        }
+        return String(string[..<end])
     }
 
     static func suggestedFillSlot(now: Date = Date()) -> String {
