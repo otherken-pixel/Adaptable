@@ -65,7 +65,13 @@ struct ProfileView: View {
         if let yearly = subscriptions.yearly, let monthly = subscriptions.monthly {
             return "Unlimited AI recipes. \(monthly.displayPrice)/month or \(yearly.displayPrice)/year."
         }
-        return "Unlimited AI recipes. $4.99/month or $39.99/year."
+        if let yearly = subscriptions.yearly {
+            return "Unlimited AI recipes. \(yearly.displayPrice)/year."
+        }
+        if let monthly = subscriptions.monthly {
+            return "Unlimited AI recipes. \(monthly.displayPrice)/month."
+        }
+        return "Unlimited AI recipes. Prices load from the App Store."
     }
 
     private var plusCard: some View {
