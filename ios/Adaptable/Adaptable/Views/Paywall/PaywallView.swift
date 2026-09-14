@@ -8,6 +8,8 @@ struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var subscriptions: SubscriptionStore
 
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var selectedID = SubscriptionStore.yearlyID
     @State private var purchasing = false
 
@@ -44,11 +46,11 @@ struct PaywallView: View {
                 }
             }
             .task {
-                await subscriptions.refresh()
-                if subscriptions.product(id: selectedID) == nil {
-                    selectedID = subscriptions.yearly?.id
-                        ?? subscriptions.monthly?.id
-                        ?? selectedID
+                await reloadProducts()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active, !subscriptions.hasVisibleStorePrice {
+                    Task { await reloadProducts() }
                 }
             }
             .onChange(of: subscriptions.isPlus) { _, plus in
@@ -129,12 +131,12 @@ struct PaywallView: View {
                     .font(.system(size: 15, weight: .heavy))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.content)
-                Text(subscriptions.lastError ?? "Check your connection and try again.")
+                Text(subscriptions.productsUnavailableReason ?? PaywallCopy.missingPriceLegal)
                     .font(.system(size: 13))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(Theme.muted)
                 Button("Try again") {
-                    Task { await subscriptions.refresh() }
+                    Task { await reloadProducts() }
                 }
                 .font(.system(size: 15, weight: .bold))
             }
@@ -246,6 +248,7 @@ struct PaywallView: View {
             }
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(Theme.muted)
+            .disabled(purchasing)
 
             HStack(spacing: 6) {
                 Link("Terms of Use", destination: SiteConfig.termsURL)
@@ -257,7 +260,10 @@ struct PaywallView: View {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Theme.muted)
 
-            Text(legalCopy)
+            Text(PaywallCopy.legalText(
+                lengthLabel: selectedProduct.map { SubscriptionStore.lengthLabel($0) },
+                displayPrice: selectedProduct?.displayPrice
+            ))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.faint)
                 .multilineTextAlignment(.center)
@@ -285,16 +291,13 @@ struct PaywallView: View {
         return "Subscribe \(product.displayPrice) / \(SubscriptionStore.periodUnit(product))"
     }
 
-    private var legalCopy: String {
-        let priceBit: String = {
-            guard let product = selectedProduct else {
-                return "Price is shown above."
-            }
-            return "The \(SubscriptionStore.lengthLabel(product)) plan is \(product.displayPrice)."
-        }()
-        return """
-        \(priceBit) Payment is charged to your Apple ID at confirmation of purchase. Subscription automatically renews unless canceled at least 24 hours before the end of the current period. Your account will be charged for renewal within 24 hours prior to the end of the current period at the same price. Manage or cancel in Settings → Apple ID → Subscriptions. Any unused portion of a free trial is forfeited when you buy a subscription.
-        """
+    private func reloadProducts() async {
+        await subscriptions.refresh()
+        if subscriptions.product(id: selectedID) == nil {
+            selectedID = subscriptions.yearly?.id
+                ?? subscriptions.monthly?.id
+                ?? selectedID
+        }
     }
 
     private func buy() async {

@@ -4,6 +4,9 @@
  */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { groceryAisle, sortAisles } from "../src/lib/aisle.ts";
 import { mergeQuantities, normalizeGroceryKey } from "../src/lib/groceryMerge.ts";
 import {
@@ -615,5 +618,71 @@ assert.equal(isNotificationsWebhook({
   title: "Hi",
   body: "There",
 }), false);
+
+// --- iOS Plus paywall: StoreKit IDs + never claim a price that is not on screen ---
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
+const subscriptionStoreSwift = readFileSync(
+  join(repoRoot, "ios/Adaptable/Adaptable/Services/SubscriptionStore.swift"),
+  "utf8",
+);
+const paywallCopySwift = readFileSync(
+  join(repoRoot, "ios/Adaptable/Adaptable/Views/Paywall/PaywallCopy.swift"),
+  "utf8",
+);
+const paywallViewSwift = readFileSync(
+  join(repoRoot, "ios/Adaptable/Adaptable/Views/Paywall/PaywallView.swift"),
+  "utf8",
+);
+const storekit = JSON.parse(
+  readFileSync(join(repoRoot, "ios/Adaptable/Adaptable/Resources/Adaptable.storekit"), "utf8"),
+);
+
+assert.match(subscriptionStoreSwift, /static let monthlyID = "adaptable_monthly"/);
+assert.match(subscriptionStoreSwift, /static let yearlyID = "adaptable_annual"/);
+assert.match(subscriptionStoreSwift, /for attempt in 1\.\.\.4/);
+assert.match(subscriptionStoreSwift, /productsUnavailableReason/);
+assert.doesNotMatch(
+  subscriptionStoreSwift,
+  /lastError = "Subscriptions are not available yet/,
+);
+
+const missingPriceLegal =
+  "Subscription prices load from the App Store and appear on the plan cards when available.";
+assert.ok(paywallCopySwift.includes(missingPriceLegal));
+assert.doesNotMatch(paywallCopySwift, /Price is shown above/);
+assert.doesNotMatch(paywallViewSwift, /Price is shown above/);
+assert.match(paywallViewSwift, /PaywallCopy\.legalText/);
+assert.match(paywallViewSwift, /reloadProducts/);
+
+function paywallLegalText(lengthLabel, displayPrice) {
+  const hasVisibleStorePrice =
+    typeof lengthLabel === "string" &&
+    lengthLabel.length > 0 &&
+    typeof displayPrice === "string" &&
+    displayPrice.length > 0;
+  const priceBit = hasVisibleStorePrice
+    ? `The ${lengthLabel} plan is ${displayPrice}.`
+    : missingPriceLegal;
+  return `${priceBit} Payment is charged to your Apple ID at confirmation of purchase.`;
+}
+
+const emptyLegal = paywallLegalText(null, null);
+assert.equal(emptyLegal.includes("Price is shown above"), false);
+assert.ok(emptyLegal.includes("App Store"));
+assert.equal(paywallLegalText("", "$4.99").includes("$4.99"), false);
+assert.ok(paywallLegalText("1 year", "$39.99").includes("The 1 year plan is $39.99."));
+
+const group = storekit.subscriptionGroups[0];
+assert.equal(group.name, "Adaptable Pro");
+const byId = Object.fromEntries(group.subscriptions.map((s) => [s.productID, s]));
+assert.deepEqual(Object.keys(byId).sort(), ["adaptable_annual", "adaptable_monthly"]);
+assert.equal(byId.adaptable_annual.recurringSubscriptionPeriod, "P1Y");
+assert.equal(byId.adaptable_monthly.recurringSubscriptionPeriod, "P1M");
+assert.equal(byId.adaptable_annual.groupNumber, 1);
+assert.equal(byId.adaptable_monthly.groupNumber, 2);
+assert.equal(
+  new Set(group.subscriptions.map((s) => s.groupNumber)).size,
+  group.subscriptions.length,
+);
 
 console.log("smoke-tests: all passed");

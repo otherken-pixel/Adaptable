@@ -23,16 +23,23 @@ final class SubscriptionStore: ObservableObject {
     @Published private(set) var isPlus = false
     @Published private(set) var currentProductID: String?
     @Published private(set) var loadingProducts = false
+    /// Catalog fetch failure only. Never used as a blocking purchase alert.
+    @Published private(set) var productsUnavailableReason: String?
+    /// Purchase / restore / redeem errors. Paywall alerts on this only.
     @Published var lastError: String?
     /// Presented from `RootView` as a fullScreenCover so iPad's floating tab bar
     /// cannot swallow the paywall the way a child `.sheet` can.
     @Published var isPaywallPresented = false
 
     private var listener: Task<Void, Never>?
+    private var inFlightRefresh: Task<Void, Never>?
 
     var products: [Product] {
         [yearly, monthly].compactMap { $0 }
     }
+
+    /// True only when StoreKit returned at least one localized-price product.
+    var hasVisibleStorePrice: Bool { !products.isEmpty }
 
     func start() {
         guard listener == nil else { return }
@@ -52,22 +59,65 @@ final class SubscriptionStore: ObservableObject {
         Task { await refresh() }
     }
 
+    /// Loads StoreKit products. Coalesces overlapping calls (paywall present +
+    /// `.task` both refresh). Retries because `Product.products(for:)` often
+    /// returns `[]` on the first cold call in TestFlight / sandbox / Review
+    /// without throwing — that empty result is not an Apple error.
     func refresh() async {
-        loadingProducts = true
-        lastError = nil
-        defer { loadingProducts = false }
-        do {
-            let found = try await Product.products(for: Self.productIDs)
-            yearly = found.first { $0.id == Self.yearlyID }
-            monthly = found.first { $0.id == Self.monthlyID }
-            if found.isEmpty {
-                lastError = "Subscriptions are not available yet. Try again in a moment."
-            }
-            await updateEntitlement()
-        } catch {
-            lastError = error.localizedDescription
+        if let inFlightRefresh {
+            await inFlightRefresh.value
+            return
+        }
+        let task = Task { @MainActor in
+            await self.loadProductsWithRetry()
+        }
+        inFlightRefresh = task
+        await task.value
+        if inFlightRefresh == task {
+            inFlightRefresh = nil
         }
     }
+
+    private func loadProductsWithRetry() async {
+        loadingProducts = true
+        defer { loadingProducts = false }
+
+        let requested = [Self.yearlyID, Self.monthlyID]
+        var lastFailure: String?
+
+        for attempt in 1...4 {
+            do {
+                let found = try await Product.products(for: requested)
+                // Keep last good catalog if a later attempt returns [].
+                if let yearlyProduct = found.first(where: { $0.id == Self.yearlyID }) {
+                    yearly = yearlyProduct
+                }
+                if let monthlyProduct = found.first(where: { $0.id == Self.monthlyID }) {
+                    monthly = monthlyProduct
+                }
+                if hasVisibleStorePrice {
+                    productsUnavailableReason = nil
+                    await updateEntitlement()
+                    return
+                }
+                lastFailure = Self.emptyCatalogMessage
+                print("[SubscriptionStore] Product.products empty for \(requested) (attempt \(attempt)/4)")
+            } catch {
+                lastFailure = error.localizedDescription
+                print("[SubscriptionStore] Product.products failed (attempt \(attempt)/4): \(error)")
+            }
+            if attempt < 4 {
+                let nanos = UInt64(500_000_000) * UInt64(1 << (attempt - 1))
+                try? await Task.sleep(nanoseconds: nanos)
+            }
+        }
+
+        productsUnavailableReason = lastFailure
+        await updateEntitlement()
+    }
+
+    static let emptyCatalogMessage =
+        "Subscriptions are not available yet. Try again in a moment."
 
     func product(id: String) -> Product? {
         products.first { $0.id == id }
