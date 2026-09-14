@@ -145,9 +145,9 @@ final class ShoppingStore: ObservableObject {
         }
         do {
             let created = try await API.addShoppingItems(userId: userId, rows: rows)
-            items = created + items.filter { item in !temp.contains { $0.id == item.id } }
+            await settleInFlightInsert(queued: queued, created: created, userId: userId)
         } catch {
-            enqueue(.insert(rows: queued), userId: userId)
+            await settleInFlightInsert(queued: queued, created: nil, userId: userId)
         }
     }
 
@@ -191,7 +191,13 @@ final class ShoppingStore: ObservableObject {
         let removed = items.first { $0.id == id }
         items.removeAll { $0.id == id }
         if id.hasPrefix("tmp-") {
+            let hadInsert = hasQueuedInsert(containing: id)
             dropQueuedTemp(id, userId: userId)
+            // In-flight add: insert is not queued yet, so drop is a no-op.
+            // Queue a remove so settle/flush can delete the server row after remap.
+            if !hadInsert {
+                enqueue(.remove(id: id), userId: userId)
+            }
             return
         }
         if !NetworkMonitor.shared.isOnline {
@@ -286,6 +292,68 @@ final class ShoppingStore: ObservableObject {
         if changed { persistQueue(for: userId) }
     }
 
+    private func hasQueuedInsert(containing tempId: String) -> Bool {
+        offlineQueue.contains { op in
+            if case .insert(let rows) = op {
+                return rows.contains { $0.tempId == tempId }
+            }
+            return false
+        }
+    }
+
+    private func queuedRemoveIds() -> Set<String> {
+        Set(offlineQueue.compactMap { op in
+            if case .remove(let id) = op { return id }
+            return nil
+        })
+    }
+
+    /// Apply toggles/removes that targeted temp rows while an online add was in flight.
+    /// `created == nil` means the write failed and the insert must be queued.
+    private func settleInFlightInsert(queued: [QueuedInsert], created: [ShoppingItem]?, userId: String) async {
+        let tempIds = Set(queued.map(\.tempId))
+        let deletedTemps = queuedRemoveIds().intersection(tempIds)
+        if let created {
+            var idMap: [String: String] = [:]
+            for (row, item) in zip(queued, created) {
+                idMap[row.tempId] = item.id
+            }
+            let deletedRealIds = Set(deletedTemps.compactMap { idMap[$0] })
+            let checkedTemps = Set(items.filter { tempIds.contains($0.id) && $0.checked }.map(\.id))
+            var replaced = created
+            for (index, row) in queued.enumerated() where index < replaced.count {
+                if checkedTemps.contains(row.tempId) { replaced[index].checked = true }
+            }
+            items = replaced.filter { !deletedRealIds.contains($0.id) }
+                + items.filter { !tempIds.contains($0.id) }
+            remapQueuedOps(idMap: idMap, userId: userId)
+            await flushQueue(userId: userId)
+            return
+        }
+        for tempId in deletedTemps {
+            dropQueuedTemp(tempId, userId: userId)
+        }
+        let surviving = queued.filter { !deletedTemps.contains($0.tempId) }
+        if !surviving.isEmpty {
+            enqueue(.insert(rows: surviving), userId: userId)
+        }
+    }
+
+    private func remapQueuedOps(idMap: [String: String], userId: String) {
+        guard !idMap.isEmpty, !offlineQueue.isEmpty else { return }
+        offlineQueue = offlineQueue.map { remapOp($0, idMap: idMap) }
+        persistQueue(for: userId)
+    }
+
+    private func hasUnmappedTempId(_ op: OfflineOp) -> Bool {
+        switch op {
+        case .toggle(let id, _), .remove(let id), .updateQuantity(let id, _):
+            return id.hasPrefix("tmp-")
+        default:
+            return false
+        }
+    }
+
     /// Drop a temp row from a queued insert (and any follow-up ops on that id)
     /// so flush never creates a deleted item or calls the API with `tmp-`.
     private func dropQueuedTemp(_ tempId: String, userId: String) {
@@ -340,8 +408,15 @@ final class ShoppingStore: ObservableObject {
         guard NetworkMonitor.shared.isOnline, !offlineQueue.isEmpty else { return }
         var remaining: [OfflineOp] = []
         var idMap: [String: String] = [:]
-        for original in offlineQueue {
+        // Inserts first so a leading tmp- toggle/remove can remap in this pass.
+        let inserts = offlineQueue.filter { if case .insert = $0 { return true } else { return false } }
+        let rest = offlineQueue.filter { if case .insert = $0 { return false } else { return true } }
+        for original in inserts + rest {
             let op = remapOp(original, idMap: idMap)
+            if hasUnmappedTempId(op) {
+                remaining.append(op)
+                continue
+            }
             do {
                 switch op {
                 case .toggle(let id, let checked):
