@@ -252,7 +252,9 @@ struct RecipeContentView: View {
             Spacer(minLength: 0)
         }
         .padding(20)
+        .background(Theme.surface)
         .presentationDetents([.height(340)])
+        .kitchenSheetSurface()
     }
 
     private func planFor(_ iso: String, label: String) {

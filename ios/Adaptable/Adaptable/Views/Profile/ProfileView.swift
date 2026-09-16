@@ -52,7 +52,7 @@ struct ProfileView: View {
             .padding(.bottom, 32)
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .refreshable { await loadMine() }
         .task { await loadMine() }
         .task { await push.refreshAuthorizationStatus() }

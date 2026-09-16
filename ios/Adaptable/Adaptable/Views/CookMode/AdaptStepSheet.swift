@@ -44,6 +44,7 @@ struct AdaptStepSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .kitchenSheetSurface()
     }
 
     @ViewBuilder

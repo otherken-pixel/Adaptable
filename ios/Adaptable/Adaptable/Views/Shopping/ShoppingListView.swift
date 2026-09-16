@@ -71,7 +71,7 @@ struct ShoppingListView: View {
             .padding(.bottom, 32)
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .refreshable { await shoppingStore.load(for: authStore.profile) }
         .task { await shoppingStore.load(for: authStore.profile) }
         .alert("Reminders access needed", isPresented: $showRemindersDenied) {

@@ -1,5 +1,9 @@
 // Adaptable — Supabase project configuration.
 //
+// Archive / TestFlight: open this project in Xcode 27 (iOS 27 SDK).
+// Apple's April 2027 App Store deadline requires that SDK. Do not put
+// StoreKit shared secrets, IAP .p8 keys, or other client secrets here.
+//
 // This points the native app at the SAME Supabase project as the web app
 // (ypziulvtfsyrwpotlevp), so recipes, votes, comments and the community
 // feed are shared across web, iOS and Android. The anon key is a

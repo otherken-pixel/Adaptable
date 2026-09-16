@@ -23,7 +23,7 @@ struct ActivityView: View {
             .padding(.bottom, 32)
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .refreshable {
             if let userId = authStore.profile?.id {
                 await notificationsStore.refresh(userId: userId)
