@@ -15,6 +15,8 @@ struct AdaptableApp: App {
     @State private var showResetPassword = false
 
     var body: some Scene {
+        // Single iOS scene. iOS 27 SDK still launches this WindowGroup;
+        // RootView + Theme.surface keep the first frame opaque under Liquid Glass.
         WindowGroup {
             RootView(showResetPassword: $showResetPassword)
                 .environmentObject(authStore)
@@ -24,6 +26,7 @@ struct AdaptableApp: App {
                 .environmentObject(subscriptions)
                 .environmentObject(deepLinks)
                 .environmentObject(network)
+                .background(Theme.surface.ignoresSafeArea())
                 .task {
                     authStore.start()
                     subscriptions.start()

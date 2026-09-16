@@ -95,7 +95,7 @@ struct FeedView: View {
             }
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .task { if recipes == nil { await load() } }
         .onChange(of: sort) { _, _ in
             Task { await load() }

@@ -7,6 +7,7 @@ struct AdaptableWidgets: WidgetBundle {
     var body: some Widget {
         TonightWidget()
         CookLiveActivityWidget()
+        CookTimerLiveActivityWidget()
     }
 }
 
@@ -48,7 +49,7 @@ struct TonightWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "AdaptableTonight", provider: TonightProvider()) { entry in
             TonightView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+                .kitchenWidgetSurface()
         }
         .configurationDisplayName("Tonight")
         .description("Tonight's planned meal — tap to start Cook Mode.")
@@ -62,14 +63,22 @@ struct TonightView: View {
     var body: some View {
         let url = entry.recipeId.flatMap { URL(string: "com.adaptable.app://cook?id=\($0)") }
         VStack(alignment: .leading, spacing: 8) {
-            Text("TONIGHT").font(.system(size: 10, weight: .heavy)).foregroundStyle(.orange)
+            Text("TONIGHT")
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundStyle(KitchenWidgetChrome.accent)
             Text(entry.emoji).font(.system(size: 32))
-            Text(entry.title).font(.system(size: 15, weight: .heavy)).lineLimit(2)
+            Text(entry.title)
+                .font(.system(size: 15, weight: .heavy))
+                .foregroundStyle(KitchenWidgetChrome.content)
+                .lineLimit(2)
             if !entry.planDate.isEmpty {
-                Text(entry.planDate).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                Text(entry.planDate)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(KitchenWidgetChrome.secondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(4)
         .widgetURL(url)
     }
 }
@@ -80,19 +89,23 @@ struct CookLiveActivityWidget: Widget {
             HStack {
                 Text(context.attributes.emoji)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(context.attributes.recipeTitle).font(.headline)
-                    Text(context.state.stepLabel).font(.subheadline)
+                    Text(context.attributes.recipeTitle)
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(context.state.stepLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.8))
                 }
                 Spacer()
                 if let end = context.state.timerEndsAt {
                     Text(timerInterval: Date.now...max(Date.now, end), countsDown: true)
                         .monospacedDigit()
                         .font(.headline)
+                        .foregroundStyle(.white)
                 }
             }
             .padding()
-            .activityBackgroundTint(.black.opacity(0.7))
-            .activitySystemActionForegroundColor(.white)
+            .kitchenActivitySurface()
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {

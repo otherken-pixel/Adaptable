@@ -66,7 +66,7 @@ struct TasteProfileView: View {
             .padding(.bottom, 32)
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .onAppear(perform: loadInitial)
     }
 

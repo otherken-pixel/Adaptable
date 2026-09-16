@@ -22,7 +22,7 @@ struct CookbookView: View {
             .padding(.bottom, 32)
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .task { await loadSaved() }
         .task { await loadPlans() }
         .task { await engagement.load(for: authStore.profile) }

@@ -22,8 +22,8 @@ struct RecipeDetailView: View {
                     .padding(.bottom, 32)
             }
         }
-        .background(Theme.surface)
-        .navigationBarHidden(true)
+        .background(Theme.surface.ignoresSafeArea())
+        .kitchenNavigationHidden()
         .task { await load() }
         .refreshable { await load() }
     }
@@ -69,6 +69,7 @@ struct RecipeDetailView: View {
         }
         .padding(.top, 12)
         .padding(.bottom, 10)
+        .kitchenOpaqueBar()
     }
 
     @ViewBuilder

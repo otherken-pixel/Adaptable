@@ -117,7 +117,7 @@ struct GenerateView: View {
             .padding(.bottom, 120)
         }
         .background(Theme.surface)
-        .navigationBarHidden(true)
+        .kitchenNavigationHidden()
         .safeAreaInset(edge: .bottom) {
             if showsComposer { composer }
         }

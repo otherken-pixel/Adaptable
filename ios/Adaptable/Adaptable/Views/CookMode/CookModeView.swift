@@ -97,8 +97,8 @@ struct CookModeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .cookCommand)) { note in
             applyCookCommand(note.object as? String)
         }
-        .navigationBarHidden(true)
-        .toolbar(.hidden, for: .tabBar)
+        .kitchenNavigationHidden()
+        .kitchenTabBarHidden()
         .background(Theme.surface.ignoresSafeArea())
         .sheet(item: $shareItem) { item in
             ShareSheet(items: item.activityItems)
@@ -193,6 +193,7 @@ struct CookModeView: View {
                         .frame(maxWidth: 720, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .kitchenScrollEdge()
             } else if let resolved {
                 stepChrome(recipe: recipe, resolved: resolved)
             } else if isDone {
@@ -200,6 +201,7 @@ struct CookModeView: View {
                     doneView(recipe: recipe)
                         .padding(.horizontal, 20)
                 }
+                .kitchenScrollEdge()
             }
 
             if !isDone {
@@ -277,13 +279,15 @@ struct CookModeView: View {
                         .padding(.bottom, 16)
                         .frame(maxWidth: 720, alignment: .leading)
                 }
+                .kitchenScrollEdge()
                 Divider()
                 ScrollView {
                     inspector(recipe: recipe, resolved: resolved)
                         .padding(20)
                 }
+                .kitchenScrollEdge()
                 .frame(minWidth: 280, maxWidth: 400)
-                .background(Theme.sunken.opacity(0.35))
+                .background(Theme.sunken)
             }
         } else {
             ScrollView {
@@ -294,6 +298,7 @@ struct CookModeView: View {
                     .frame(maxWidth: 720, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .kitchenScrollEdge()
         }
     }
 
@@ -504,6 +509,7 @@ struct CookModeView: View {
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 6)
+        .kitchenOpaqueBar()
     }
 
     // MARK: - Prep
@@ -770,6 +776,7 @@ struct CookModeView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+        .kitchenOpaqueBar()
     }
 
     // MARK: - Ingredients sheet
@@ -801,7 +808,9 @@ struct CookModeView: View {
             }
         }
         .padding(20)
+        .background(Theme.surface)
         .presentationDetents([.medium, .large])
+        .kitchenSheetSurface()
     }
 
     // MARK: - Timers

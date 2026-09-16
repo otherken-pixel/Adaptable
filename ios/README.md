@@ -21,11 +21,15 @@ versa.
 open ios/Adaptable/Adaptable.xcodeproj
 ```
 
-Requirements: **Xcode 16+** on macOS (this project uses Xcode 16's
+Requirements: **Xcode 27** on macOS for Archive / TestFlight (iOS 27 SDK —
+Apple's April 2027 App Store deadline). The project still uses Xcode 16's
 file-system-synchronized group format, so the folder structure on disk
-*is* the project — no file-by-file membership to maintain). On first
+*is* the project — no file-by-file membership to maintain. On first
 open, Xcode resolves the `supabase-swift` Swift Package automatically
 (needs network access once).
+
+See `IOS27_READINESS.md` for the Spec C checklist, WindowGroup review,
+and the device screens Ken must capture if a simulator is not available.
 
 This project was authored and organized in a Linux sandbox without
 Xcode/Swift available, so **it has not been compiled yet**. The code

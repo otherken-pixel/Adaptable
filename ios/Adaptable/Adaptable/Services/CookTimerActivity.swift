@@ -1,9 +1,9 @@
 import ActivityKit
 import Foundation
 
-/// Starts / updates / ends the cook-timer Live Activity. Without a Widget
-/// Extension the request is a no-op (or fails quietly); lock-screen banners
-/// still fire via `Alarm.scheduleTimerNotification`.
+/// Starts / updates / ends the cook-timer Live Activity. The lock-screen /
+/// Dynamic Island UI ships in `AdaptableWidgets` as `CookTimerLiveActivityWidget`.
+/// Lock-screen banners still fire via `Alarm.scheduleTimerNotification`.
 @MainActor
 enum CookTimerLiveActivity {
     /// Chains create work so overlapping `sync` calls cannot end a just-requested activity.
