@@ -41,8 +41,11 @@ import {
   recipeHonorsMethodLock,
 } from "../supabase/functions/_shared/surprise.ts";
 import {
+  dailyActionLimit,
   dailyGenerateLimit,
   decodeJwsPayload,
+  FREE_DAILY_ADAPT_LIMIT,
+  FREE_DAILY_FRIDGE_LIMIT,
   FREE_DAILY_GENERATE_LIMIT,
   isPlusActive,
   isPlusProductId,
@@ -483,8 +486,14 @@ assert.ok((down.learned?.cuisines?.Thai ?? 0) < (liked.learned?.cuisines?.Thai ?
 
 // --- Plus entitlement (server cap; never a client isPlus flag) ---
 assert.equal(FREE_DAILY_GENERATE_LIMIT, 25);
+assert.equal(FREE_DAILY_ADAPT_LIMIT, 40);
+assert.equal(FREE_DAILY_FRIDGE_LIMIT, 20);
 assert.equal(dailyGenerateLimit(false), 25);
 assert.equal(dailyGenerateLimit(true), null);
+assert.equal(dailyActionLimit(false, FREE_DAILY_ADAPT_LIMIT), 40);
+assert.equal(dailyActionLimit(true, FREE_DAILY_ADAPT_LIMIT), null);
+assert.equal(dailyActionLimit(false, FREE_DAILY_FRIDGE_LIMIT), 20);
+assert.equal(dailyActionLimit(true, FREE_DAILY_FRIDGE_LIMIT), null);
 assert.equal(isPlusActive({ is_plus: true }), true);
 assert.equal(isPlusActive({ is_plus: false }), false);
 assert.equal(isPlusActive(null), false);
@@ -684,5 +693,64 @@ assert.equal(
   new Set(group.subscriptions.map((s) => s.groupNumber)).size,
   group.subscriptions.length,
 );
+
+// --- Choice A: Plus unlimited adapt-step / read-fridge; free keeps soft caps ---
+const adaptStepTs = readFileSync(
+  join(repoRoot, "supabase/functions/adapt-step/index.ts"),
+  "utf8",
+);
+const readFridgeTs = readFileSync(
+  join(repoRoot, "supabase/functions/read-fridge/index.ts"),
+  "utf8",
+);
+const importRecipeTs = readFileSync(
+  join(repoRoot, "supabase/functions/import-recipe/index.ts"),
+  "utf8",
+);
+assert.match(adaptStepTs, /resolveDailyActionLimit/);
+assert.match(adaptStepTs, /FREE_DAILY_ADAPT_LIMIT/);
+assert.match(readFridgeTs, /resolveDailyActionLimit/);
+assert.match(readFridgeTs, /FREE_DAILY_FRIDGE_LIMIT/);
+assert.match(importRecipeTs, /resolveIsPlus/);
+assert.match(importRecipeTs, /DAILY_IMPORT_LIMIT = 40/);
+assert.doesNotMatch(adaptStepTs, /body\?\.isPlus|body\.is_plus|isPlus\s*=\s*true/);
+assert.doesNotMatch(readFridgeTs, /body\?\.isPlus|body\.is_plus/);
+
+// Honesty: free import is 40/UTC day, not unlimited
+const generateViewSwift = readFileSync(
+  join(repoRoot, "ios/Adaptable/Adaptable/Views/Generate/GenerateView.swift"),
+  "utf8",
+);
+const generatePageTsx = readFileSync(
+  join(repoRoot, "src/pages/GeneratePage.tsx"),
+  "utf8",
+);
+assert.doesNotMatch(generateViewSwift, /Free, unlimited/);
+assert.doesNotMatch(generatePageTsx, /Free, unlimited/);
+assert.match(generateViewSwift, /40 imports per UTC day/);
+assert.match(generatePageTsx, /40 imports per UTC day/);
+assert.match(paywallViewSwift, /Unlimited generations and imports/);
+
+// Mid-cook adapt-step cap is recoverable — never force-quit Cook Mode
+const cookModeSwift = readFileSync(
+  join(repoRoot, "ios/Adaptable/Adaptable/Views/CookMode/CookModeView.swift"),
+  "utf8",
+);
+assert.match(cookModeSwift, /adaptCurrentStep/);
+assert.match(cookModeSwift, /API\.adaptStep/);
+assert.match(cookModeSwift, /adaptError = AppError\.friendlyMessage/);
+assert.match(cookModeSwift, /assistBanner/);
+assert.doesNotMatch(cookModeSwift, /isPlus/);
+assert.doesNotMatch(cookModeSwift, /presentPaywall/);
+
+for (const rel of [
+  "ios/Adaptable/Adaptable/Views/Cookbook/CookbookView.swift",
+  "ios/Adaptable/Adaptable/Views/Shopping/ShoppingListView.swift",
+  "ios/Adaptable/Adaptable/Views/RecipeDetail/RecipeDetailView.swift",
+]) {
+  const src = readFileSync(join(repoRoot, rel), "utf8");
+  assert.doesNotMatch(src, /isPlus/);
+  assert.doesNotMatch(src, /presentPaywall/);
+}
 
 console.log("smoke-tests: all passed");

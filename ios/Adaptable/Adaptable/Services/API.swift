@@ -606,7 +606,12 @@ enum API {
         let substitute: String?
     }
 
-    static func adaptStep(recipe: Recipe, step: Int, missing: String) async throws -> AdaptStepResult {
+    static func adaptStep(
+        recipe: Recipe,
+        step: Int,
+        missing: String,
+        instruction: String? = nil
+    ) async throws -> AdaptStepResult {
         if SupabaseManager.isDemo {
             try? await Task.sleep(nanoseconds: 900_000_000)
             return AdaptStepResult(
@@ -622,14 +627,18 @@ enum API {
             let missing: String
         }
         struct Envelope: Decodable { let adapt: AdaptStepResult }
-        let instruction = recipe.steps?.first(where: { $0.step == step })?.instruction ?? ""
+        let steps = recipe.steps ?? []
+        let resolvedInstruction = instruction
+            ?? steps.first(where: { $0.step == step })?.instruction
+            ?? steps.dropFirst(max(step - 1, 0)).first?.instruction
+            ?? ""
         do {
             let envelope: Envelope = try await SupabaseManager.client.functions.invoke(
                 "adapt-step",
                 options: FunctionInvokeOptions(body: Body(
                     recipe_title: recipe.title ?? "",
                     step: step,
-                    instruction: instruction,
+                    instruction: resolvedInstruction,
                     missing: missing
                 ))
             )

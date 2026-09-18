@@ -24,7 +24,8 @@ The Vercel production branch is configured in the project dashboard
 - **Universal Import** — paste any recipe link, snap a cookbook page or
   screenshot, or paste raw text; Gemini extracts a clean structured
   recipe with source attribution (`import-recipe` edge function; prefers
-  JSON-LD Recipe blocks, falls back to page text). Free and unlimited.
+  JSON-LD Recipe blocks, falls back to page text). Free 40/UTC day;
+  Plus unlimited.
 - **Meal Planner** — plan any recipe onto a day with servings, then send
   every planned meal to Groceries in one tap, quantities scaled per
   entry. Plan changes and serving tweaks always flow to the list.

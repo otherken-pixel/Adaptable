@@ -4,12 +4,22 @@ struct AdaptStepSheet: View {
     let recipeTitle: String
     let ingredients: [StepIngredientUse]
     let substitutions: [String: String]
+    var adaptBusy: Bool
+    var adaptError: String?
     var onApply: (String, String) -> Void
-    var onAskAI: (String) -> Void
+    var onAskStepAI: (String) -> Void
+    var onAskRemix: (String) -> Void
     var onDismiss: () -> Void
+    var onDismissError: () -> Void
 
     @State private var selectedItem: String?
     @State private var custom = ""
+
+    private var missingText: String {
+        let typed = custom.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !typed.isEmpty { return typed }
+        return selectedItem ?? ""
+    }
 
     var body: some View {
         NavigationStack {
@@ -18,6 +28,10 @@ struct AdaptStepSheet: View {
                     Text("Swap just this step so you can keep cooking. Bigger changes can go to Remix.")
                         .font(.subheadline)
                         .foregroundStyle(Theme.muted)
+
+                    if let adaptError {
+                        assistErrorBanner(adaptError)
+                    }
 
                     if ingredients.isEmpty {
                         Text("This step doesn’t list specific ingredients — describe what you’re out of below.")
@@ -44,7 +58,28 @@ struct AdaptStepSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled(adaptBusy)
         .kitchenSheetSurface()
+    }
+
+    private func assistErrorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(Theme.down)
+            Text(message)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.content)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button("OK", action: onDismissError)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(Theme.accent)
+        }
+        .padding(12)
+        .background(Theme.down.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
+        .accessibilityHint("Dismiss this message and keep cooking")
     }
 
     @ViewBuilder
@@ -133,12 +168,8 @@ struct AdaptStepSheet: View {
 
             Button {
                 let text = custom.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                if let item = selectedItem {
-                    onApply(item, text)
-                } else {
-                    onAskAI(text)
-                }
+                guard !text.isEmpty, let item = selectedItem else { return }
+                onApply(item, text)
             } label: {
                 Text("Apply this swap")
                     .font(.body.weight(.heavy))
@@ -148,7 +179,30 @@ struct AdaptStepSheet: View {
                     .background(Theme.heroGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .buttonStyle(.pressable)
-            .disabled(custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || (selectedItem == nil && !ingredients.isEmpty))
+            .disabled(custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || selectedItem == nil)
+
+            Button {
+                let missing = String(missingText.prefix(80))
+                guard !missing.isEmpty else { return }
+                onAskStepAI(missing)
+            } label: {
+                HStack(spacing: 8) {
+                    if adaptBusy {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "sparkles")
+                    }
+                    Text(adaptBusy ? "Adapting this step…" : "Ask AI to adapt this step")
+                        .font(.subheadline.weight(.bold))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 48)
+                .foregroundStyle(Theme.accent)
+                .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.pressable)
+            .disabled(missingText.isEmpty || adaptBusy)
+            .accessibilityHint("Rewrites this step only. You can keep cooking if the daily AI limit is reached.")
 
             Button {
                 let text = custom.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -160,16 +214,16 @@ struct AdaptStepSheet: View {
                 } else {
                     prompt = "I'm cooking \(recipeTitle). \(text)"
                 }
-                onAskAI(prompt)
+                onAskRemix(prompt)
             } label: {
-                Label("Ask AI to remix the whole recipe", systemImage: "sparkles")
+                Label("Ask AI to remix the whole recipe", systemImage: "arrow.triangle.branch")
                     .font(.subheadline.weight(.bold))
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 48)
-                    .foregroundStyle(Theme.accent)
-                    .background(Theme.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .foregroundStyle(Theme.muted)
             }
             .buttonStyle(.pressable)
+            .disabled(adaptBusy)
         }
         .padding(14)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.cardRadius, style: .continuous))
