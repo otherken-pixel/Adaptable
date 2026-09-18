@@ -1012,7 +1012,8 @@ struct CookModeView: View {
         guard idx >= 1, idx <= steps.count else { return }
         adaptBusy = true
         adaptError = nil
-        let current = steps[idx - 1]
+        let stepIndex = idx - 1
+        let current = steps[stepIndex]
         do {
             let result = try await API.adaptStep(
                 recipe: recipe,
@@ -1020,9 +1021,9 @@ struct CookModeView: View {
                 missing: missing,
                 instruction: current.instruction
             )
-            steps[idx - 1].instruction = result.instruction
+            steps[stepIndex].instruction = result.instruction
             if let tip = result.tip, !tip.isEmpty {
-                steps[idx - 1].tip = tip
+                steps[stepIndex].tip = tip
             }
             recipe.steps = steps
             self.recipe = recipe
