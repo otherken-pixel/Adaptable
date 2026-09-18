@@ -48,6 +48,8 @@ struct CookModeView: View {
     @State private var leftoverBusy = false
     @State private var leftoverError: String?
     @State private var leftoverBundle: MealPrepBundle?
+    @State private var adaptBusy = false
+    @State private var adaptError: String?
 
     private var factor: Double {
         guard let recipe, let servings, (recipe.servings ?? 1) > 0 else { return 1 }
@@ -217,16 +219,22 @@ struct CookModeView: View {
                 recipeTitle: recipe.title ?? "this recipe",
                 ingredients: resolved?.ingredients ?? [],
                 substitutions: substitutions,
+                adaptBusy: adaptBusy,
+                adaptError: adaptError,
                 onApply: { from, to in
                     applySubstitution(from: from, to: to)
                     adaptOpen = false
                 },
-                    onAskAI: { prompt in
+                onAskStepAI: { missing in
+                    Task { await adaptCurrentStep(missing: missing) }
+                },
+                onAskRemix: { prompt in
                     adaptOpen = false
                     deepLinks.openRemix(recipe.id, prompt: prompt)
                     dismiss()
                 },
-                onDismiss: { adaptOpen = false }
+                onDismiss: { adaptOpen = false },
+                onDismissError: { adaptError = nil }
             )
         }
         .task(id: timers.count) { await tickTimers() }
@@ -322,6 +330,10 @@ struct CookModeView: View {
                         in: RoundedRectangle(cornerRadius: 14)
                     )
                     .accessibilityLabel(voice.statusMessage ?? "Voice commands listening")
+            }
+
+            if let adaptError {
+                assistBanner(adaptError) { self.adaptError = nil }
             }
 
             Text("STEP \(resolved.number) OF \(resolved.total)")
@@ -674,9 +686,30 @@ struct CookModeView: View {
                 .disabled(leftoverBusy)
             }
             if let leftoverError {
-                Text(leftoverError).font(.caption.weight(.semibold)).foregroundStyle(Theme.down)
+                assistBanner(leftoverError) { self.leftoverError = nil }
+                    .frame(maxWidth: 320)
             }
         }
+    }
+
+    private func assistBanner(_ message: String, dismiss: @escaping () -> Void) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(Theme.down)
+            Text(message)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Theme.content)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button("OK", action: dismiss)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Theme.accent)
+        }
+        .padding(12)
+        .background(Theme.down.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message)
+        .accessibilityHint("Dismiss this message and keep cooking")
     }
 
     private func leftoverCta(_ recipe: Recipe) -> String {
@@ -970,6 +1003,40 @@ struct CookModeView: View {
             substitutions[from] = to
         }
         Haptics.success()
+    }
+
+    /// In-step AI adapt. Cap / engine errors stay on this cook — never quit Cook Mode.
+    private func adaptCurrentStep(missing: String) async {
+        guard var recipe else { return }
+        var steps = recipe.steps ?? []
+        guard idx >= 1, idx <= steps.count else { return }
+        adaptBusy = true
+        adaptError = nil
+        let current = steps[idx - 1]
+        do {
+            let result = try await API.adaptStep(
+                recipe: recipe,
+                step: current.step,
+                missing: missing,
+                instruction: current.instruction
+            )
+            steps[idx - 1].instruction = result.instruction
+            if let tip = result.tip, !tip.isEmpty {
+                steps[idx - 1].tip = tip
+            }
+            recipe.steps = steps
+            self.recipe = recipe
+            if let substitute = result.substitute, !substitute.isEmpty {
+                applySubstitution(from: missing, to: substitute)
+            } else {
+                Haptics.success()
+            }
+            adaptOpen = false
+        } catch {
+            adaptError = AppError.friendlyMessage(for: error)
+            Haptics.warning()
+        }
+        adaptBusy = false
     }
 }
 

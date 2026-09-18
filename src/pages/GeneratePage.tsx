@@ -752,7 +752,8 @@ export default function GeneratePage() {
               <p className="mt-1.5 text-sm leading-relaxed text-muted">
                 A blog link, a YouTube video, a screenshot, grandma's
                 handwritten card — the AI turns it into a clean, cookable
-                Adaptable recipe. Free, unlimited.
+                Adaptable recipe. Free: 40 imports per UTC day. Plus is
+                unlimited.
               </p>
 
               {/* URL */}

@@ -5,14 +5,16 @@ import {
   assertDailyActionLimit,
   recordDailyAction,
 } from "../_shared/safety.ts";
+import {
+  FREE_DAILY_FRIDGE_LIMIT,
+  resolveDailyActionLimit,
+} from "../_shared/entitlement.ts";
 
 const GEMINI_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-flash-latest",
 ];
-
-const DAILY_FRIDGE_LIMIT = 20;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,15 +60,22 @@ Deno.serve(async (req) => {
       return json({ error: "Send a fridge photo under ~4 MB." }, 400);
     }
 
-    const rate = await assertDailyActionLimit(
+    const dailyLimit = await resolveDailyActionLimit(
       supabase,
       user.id,
-      "read-fridge",
-      DAILY_FRIDGE_LIMIT,
-      "fridge scan",
-      { consume: false },
+      FREE_DAILY_FRIDGE_LIMIT,
     );
-    if (!rate.ok) return json({ error: rate.error }, rate.status);
+    if (dailyLimit !== null) {
+      const rate = await assertDailyActionLimit(
+        supabase,
+        user.id,
+        "read-fridge",
+        dailyLimit,
+        "fridge scan",
+        { consume: false },
+      );
+      if (!rate.ok) return json({ error: rate.error }, rate.status);
+    }
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) return json({ error: "Recipe engine is not configured." }, 500);

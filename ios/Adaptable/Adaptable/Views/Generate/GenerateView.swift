@@ -469,7 +469,7 @@ struct GenerateView: View {
     private var importContent: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Bring any recipe with you 📥").font(.system(size: 20, weight: .heavy))
-            Text("A blog link, a screenshot, grandma's handwritten card — the AI turns it into a clean, cookable Adaptable recipe. Free, unlimited.")
+            Text("A blog link, a screenshot, grandma's handwritten card — the AI turns it into a clean, cookable Adaptable recipe. Free: 40 imports per UTC day. Plus is unlimited.")
                 .font(.system(size: 14)).foregroundStyle(Theme.muted)
 
             HStack(spacing: 8) {

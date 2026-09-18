@@ -5,6 +5,12 @@
 
 export const FREE_DAILY_GENERATE_LIMIT = 25;
 
+/** Soft daily cap for in-step adapt (free). Plus is unlimited. */
+export const FREE_DAILY_ADAPT_LIMIT = 40;
+
+/** Soft daily cap for fridge photo reads (free). Plus is unlimited. */
+export const FREE_DAILY_FRIDGE_LIMIT = 20;
+
 /** Plus product IDs from App Store Connect (same as iOS SubscriptionStore). */
 export const PLUS_PRODUCT_IDS = ["adaptable_monthly", "adaptable_annual"] as const;
 
@@ -18,6 +24,14 @@ export function isPlusProductId(id: unknown): id is PlusProductId {
 /** null = unlimited (Plus). Free stays at 25/UTC day. */
 export function dailyGenerateLimit(isPlus: boolean): number | null {
   return isPlus ? null : FREE_DAILY_GENERATE_LIMIT;
+}
+
+/** null = unlimited (Plus). Free keeps the given soft cap. */
+export function dailyActionLimit(
+  isPlus: boolean,
+  freeLimit: number,
+): number | null {
+  return isPlus ? null : freeLimit;
 }
 
 export function isPlusActive(
@@ -87,4 +101,18 @@ export async function resolveIsPlus(
   userId: string,
 ): Promise<boolean> {
   return (await resolveDailyGenerateLimit(supabase, userId)) === null;
+}
+
+/**
+ * Soft daily cap for adapt-step / read-fridge.
+ * null = Plus unlimited (same resolveDailyGenerateLimit null path).
+ * Entitlement read errors fail closed to the free cap.
+ */
+export async function resolveDailyActionLimit(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  freeLimit: number,
+): Promise<number | null> {
+  return dailyActionLimit(await resolveIsPlus(supabase, userId), freeLimit);
 }
